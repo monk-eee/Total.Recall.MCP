@@ -14,14 +14,18 @@ public static class GotchaTool
         "Returns construction traps, namespace issues, enum quirks, and API surprises " +
         "discovered during previous test generation sessions.")]
     public static string GetGotchas(
-        [Description("Type name to look up gotchas for")] string typeName)
+        [Description("Type name to look up gotchas for")] string typeName,
+        [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        Metrics.Increment(Metrics.ToolGetGotchas);
         try
         {
-            if (!StoreRegistry.Gotchas.HasData())
+            var stores = StoreRegistry.ForNamespace(ns);
+
+            if (!stores.Gotchas.HasData())
                 return $"No gotchas database found. No known issues for '{typeName}'.";
 
-            var matches = StoreRegistry.Gotchas.Query(g =>
+            var matches = stores.Gotchas.Query(g =>
                 g.Type.Contains(typeName, StringComparison.OrdinalIgnoreCase));
 
             if (matches.Count == 0)
@@ -43,10 +47,13 @@ public static class GotchaTool
     public static string AddGotcha(
         [Description("Type name the gotcha applies to")] string typeName,
         [Description("Category: constructor|namespace|enum|equality|mock|unreachable|property|inheritance|bug|static")] string category,
-        [Description("Description of the pitfall/gotcha")] string gotcha)
+        [Description("Description of the pitfall/gotcha")] string gotcha,
+        [Description("Optional: namespace/session to write to (default: server default)")] string? ns = null)
     {
+        Metrics.Increment(Metrics.ToolAddGotcha);
         try
         {
+            var stores = StoreRegistry.ForNamespace(ns);
             var record = new Gotcha
             {
                 Type = typeName,
@@ -56,7 +63,7 @@ public static class GotchaTool
                 Date = DateTime.UtcNow.ToString("yyyy-MM-dd")
             };
 
-            StoreRegistry.Gotchas.Append(record);
+            stores.Gotchas.Append(record);
 
             return $"Added gotcha for '{typeName}' [{category}]: {gotcha}";
         }

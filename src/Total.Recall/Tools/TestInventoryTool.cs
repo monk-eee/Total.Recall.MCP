@@ -13,14 +13,18 @@ public static class TestInventoryTool
         "Get existing test methods for a class, including which file they're in " +
         "and inferred method coverage. Prevents writing duplicate tests.")]
     public static string GetTestInventory(
-        [Description("Class name to look up existing tests for")] string className)
+        [Description("Class name to look up existing tests for")] string className,
+        [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        Metrics.Increment(Metrics.ToolGetTestInventory);
         try
         {
-            if (!StoreRegistry.TestInventory.HasData())
+            var stores = StoreRegistry.ForNamespace(ns);
+
+            if (!stores.TestInventory.HasData())
                 return $"No test inventory found. Run 'total-recall scan --tests <dir>' first.";
 
-            var matches = StoreRegistry.TestInventory.Query(t =>
+            var matches = stores.TestInventory.Query(t =>
                 t.Class.Contains(className, StringComparison.OrdinalIgnoreCase));
 
             if (matches.Count == 0)

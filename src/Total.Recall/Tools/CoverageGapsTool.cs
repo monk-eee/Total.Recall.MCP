@@ -17,11 +17,13 @@ public static class CoverageGapsTool
     public static string GetCoverageGaps(
         [Description("Max results (default: 20)")] int top = 20,
         [Description("Filter out untestable classes (default: true)")] bool skipUntestable = true,
-        [Description("Sort by: 'roi' (default), 'uncovered', 'coverage'")] string sortBy = "roi")
+        [Description("Sort by: 'roi' (default), 'uncovered', 'coverage'")] string sortBy = "roi",
+        [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        Metrics.Increment(Metrics.ToolGetCoverageGaps);
         try
         {
-        return GetCoverageGapsCore(top, skipUntestable, sortBy);
+            return GetCoverageGapsCore(top, skipUntestable, sortBy, ns);
         }
         catch (Exception ex)
         {
@@ -30,12 +32,14 @@ public static class CoverageGapsTool
         }
     }
 
-    private static string GetCoverageGapsCore(int top, bool skipUntestable, string sortBy)
+    private static string GetCoverageGapsCore(int top, bool skipUntestable, string sortBy, string? ns)
     {
-        if (!StoreRegistry.CoverageGaps.HasData())
+        var stores = StoreRegistry.ForNamespace(ns);
+
+        if (!stores.CoverageGaps.HasData())
             return "No coverage data found. Run 'total-recall scan --coverage <cobertura.xml>' first.";
 
-        var all = StoreRegistry.CoverageGaps.LoadAll();
+        var all = stores.CoverageGaps.LoadAll();
 
         IEnumerable<CoverageGap> filtered = all;
         if (skipUntestable)
