@@ -98,4 +98,96 @@ public sealed class CoverageGapsToolTests : IDisposable
         Assert.Contains("Class6", result);
         Assert.DoesNotContain("\"Class5\"", result); // exact match avoids Class25 containing "5"
     }
+
+    // --- sortBy parameter tests ---
+
+    [Fact]
+    public void GetCoverageGaps_SortByUncovered_OrdersByUncoveredLinesDescending()
+    {
+        SeedCoverageGaps(
+            new CoverageGap { Class = "Small", UncoveredLines = 5, Testability = "high" },
+            new CoverageGap { Class = "Big", UncoveredLines = 50, Testability = "high" },
+            new CoverageGap { Class = "Medium", UncoveredLines = 20, Testability = "high" }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps(sortBy: "uncovered");
+
+        // Big (50) should appear before Medium (20) should appear before Small (5)
+        var bigIdx = result.IndexOf("Big");
+        var medIdx = result.IndexOf("Medium");
+        var smallIdx = result.IndexOf("Small");
+        Assert.True(bigIdx < medIdx, "Big should come before Medium");
+        Assert.True(medIdx < smallIdx, "Medium should come before Small");
+    }
+
+    [Fact]
+    public void GetCoverageGaps_SortByCoverage_OrdersByCoveragePercentAscending()
+    {
+        SeedCoverageGaps(
+            new CoverageGap { Class = "MostCovered", CoveragePercent = 90, UncoveredLines = 5 },
+            new CoverageGap { Class = "LeastCovered", CoveragePercent = 10, UncoveredLines = 50 },
+            new CoverageGap { Class = "HalfCovered", CoveragePercent = 50, UncoveredLines = 20 }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps(sortBy: "coverage");
+
+        // LeastCovered (10%) should appear before HalfCovered (50%) before MostCovered (90%)
+        var leastIdx = result.IndexOf("LeastCovered");
+        var halfIdx = result.IndexOf("HalfCovered");
+        var mostIdx = result.IndexOf("MostCovered");
+        Assert.True(leastIdx < halfIdx, "LeastCovered should come before HalfCovered");
+        Assert.True(halfIdx < mostIdx, "HalfCovered should come before MostCovered");
+    }
+
+    [Fact]
+    public void GetCoverageGaps_SortByRoi_DefaultSortUsesRoiScore()
+    {
+        SeedCoverageGaps(
+            // ROI = 10 * 1.0 / (1+0) = 10.0
+            new CoverageGap { Class = "HighRoi", UncoveredLines = 10, Testability = "high", ExistingTestCount = 0 },
+            // ROI = 100 * 0.3 / (1+0) = 30.0
+            new CoverageGap { Class = "LowTestability", UncoveredLines = 100, Testability = "low", ExistingTestCount = 0 },
+            // ROI = 50 * 0.7 / (1+5) = 5.83
+            new CoverageGap { Class = "ManyTests", UncoveredLines = 50, Testability = "medium", ExistingTestCount = 5 }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps(sortBy: "roi");
+
+        // LowTestability (30.0) > HighRoi (10.0) > ManyTests (5.83)
+        var lowTestIdx = result.IndexOf("LowTestability");
+        var highRoiIdx = result.IndexOf("HighRoi");
+        var manyTestsIdx = result.IndexOf("ManyTests");
+        Assert.True(lowTestIdx < highRoiIdx, "LowTestability (ROI=30) should come before HighRoi (ROI=10)");
+        Assert.True(highRoiIdx < manyTestsIdx, "HighRoi (ROI=10) should come before ManyTests (ROI=5.83)");
+    }
+
+    [Fact]
+    public void GetCoverageGaps_RoiScore_UnknownTestability_Uses05Multiplier()
+    {
+        SeedCoverageGaps(
+            // ROI = 20 * 0.5 / (1+0) = 10.0 (unknown testability)
+            new CoverageGap { Class = "Unknown", UncoveredLines = 20, ExistingTestCount = 0 },
+            // ROI = 20 * 1.0 / (1+0) = 20.0 (high testability)
+            new CoverageGap { Class = "High", UncoveredLines = 20, Testability = "high", ExistingTestCount = 0 }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps(sortBy: "roi");
+
+        // High (20.0) should come before Unknown (10.0)
+        var highIdx = result.IndexOf("High");
+        var unknownIdx = result.IndexOf("Unknown");
+        Assert.True(highIdx < unknownIdx, "High testability should rank higher than unknown");
+    }
+
+    [Fact]
+    public void GetCoverageGaps_ResultIncludesRoiScoreField()
+    {
+        SeedCoverageGaps(
+            new CoverageGap { Class = "TestClass", UncoveredLines = 20, Testability = "high", ExistingTestCount = 0 }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps();
+
+        Assert.Contains("roiScore", result);
+    }
 }

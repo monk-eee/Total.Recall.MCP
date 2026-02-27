@@ -20,7 +20,38 @@ builder.Services
     .WithStdioServerTransport()
     .WithToolsFromAssembly();
 
+// Validate data on startup — write to stderr so it doesn't interfere with stdio JSON-RPC
+ValidateDataOnStartup();
+
 await builder.Build().RunAsync();
+
+// ── Startup Validation ──
+static void ValidateDataOnStartup()
+{
+    var dataDir = RepoConfig.GetDataPath();
+    var files = new (string Label, string Path)[]
+    {
+        ("type-registry", RepoConfig.TypeRegistryPath(dataDir)),
+        ("coverage-gaps", RepoConfig.CoverageGapsPath(dataDir)),
+        ("test-inventory", RepoConfig.TestInventoryPath(dataDir)),
+        ("gotchas", RepoConfig.GotchasPath(dataDir)),
+        ("mock-recipes", RepoConfig.MockRecipesPath(dataDir)),
+    };
+
+    Console.Error.WriteLine($"[Total.Recall] data dir: {dataDir}");
+    foreach (var (label, path) in files)
+    {
+        if (File.Exists(path))
+        {
+            var lines = File.ReadLines(path).Count(l => !string.IsNullOrWhiteSpace(l));
+            Console.Error.WriteLine($"  ✓ {label}: {lines} records");
+        }
+        else
+        {
+            Console.Error.WriteLine($"  ✗ {label}: NOT FOUND");
+        }
+    }
+}
 
 // ── Scanner CLI Mode ──
 static async Task RunScannerAsync(string[] args)
