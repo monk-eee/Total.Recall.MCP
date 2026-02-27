@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <ExcludeByFile>**/obj/**,**/*.g.cs,**/*.designer.cs,**/Migrations/**,**/AssemblyInfo.cs</ExcludeByFile>
+          <Include>[Total.Recall]*</Include>
+          <Exclude>[*]*.Program,[*]*.Startup</Exclude>
+          <SingleHit>false</SingleHit>
+          <!-- UseSourceLink MUST be false. When true, some test projects resolve paths
+               via SourceLink URLs while others use local paths. ReportGenerator cannot
+               deduplicate files with different paths, doubling lines-valid and halving
+               reported coverage. With false, all XMLs use consistent relative paths. -->
+          <UseSourceLink>false</UseSourceLink>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
