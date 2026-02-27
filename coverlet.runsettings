@@ -8,7 +8,7 @@
           <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <ExcludeByFile>**/obj/**,**/*.g.cs,**/*.designer.cs,**/Migrations/**,**/AssemblyInfo.cs</ExcludeByFile>
           <Include>[Total.Recall]*</Include>
-          <Exclude>[*]*.Program,[*]*.Startup</Exclude>
+          <Exclude>[*]*.Program,[*]*.Startup,[Total.Recall]Program,[Total.Recall]System.Text.RegularExpressions.Generated.*</Exclude>
           <SingleHit>false</SingleHit>
           <!-- UseSourceLink MUST be false. When true, some test projects resolve paths
                via SourceLink URLs while others use local paths. ReportGenerator cannot

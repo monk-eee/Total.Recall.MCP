@@ -15,7 +15,7 @@
 
 ## Prime Directive
 
-**Total.Recall is a read-heavy, append-only data server.** Prefer simplicity over cleverness. Every tool should be a single JSONL query — no complex joins, no caching layers, no databases.
+**Total.Recall is a read-heavy, append-only data server.** Prefer simplicity over cleverness. Every tool should be a single JSONL query — no complex joins, no databases. In-memory caching is used via `StoreRegistry` singletons (file-change detection invalidation) and pre-built dictionary indexes for O(1) type lookups.
 
 ## Build & Run Commands
 
@@ -92,7 +92,7 @@ All located under `data/linter/` (or `$TOTAL_RECALL_DATA`):
 
 ## Architecture Decisions
 
-1. **JSONL over SQLite**: JSONL is grep-friendly, git-friendly, append-friendly. The data volumes (~554 types, ~312 classes, ~200 gotchas) are trivially small — full load into memory is <1MB.
+1. **JSONL over SQLite**: JSONL is grep-friendly, git-friendly, append-friendly. The data volumes (~1,176 types, ~539 classes, ~70 gotchas) are trivially small — full load into memory is <2MB.
 
 2. **MetadataLoadContext over Assembly.LoadFrom**: Server.dll has a heavy dependency graph (Microsoft.Docs.Build.ContentParser, Markdig, LibGit2Sharp, etc.). MetadataLoadContext does reflection-only — no DLL loading, no dependency resolution failures.
 
@@ -100,7 +100,11 @@ All located under `data/linter/` (or `$TOTAL_RECALL_DATA`):
 
 4. **stdio transport only**: No HTTP, no SSE. VS Code spawns the process directly. Simplest possible deployment.
 
-5. **System.Text.Json**: All serialization uses System.Text.Json with camelCase naming policy. No Newtonsoft dependency.
+5. **System.Text.Json**: All serialization uses `SharedJsonOptions` (3 static instances: CamelCase, CamelCaseIndented, Indented). STJ caches reflection metadata inside options objects, so reusing gives ~3x speedup.
+
+6. **StoreRegistry singleton pattern**: All 6 tools share `JsonLineStore<T>` instances via `StoreRegistry` static properties. Data is loaded once on first use and cached in memory (file-change detection invalidation). Startup pre-warms all caches and builds dictionary indexes.
+
+7. **O(1) type name index**: `StoreRegistry.GetTypeIndex()` builds `Dictionary<string, TypeRecord>` (exact + case-insensitive) on first call. Eliminates 5 sequential O(n) linear scans per `resolve_type` / `get_context` call.
 
 ## Footguns
 
@@ -131,7 +135,9 @@ All located under `data/linter/` (or `$TOTAL_RECALL_DATA`):
 | First build | done | 0 warnings, 0 errors |
 | Seed gotchas | done | 70 gotchas from 15 generations of Linter coverage work |
 | Seed mock recipes | done | 12 interface recipes (IJobOutputInstance, IContentBase, IRepoBase, IAuditRule, ILogger, etc.) |
-| VS Code integration | not started | .vscode/mcp.json in Linter workspace |
+| VS Code integration | done | .vscode/mcp.json + .github/copilot-instructions.md + AGENTS.md MCP section in Linter workspace |
+| Improvement round 1 | done | In-memory caching in JsonLineStore, combined GetContext tool, ROI-ranked coverage gaps, startup data validation, namespace/file search in ResolveType |
+| Improvement round 2 | done | StoreRegistry singletons, pre-built type name index (O(1) lookups), cache-aware Count/HasData, SharedJsonOptions (eliminate per-call allocs), cached data path in RepoConfig, startup pre-warm |
 | Unit tests | not started | tests/Total.Recall.Tests/ |
 
 ## VS Code MCP Configuration

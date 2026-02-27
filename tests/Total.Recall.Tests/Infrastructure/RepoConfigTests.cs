@@ -10,11 +10,13 @@ public sealed class RepoConfigTests : IDisposable
     public RepoConfigTests()
     {
         _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
+        StoreRegistry.Reset();
     }
 
     public void Dispose()
     {
         // Restore original env var
+        StoreRegistry.Reset();
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
     }
 

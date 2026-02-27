@@ -9,8 +9,6 @@ namespace Total.Recall.Tools;
 [McpServerToolType]
 public static class GotchaTool
 {
-    private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true };
-
     [McpServerTool, Description(
         "Get all known pitfalls/gotchas for a specific type. " +
         "Returns construction traps, namespace issues, enum quirks, and API surprises " +
@@ -18,19 +16,24 @@ public static class GotchaTool
     public static string GetGotchas(
         [Description("Type name to look up gotchas for")] string typeName)
     {
-        var dataDir = RepoConfig.GetDataPath();
-        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(dataDir));
+        try
+        {
+            if (!StoreRegistry.Gotchas.HasData())
+                return $"No gotchas database found. No known issues for '{typeName}'.";
 
-        if (!store.HasData())
-            return $"No gotchas database found. No known issues for '{typeName}'.";
+            var matches = StoreRegistry.Gotchas.Query(g =>
+                g.Type.Contains(typeName, StringComparison.OrdinalIgnoreCase));
 
-        var matches = store.Query(g =>
-            g.Type.Contains(typeName, StringComparison.OrdinalIgnoreCase));
+            if (matches.Count == 0)
+                return $"No gotchas found for '{typeName}'. Looks clean!";
 
-        if (matches.Count == 0)
-            return $"No gotchas found for '{typeName}'. Looks clean!";
-
-        return JsonSerializer.Serialize(matches, s_json);
+            return JsonSerializer.Serialize(matches, SharedJsonOptions.Indented);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[GetGotchas] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
+            return $"ERROR in GetGotchas: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description(
@@ -42,20 +45,25 @@ public static class GotchaTool
         [Description("Category: constructor|namespace|enum|equality|mock|unreachable|property|inheritance|bug|static")] string category,
         [Description("Description of the pitfall/gotcha")] string gotcha)
     {
-        var dataDir = RepoConfig.GetDataPath();
-        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(dataDir));
-
-        var record = new Gotcha
+        try
         {
-            Type = typeName,
-            Category = category,
-            Description = gotcha,
-            DiscoveredInGen = null,
-            Date = DateTime.UtcNow.ToString("yyyy-MM-dd")
-        };
+            var record = new Gotcha
+            {
+                Type = typeName,
+                Category = category,
+                Description = gotcha,
+                DiscoveredInGen = null,
+                Date = DateTime.UtcNow.ToString("yyyy-MM-dd")
+            };
 
-        store.Append(record);
+            StoreRegistry.Gotchas.Append(record);
 
-        return $"Added gotcha for '{typeName}' [{category}]: {gotcha}";
+            return $"Added gotcha for '{typeName}' [{category}]: {gotcha}";
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[AddGotcha] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
+            return $"ERROR in AddGotcha: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 }

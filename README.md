@@ -10,10 +10,19 @@ Eliminates 70% of context burn by providing queryable type metadata, mock recipe
 |------|---------|
 | `resolve_type` | Namespace + constructor + property lookup for any type |
 | `get_mock_recipe` | Pre-built Moq setup code for common interfaces |
-| `get_coverage_gaps` | Ranked uncovered classes + methods from Cobertura XML |
+| `get_coverage_gaps` | ROI-ranked uncovered classes + methods from Cobertura XML |
 | `get_gotchas` | Type-specific pitfalls accumulated across sessions |
 | `get_test_inventory` | Existing test methods per class (prevent duplication) |
 | `add_gotcha` | Record a new pitfall discovered during test generation |
+| `get_context` | Combined: type + gotchas + tests + mock recipes in one call |
+
+## Performance
+
+- **Startup pre-warm**: All JSONL data loaded into memory on server start (~1.2MB, <1s)
+- **O(1) type lookups**: Pre-built `Dictionary<string, TypeRecord>` index (exact + case-insensitive)
+- **Singleton stores**: All tools share `StoreRegistry` singletons — no redundant file reads
+- **Shared serializer options**: 3 static `JsonSerializerOptions` instances (STJ caches reflection metadata)
+- **Cache invalidation**: File-change detection via `LastWriteTimeUtc` — auto-reloads on rescan
 
 ## Usage
 

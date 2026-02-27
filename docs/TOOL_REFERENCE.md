@@ -13,10 +13,11 @@ Complete reference for all 6 MCP tools exposed by the server.
 | `typeName` | string | yes | Exact or partial type name |
 
 **Search strategy** (in order):
-1. Exact name match (case-sensitive)
-2. Case-insensitive exact match
-3. Partial match (contains, case-insensitive)
-4. Interface name match (searches interface lists)
+1. Exact name match (case-sensitive) — **O(1) dictionary lookup**
+2. Case-insensitive exact match — **O(1) dictionary lookup**
+3. Partial match (contains, case-insensitive) — linear scan (fallback only)
+4. Interface name match (searches interface lists) — linear scan (fallback only)
+5. Namespace search — linear scan (fallback only)
 
 **Returns**: Up to 5 matching `TypeRecord` objects as JSON.
 
@@ -98,8 +99,11 @@ Complete reference for all 6 MCP tools exposed by the server.
 |-----------|------|----------|---------|-------------|
 | `top` | int | no | 20 | Max results to return |
 | `skipUntestable` | bool | no | true | Filter out classes with a skip reason |
+| `sortBy` | string | no | `"roi"` | Sort order: `"roi"` (default, ROI score), `"uncovered"` (uncovered lines desc), `"coverage"` (coverage % asc) |
 
-**Returns**: Array of `CoverageGap` objects, sorted by uncovered lines descending.
+**ROI formula**: `uncoveredLines * testabilityMultiplier / (1 + existingTestCount)`. Higher = more value from writing tests.
+
+**Returns**: Array of `CoverageGap` objects with `roiScore`, sorted by chosen order.
 
 **Example input**: `top=5, skipUntestable=true`
 

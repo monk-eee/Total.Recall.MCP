@@ -9,6 +9,7 @@ namespace Total.Recall.Tools;
 /// <summary>
 /// Combined context tool — returns type record, gotchas, test inventory,
 /// and matching mock recipes in a single call (replaces 4 separate tool calls).
+/// Uses StoreRegistry singletons for cross-call caching.
 /// </summary>
 [McpServerToolType]
 public static class ContextTool
@@ -20,35 +21,47 @@ public static class ContextTool
     public static string GetContext(
         [Description("The type name to look up (e.g. 'AuditEntry', 'IContentBase')")] string typeName)
     {
-        var dataDir = RepoConfig.GetDataPath();
+        try
+        {
+        return GetContextCore(typeName);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[GetContext] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
+            return $"ERROR in GetContext: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
-        var typeStore = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(dataDir));
-        var gotchaStore = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(dataDir));
-        var testStore = new JsonLineStore<TestInventoryEntry>(RepoConfig.TestInventoryPath(dataDir));
-        var mockStore = new JsonLineStore<MockRecipe>(RepoConfig.MockRecipesPath(dataDir));
+    private static string GetContextCore(string typeName)
+    {
+        // Use pre-built dictionary index for O(1) exact lookup, fall back to linear scan for contains
+        var (exactIndex, ciIndex) = StoreRegistry.GetTypeIndex();
 
-        // Resolve the type (exact → case-insensitive → contains)
-        var allTypes = typeStore.LoadAll();
-        var typeRecord = allTypes.FirstOrDefault(t =>
-                t.Name == typeName) ??
-            allTypes.FirstOrDefault(t =>
-                t.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase)) ??
-            allTypes.FirstOrDefault(t =>
+        TypeRecord? typeRecord = null;
+        if (exactIndex.TryGetValue(typeName, out var exact))
+            typeRecord = exact;
+        else if (ciIndex.TryGetValue(typeName, out var ci))
+            typeRecord = ci;
+        else
+        {
+            // Contains fallback — linear scan only when dictionary misses
+            typeRecord = StoreRegistry.TypeRegistry.LoadAll().FirstOrDefault(t =>
                 t.Name.Contains(typeName, StringComparison.OrdinalIgnoreCase));
+        }
 
         // Get gotchas for this type
-        var gotchas = gotchaStore.Query(g =>
+        var gotchas = StoreRegistry.Gotchas.Query(g =>
             g.Type.Contains(typeName, StringComparison.OrdinalIgnoreCase));
 
         // Get test inventory
-        var tests = testStore.Query(t =>
+        var tests = StoreRegistry.TestInventory.Query(t =>
             t.Class.Contains(typeName, StringComparison.OrdinalIgnoreCase));
 
         // Get mock recipes for interfaces this type implements
         var mockRecipes = new List<MockRecipe>();
         if (typeRecord?.Interfaces is { Count: > 0 })
         {
-            var allMocks = mockStore.LoadAll();
+            var allMocks = StoreRegistry.MockRecipes.LoadAll();
             foreach (var iface in typeRecord.Interfaces)
             {
                 var normalized = iface.StartsWith("I") ? iface[1..] : iface;
@@ -68,10 +81,7 @@ public static class ContextTool
             mockRecipes
         };
 
-        return JsonSerializer.Serialize(result, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
-        });
+        return JsonSerializer.Serialize(result, SharedJsonOptions.CamelCaseIndented);
     }
+
 }

@@ -9,26 +9,29 @@ namespace Total.Recall.Tools;
 [McpServerToolType]
 public static class TestInventoryTool
 {
-    private static readonly JsonSerializerOptions s_json = new() { WriteIndented = true };
-
     [McpServerTool, Description(
         "Get existing test methods for a class, including which file they're in " +
         "and inferred method coverage. Prevents writing duplicate tests.")]
     public static string GetTestInventory(
         [Description("Class name to look up existing tests for")] string className)
     {
-        var dataDir = RepoConfig.GetDataPath();
-        var store = new JsonLineStore<TestInventoryEntry>(RepoConfig.TestInventoryPath(dataDir));
+        try
+        {
+            if (!StoreRegistry.TestInventory.HasData())
+                return $"No test inventory found. Run 'total-recall scan --tests <dir>' first.";
 
-        if (!store.HasData())
-            return $"No test inventory found. Run 'total-recall scan --tests <dir>' first.";
+            var matches = StoreRegistry.TestInventory.Query(t =>
+                t.Class.Contains(className, StringComparison.OrdinalIgnoreCase));
 
-        var matches = store.Query(t =>
-            t.Class.Contains(className, StringComparison.OrdinalIgnoreCase));
+            if (matches.Count == 0)
+                return $"No existing tests found for '{className}'.";
 
-        if (matches.Count == 0)
-            return $"No existing tests found for '{className}'.";
-
-        return JsonSerializer.Serialize(matches, s_json);
+            return JsonSerializer.Serialize(matches, SharedJsonOptions.Indented);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[GetTestInventory] failed for '{className}': {ex.GetType().Name}: {ex.Message}");
+            return $"ERROR in GetTestInventory: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 }

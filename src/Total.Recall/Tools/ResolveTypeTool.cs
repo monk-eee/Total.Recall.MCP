@@ -9,12 +9,6 @@ namespace Total.Recall.Tools;
 [McpServerToolType]
 public static class ResolveTypeTool
 {
-    private static readonly JsonSerializerOptions s_json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true
-    };
-
     [McpServerTool, Description(
         "Resolve a .NET type name to its full namespace, constructors, properties, base type, and interfaces. " +
         "Supports partial name matching, namespace search, and file path search. Returns up to 5 results.")]
@@ -23,33 +17,53 @@ public static class ResolveTypeTool
         [Description("Optional: filter by namespace prefix (e.g. 'Server.Auditing')")] string? namespacePart = null,
         [Description("Optional: filter by source file path substring (e.g. 'Parsing/Output')")] string? filePath = null)
     {
-        var dataDir = RepoConfig.GetDataPath();
-        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(dataDir));
+        try
+        {
+        return ResolveTypeCore(typeName, namespacePart, filePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[ResolveType] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
+            return $"ERROR in ResolveType: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
-        if (!store.HasData())
+    private static string ResolveTypeCore(string typeName, string? namespacePart, string? filePath)
+    {
+        if (!StoreRegistry.TypeRegistry.HasData())
             return "No type registry found. Run 'total-recall scan --assembly <dll>' first.";
 
-        var all = store.LoadAll();
+        // Use pre-built dictionary index for exact/case-insensitive lookups (O(1))
+        var (exactIndex, ciIndex) = StoreRegistry.GetTypeIndex();
+        List<TypeRecord> matches;
 
-        // 1. Exact name match
-        var matches = all.Where(t => t.Name.Equals(typeName, StringComparison.Ordinal)).ToList();
+        // 1. Exact name match via dictionary
+        if (exactIndex.TryGetValue(typeName, out var exactMatch))
+        {
+            matches = [exactMatch];
+        }
+        // 2. Case-insensitive exact match via dictionary
+        else if (ciIndex.TryGetValue(typeName, out var ciMatch))
+        {
+            matches = [ciMatch];
+        }
+        else
+        {
+            // 3-5: Fall back to linear scan only for partial/interface/namespace matches
+            var all = StoreRegistry.TypeRegistry.LoadAll();
 
-        // 2. Case-insensitive exact match
-        if (matches.Count == 0)
-            matches = all.Where(t => t.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        // 3. Contains (partial match)
-        if (matches.Count == 0)
+            // 3. Contains (partial match)
             matches = all.Where(t => t.Name.Contains(typeName, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        // 4. Interface name match (search interfaces list)
-        if (matches.Count == 0)
-            matches = all.Where(t => t.Interfaces.Any(i => i.Contains(typeName, StringComparison.OrdinalIgnoreCase))).ToList();
+            // 4. Interface name match (search interfaces list)
+            if (matches.Count == 0)
+                matches = all.Where(t => t.Interfaces.Any(i => i.Contains(typeName, StringComparison.OrdinalIgnoreCase))).ToList();
 
-        // 5. Namespace search — if no name match, try namespace contains
-        if (matches.Count == 0)
-            matches = all.Where(t =>
-                t.Namespace?.Contains(typeName, StringComparison.OrdinalIgnoreCase) == true).ToList();
+            // 5. Namespace search — if no name match, try namespace contains
+            if (matches.Count == 0)
+                matches = all.Where(t =>
+                    t.Namespace?.Contains(typeName, StringComparison.OrdinalIgnoreCase) == true).ToList();
+        }
 
         // Apply optional namespace filter
         if (!string.IsNullOrEmpty(namespacePart))
@@ -59,8 +73,7 @@ public static class ResolveTypeTool
         // Apply optional file path filter (cross-reference coverage data for file paths)
         if (!string.IsNullOrEmpty(filePath))
         {
-            var coverageStore = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(dataDir));
-            var coverageData = coverageStore.LoadAll();
+            var coverageData = StoreRegistry.CoverageGaps.LoadAll();
             var classesInFile = coverageData
                 .Where(c => c.File?.Contains(filePath, StringComparison.OrdinalIgnoreCase) == true)
                 .Select(c => c.Class)
@@ -76,6 +89,7 @@ public static class ResolveTypeTool
                    ".";
 
         var results = matches.Take(5).ToList();
-        return JsonSerializer.Serialize(results, s_json);
+        return JsonSerializer.Serialize(results, SharedJsonOptions.CamelCaseIndented);
     }
+
 }

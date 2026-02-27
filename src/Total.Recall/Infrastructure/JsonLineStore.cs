@@ -43,15 +43,36 @@ public sealed class JsonLineStore<T> where T : class
             return _cache;
 
         var results = new List<T>();
+        var lineNum = 0;
+        var errorCount = 0;
         foreach (var line in File.ReadLines(_filePath))
         {
+            lineNum++;
             if (string.IsNullOrWhiteSpace(line))
                 continue;
 
-            var record = JsonSerializer.Deserialize<T>(line, s_options);
-            if (record is not null)
-                results.Add(record);
+            try
+            {
+                var record = JsonSerializer.Deserialize<T>(line, s_options);
+                if (record is not null)
+                    results.Add(record);
+            }
+            catch (JsonException ex)
+            {
+                errorCount++;
+                if (errorCount <= 5) // log first 5 errors to avoid flooding
+                {
+                    Log.Error($"[JsonLineStore<{typeof(T).Name}>] corrupt line {lineNum} in {Path.GetFileName(_filePath)}: {ex.Message}");
+                    Log.Error($"  line content: {(line.Length > 120 ? line[..120] + "..." : line)}");
+                }
+            }
         }
+
+        if (errorCount > 5)
+            Log.Error($"[JsonLineStore<{typeof(T).Name}>] ... and {errorCount - 5} more corrupt lines in {Path.GetFileName(_filePath)}");
+
+        if (errorCount > 0)
+            Log.Warn($"[JsonLineStore<{typeof(T).Name}>] loaded {results.Count} records, skipped {errorCount} corrupt lines from {Path.GetFileName(_filePath)}");
 
         _cache = results;
         _cacheTimestamp = lastWrite;
@@ -71,13 +92,21 @@ public sealed class JsonLineStore<T> where T : class
     /// </summary>
     public void Append(T record)
     {
-        var dir = Path.GetDirectoryName(_filePath);
-        if (!string.IsNullOrEmpty(dir))
-            Directory.CreateDirectory(dir);
+        try
+        {
+            var dir = Path.GetDirectoryName(_filePath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
 
-        var line = JsonSerializer.Serialize(record, s_options);
-        File.AppendAllText(_filePath, line + Environment.NewLine);
-        _cache = null; // invalidate cache
+            var line = JsonSerializer.Serialize(record, s_options);
+            File.AppendAllText(_filePath, line + Environment.NewLine);
+            _cache = null; // invalidate cache
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[JsonLineStore<{typeof(T).Name}>] failed to append to {Path.GetFileName(_filePath)}: {ex.GetType().Name}: {ex.Message}");
+            throw; // re-throw so tool can catch and return error message
+        }
     }
 
     /// <summary>
@@ -100,17 +129,24 @@ public sealed class JsonLineStore<T> where T : class
 
     /// <summary>
     /// Returns true if the JSONL file exists and has at least one record.
+    /// Uses the in-memory cache when available to avoid disk I/O.
     /// </summary>
     public bool HasData()
     {
+        if (_cache is not null)
+            return _cache.Count > 0;
+
         return File.Exists(_filePath) && new FileInfo(_filePath).Length > 0;
     }
 
     /// <summary>
-    /// Returns the number of records (lines) in the file.
+    /// Returns the number of records. Uses the in-memory cache when available.
     /// </summary>
     public int Count()
     {
+        if (_cache is not null)
+            return _cache.Count;
+
         if (!File.Exists(_filePath))
             return 0;
 
