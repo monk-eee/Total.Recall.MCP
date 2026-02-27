@@ -35,6 +35,12 @@ public sealed class ResolveTypeToolTests : IDisposable
         store.WriteAll(records);
     }
 
+    private void SeedCoverageGaps(params CoverageGap[] records)
+    {
+        var store = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(_tempDir));
+        store.WriteAll(records);
+    }
+
     [Fact]
     public void ResolveType_NoData_ReturnsNotFoundMessage()
     {
@@ -122,5 +128,121 @@ public sealed class ResolveTypeToolTests : IDisposable
         // At most 5 results, but each may have "Widget" in Name → at most ~10 occurrences
         // We check the result is valid JSON with at most 5 entries
         Assert.Contains("Widget", result);
+    }
+
+    // --- Namespace search (step 5) ---
+
+    [Fact]
+    public void ResolveType_NamespaceSearch_FindsTypesWhenNoNameMatch()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "FooClass", Namespace = "Server.Auditing" },
+            new TypeRecord { Name = "BarClass", Namespace = "Server.Parsing" }
+        );
+
+        // "Auditing" doesn't match any Name, so step 5 searches Namespace
+        var result = ResolveTypeTool.ResolveType("Auditing");
+
+        Assert.Contains("FooClass", result);
+        Assert.DoesNotContain("BarClass", result);
+    }
+
+    // --- namespacePart filter ---
+
+    [Fact]
+    public void ResolveType_NamespaceFilter_NarrowsResults()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "Helper", Namespace = "Server.Auditing" },
+            new TypeRecord { Name = "Helper", Namespace = "Server.Parsing" }
+        );
+
+        var result = ResolveTypeTool.ResolveType("Helper", namespacePart: "Auditing");
+
+        Assert.Contains("Auditing", result);
+        Assert.DoesNotContain("Parsing", result);
+    }
+
+    [Fact]
+    public void ResolveType_NamespaceFilter_NoMatchesAfterFilter()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "Helper", Namespace = "Server.Auditing" }
+        );
+
+        var result = ResolveTypeTool.ResolveType("Helper", namespacePart: "NonExistent");
+
+        Assert.Contains("No type found matching", result);
+        Assert.Contains("in namespace 'NonExistent'", result);
+    }
+
+    // --- filePath filter ---
+
+    [Fact]
+    public void ResolveType_FilePathFilter_CrossReferencesCoverageData()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" },
+            new TypeRecord { Name = "ParseResult", Namespace = "Server.Parsing" }
+        );
+        SeedCoverageGaps(
+            new CoverageGap { Class = "AuditEntry", File = "src/Auditing/AuditEntry.cs" },
+            new CoverageGap { Class = "ParseResult", File = "src/Parsing/ParseResult.cs" }
+        );
+
+        var result = ResolveTypeTool.ResolveType("AuditEntry", filePath: "Auditing");
+
+        Assert.Contains("AuditEntry", result);
+    }
+
+    [Fact]
+    public void ResolveType_FilePathFilter_ExcludesNonMatchingFiles()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" },
+            new TypeRecord { Name = "ParseResult", Namespace = "Server.Parsing" }
+        );
+        SeedCoverageGaps(
+            new CoverageGap { Class = "AuditEntry", File = "src/Auditing/AuditEntry.cs" },
+            new CoverageGap { Class = "ParseResult", File = "src/Parsing/ParseResult.cs" }
+        );
+
+        // filePath filter matches only ParseResult
+        var result = ResolveTypeTool.ResolveType("Entry", filePath: "Parsing");
+
+        Assert.Contains("No type found matching", result);
+        Assert.Contains("in file 'Parsing'", result);
+    }
+
+    [Fact]
+    public void ResolveType_FilePathFilter_NoCoverageData_ReturnsEmpty()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" }
+        );
+        // No coverage gaps seeded — filePath filter will find no cross-reference
+
+        var result = ResolveTypeTool.ResolveType("AuditEntry", filePath: "Auditing");
+
+        Assert.Contains("No type found matching", result);
+    }
+
+    [Fact]
+    public void ResolveType_BothFilters_CombinesNamespaceAndFilePath()
+    {
+        SeedTypeRegistry(
+            new TypeRecord { Name = "Entry", Namespace = "Server.Auditing" },
+            new TypeRecord { Name = "Entry", Namespace = "Server.Parsing" }
+        );
+        SeedCoverageGaps(
+            new CoverageGap { Class = "Entry", File = "src/Auditing/Entry.cs" }
+        );
+
+        var result = ResolveTypeTool.ResolveType("Entry",
+            namespacePart: "Auditing", filePath: "Auditing");
+
+        Assert.Contains("Auditing", result);
+        // Should only get the Auditing namespace one
+        Assert.DoesNotContain("Parsing", result);
     }
 }

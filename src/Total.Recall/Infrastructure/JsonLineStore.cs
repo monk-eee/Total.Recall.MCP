@@ -77,6 +77,7 @@ public sealed class JsonLineStore<T> where T : class
 
         var line = JsonSerializer.Serialize(record, s_options);
         File.AppendAllText(_filePath, line + Environment.NewLine);
+        _cache = null; // invalidate cache
     }
 
     /// <summary>
@@ -94,6 +95,7 @@ public sealed class JsonLineStore<T> where T : class
             var line = JsonSerializer.Serialize(record, s_options);
             writer.WriteLine(line);
         }
+        _cache = null; // invalidate cache
     }
 
     /// <summary>
