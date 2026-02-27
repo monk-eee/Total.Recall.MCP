@@ -15,6 +15,7 @@ try
     Log.Info($"  args: [{string.Join(", ", args)}]");
     Log.Info($"  cwd: {Environment.CurrentDirectory}");
     Log.Info($"  env TOTAL_RECALL_DATA: {Environment.GetEnvironmentVariable(RepoConfig.EnvVarName) ?? "(not set)"}");
+    Log.Info($"  env TOTAL_RECALL_NAMESPACE: {Environment.GetEnvironmentVariable(RepoConfig.NamespaceEnvVar) ?? "(not set)"}");
 
     if (args.Length > 0 && args[0].Equals("scan", StringComparison.OrdinalIgnoreCase))
     {
@@ -66,7 +67,23 @@ static void ValidateDataOnStartup()
         return;
     }
 
+    var ns = RepoConfig.GetDefaultNamespace();
+    Log.Info($"default namespace: '{ns}'");
     Log.Info($"data dir: {dataDir}");
+
+    // List available namespaces
+    try
+    {
+        var namespaces = RepoConfig.ListNamespaces();
+        if (namespaces.Count > 0)
+            Log.Info($"  available namespaces: [{string.Join(", ", namespaces)}]");
+        else
+            Log.Info("  no namespace subdirectories found (using root or legacy layout)");
+    }
+    catch (Exception ex)
+    {
+        Log.Warn($"  could not enumerate namespaces: {ex.Message}");
+    }
 
     if (!Directory.Exists(dataDir))
     {
@@ -102,6 +119,7 @@ static void ValidateDataOnStartup()
     LogStore("test-inventory", () => StoreRegistry.TestInventory);
     LogStore("gotchas", () => StoreRegistry.Gotchas);
     LogStore("mock-recipes", () => StoreRegistry.MockRecipes);
+    LogStore("assessments", () => StoreRegistry.Assessments);
 
     // Pre-build the type name index
     try
@@ -114,6 +132,7 @@ static void ValidateDataOnStartup()
         Log.Error($"  ⚡ type index: FAILED — {ex.GetType().Name}: {ex.Message}");
     }
 
+    Log.Info($"telemetry tracking active (started {Metrics.StartedUtc:yyyy-MM-dd HH:mm:ss} UTC)");
     Log.Info("startup validation complete");
 }
 
@@ -126,6 +145,7 @@ static async Task RunScannerAsync(string[] args)
     string? coveragePath = null;
     string? testsPath = null;
     string? outputPath = null;
+    string? namespaceName = null;
 
     for (int i = 1; i < args.Length - 1; i++)
     {
@@ -143,10 +163,26 @@ static async Task RunScannerAsync(string[] args)
             case "--output":
                 outputPath = args[++i];
                 break;
+            case "--namespace":
+                namespaceName = args[++i];
+                break;
         }
     }
 
-    var dataDir = RepoConfig.GetDataPath(outputPath);
+    // Resolve data directory: --namespace composes {root}/{name}/, --output overrides entirely
+    string dataDir;
+    if (!string.IsNullOrEmpty(outputPath))
+    {
+        dataDir = RepoConfig.GetDataPath(outputPath);
+    }
+    else if (!string.IsNullOrEmpty(namespaceName))
+    {
+        dataDir = RepoConfig.GetNamespacePath(namespaceName);
+    }
+    else
+    {
+        dataDir = RepoConfig.GetDataPath();
+    }
     Directory.CreateDirectory(dataDir);
 
     Console.WriteLine($"Total.Recall Scanner — output: {dataDir}");

@@ -13,11 +13,15 @@ public static class MockRecipeTool
         "Get a pre-built Moq setup recipe for a .NET interface, including required usings, " +
         "C# mock code, and known gotchas. Supports names with or without the 'I' prefix.")]
     public static string GetMockRecipe(
-        [Description("Interface name (e.g. 'IJobOutputInstance' or 'JobOutputInstance')")] string interfaceName)
+        [Description("Interface name (e.g. 'IJobOutputInstance' or 'JobOutputInstance')")] string interfaceName,
+        [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        Metrics.Increment(Metrics.ToolGetMockRecipe);
         try
         {
-            if (!StoreRegistry.MockRecipes.HasData())
+            var stores = StoreRegistry.ForNamespace(ns);
+
+            if (!stores.MockRecipes.HasData())
                 return "No mock recipes found. Seed mock-recipes.jsonl first.";
 
             // Normalize: ensure we search with and without 'I' prefix
@@ -28,7 +32,7 @@ public static class MockRecipeTool
                 ? interfaceName[1..]
                 : interfaceName;
 
-            var matches = StoreRegistry.MockRecipes.Query(r =>
+            var matches = stores.MockRecipes.Query(r =>
                 r.Interface.Equals(withI, StringComparison.OrdinalIgnoreCase) ||
                 r.Interface.Equals(withoutI, StringComparison.OrdinalIgnoreCase) ||
                 r.Interface.Contains(interfaceName, StringComparison.OrdinalIgnoreCase));
