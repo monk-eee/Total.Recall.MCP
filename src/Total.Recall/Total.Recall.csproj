@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Total.Recall.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="8.0.1" />

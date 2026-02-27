@@ -9,12 +9,6 @@ namespace Total.Recall.Tools;
 [McpServerToolType]
 public static class CoverageGapsTool
 {
-    private static readonly JsonSerializerOptions s_json = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true
-    };
-
     [McpServerTool, Description(
         "Get the top N classes ranked by ROI score (factors in uncovered lines, " +
         "testability, and existing test count). " +
@@ -25,18 +19,29 @@ public static class CoverageGapsTool
         [Description("Filter out untestable classes (default: true)")] bool skipUntestable = true,
         [Description("Sort by: 'roi' (default), 'uncovered', 'coverage'")] string sortBy = "roi")
     {
-        var dataDir = RepoConfig.GetDataPath();
-        var store = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(dataDir));
+        try
+        {
+        return GetCoverageGapsCore(top, skipUntestable, sortBy);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[GetCoverageGaps] failed: {ex.GetType().Name}: {ex.Message}");
+            return $"ERROR in GetCoverageGaps: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
-        if (!store.HasData())
+    private static string GetCoverageGapsCore(int top, bool skipUntestable, string sortBy)
+    {
+        if (!StoreRegistry.CoverageGaps.HasData())
             return "No coverage data found. Run 'total-recall scan --coverage <cobertura.xml>' first.";
 
-        var all = store.LoadAll();
+        var all = StoreRegistry.CoverageGaps.LoadAll();
 
+        IEnumerable<CoverageGap> filtered = all;
         if (skipUntestable)
-            all = all.Where(g => string.IsNullOrEmpty(g.SkipReason)).ToList();
+            filtered = all.Where(g => string.IsNullOrEmpty(g.SkipReason));
 
-        var scored = all.Select(g => new
+        var scored = filtered.Select(g => new
         {
             gap = g,
             roiScore = CalculateRoi(g)
@@ -64,8 +69,9 @@ public static class CoverageGapsTool
             RoiScore = Math.Round(x.roiScore, 1)
         }).ToList();
 
-        return JsonSerializer.Serialize(results, s_json);
+        return JsonSerializer.Serialize(results, SharedJsonOptions.CamelCaseIndented);
     }
+
 
     /// <summary>
     /// ROI = uncoveredLines * testabilityMultiplier / (1 + existingTestCount).

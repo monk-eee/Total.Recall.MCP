@@ -16,10 +16,12 @@ public sealed class MockRecipeToolTests : IDisposable
         Directory.CreateDirectory(_tempDir);
         _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
+        StoreRegistry.Reset();
     }
 
     public void Dispose()
     {
+        StoreRegistry.Reset();
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
@@ -126,4 +128,5 @@ public sealed class MockRecipeToolTests : IDisposable
         Assert.Contains("IJobOutputInstance", result);
         Assert.Contains("IJobInput", result);
     }
+
 }

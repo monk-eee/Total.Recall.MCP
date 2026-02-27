@@ -338,4 +338,113 @@ public sealed class JsonLineStoreTests : IDisposable
         Assert.Equal("Parse", loaded[0].UncoveredMethods[0].Name);
         Assert.Equal(8, loaded[0].UncoveredMethods[0].UncoveredLines);
     }
+
+    // --- Corrupt JSONL handling ---
+
+    [Fact]
+    public void LoadAll_CorruptLine_SkipsItAndLoadsValidRecords()
+    {
+        File.WriteAllLines(_tempFile, [
+            """{"type":"Valid","category":"bug","gotcha":"good","date":"2025-01-01"}""",
+            "NOT VALID JSON {{{",
+            """{"type":"AlsoValid","category":"enum","gotcha":"fine","date":"2025-01-02"}"""
+        ]);
+        var store = new JsonLineStore<Gotcha>(_tempFile);
+
+        var result = store.LoadAll();
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Valid", result[0].Type);
+        Assert.Equal("AlsoValid", result[1].Type);
+    }
+
+    [Fact]
+    public void LoadAll_AllCorruptLines_ReturnsEmpty()
+    {
+        File.WriteAllLines(_tempFile, [
+            "NOT JSON AT ALL",
+            "{broken",
+            "12345"
+        ]);
+        var store = new JsonLineStore<Gotcha>(_tempFile);
+
+        var result = store.LoadAll();
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void LoadAll_MoreThan5CorruptLines_LogsTruncatedMessage()
+    {
+        // Write 8 corrupt lines + 1 valid to trigger the "> 5 more" code path
+        var lines = new List<string>();
+        for (int i = 0; i < 8; i++)
+            lines.Add($"corrupt line {i}");
+        lines.Add("""{"type":"Valid","category":"bug","gotcha":"ok","date":"2025-01-01"}""");
+
+        File.WriteAllLines(_tempFile, lines);
+        var store = new JsonLineStore<Gotcha>(_tempFile);
+
+        var result = store.LoadAll();
+
+        // Should still load the one valid record
+        Assert.Single(result);
+        Assert.Equal("Valid", result[0].Type);
+    }
+
+    // --- Cached HasData / Count ---
+
+    [Fact]
+    public void HasData_AfterLoadAll_UsesCachedResult()
+    {
+        File.WriteAllText(_tempFile, """{"type":"X","category":"bug","gotcha":"y","date":"2025-01-01"}""" + "\n");
+        var store = new JsonLineStore<Gotcha>(_tempFile);
+
+        // Populate cache
+        store.LoadAll();
+
+        // Now HasData should use cache (different code path from disk check)
+        Assert.True(store.HasData());
+    }
+
+    [Fact]
+    public void HasData_AfterLoadAll_EmptyFile_ReturnsFalse()
+    {
+        File.WriteAllText(_tempFile, "\n");
+        var store = new JsonLineStore<Gotcha>(_tempFile);
+
+        // LoadAll with only blank lines → empty cache
+        store.LoadAll();
+
+        Assert.False(store.HasData());
+    }
+
+    [Fact]
+    public void Count_AfterLoadAll_UsesCachedResult()
+    {
+        File.WriteAllLines(_tempFile, [
+            """{"type":"A","category":"bug","gotcha":"x","date":"2025-01-01"}""",
+            """{"type":"B","category":"bug","gotcha":"y","date":"2025-01-02"}"""
+        ]);
+        var store = new JsonLineStore<Gotcha>(_tempFile);
+
+        // Populate cache
+        store.LoadAll();
+
+        // Count should use cached list
+        Assert.Equal(2, store.Count());
+    }
+
+    // --- Append error handling ---
+
+    [Fact]
+    public void Append_ToInvalidPath_ThrowsAndLogs()
+    {
+        // Path with embedded null character causes IOException
+        var badPath = Path.Combine(_tempDir, "sub\0dir", "test.jsonl");
+        var store = new JsonLineStore<Gotcha>(badPath);
+
+        Assert.ThrowsAny<Exception>(() =>
+            store.Append(new Gotcha { Type = "X", Category = "bug", Description = "y", Date = "2025-01-01" }));
+    }
 }

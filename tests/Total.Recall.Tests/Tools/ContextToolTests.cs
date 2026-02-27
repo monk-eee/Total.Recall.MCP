@@ -21,10 +21,12 @@ public sealed class ContextToolTests : IDisposable
         Directory.CreateDirectory(_tempDir);
         _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
+        StoreRegistry.Reset();
     }
 
     public void Dispose()
     {
+        StoreRegistry.Reset();
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
@@ -239,4 +241,5 @@ public sealed class ContextToolTests : IDisposable
         var doc = JsonDocument.Parse(result);
         Assert.Equal(1, doc.RootElement.GetProperty("mockRecipes").GetArrayLength());
     }
+
 }

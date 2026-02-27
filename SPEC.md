@@ -44,7 +44,7 @@
 │                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │ resolve_type  │  │ get_mock_    │  │ get_coverage_ │  │
-│  │              │  │ recipe       │  │ gaps          │  │
+│  │ + get_context │  │ recipe       │  │ gaps          │  │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬────────┘  │
 │         │                 │                  │           │
 │  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴────────┐  │
@@ -53,6 +53,16 @@
 │  └──────┬───────┘  └──────┬───────┘  └──────┬────────┘  │
 │         │                 │                  │           │
 │         ▼                 ▼                  ▼           │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ StoreRegistry (singleton in-memory cache)         │   │
+│  │  ┌─ TypeRegistry ─ Dict<name,TypeRecord> index    │   │
+│  │  ├─ CoverageGaps   (file-change invalidation)    │   │
+│  │  ├─ TestInventory   SharedJsonOptions (3 static)  │   │
+│  │  ├─ Gotchas         RepoConfig (cached path)      │   │
+│  │  └─ MockRecipes                                   │   │
+│  └──────────────────────────────────────────────────┘   │
+│         │                                                │
+│         ▼                                                │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │ Data Layer (JSONL files per repo)                 │   │
 │  │  data/linter/type-registry.jsonl                  │   │
@@ -115,9 +125,11 @@ C:\Users\lyndonswan\Repos\Total.Recall\
 │       │   ├── Gotcha.cs
 │       │   └── TestInventoryEntry.cs
 │       │
-│       └── Infrastructure/              # JSONL I/O, config
-│           ├── JsonLineStore.cs         # Generic read/write/query for JSONL
-│           └── RepoConfig.cs            # Resolve data path from env var
+│       └── Infrastructure/              # JSONL I/O, config, caching
+│           ├── JsonLineStore.cs         # Generic read/write/query for JSONL (file-change caching)
+│           ├── RepoConfig.cs            # Resolve data path from env var (cached on first call)
+│           ├── StoreRegistry.cs         # Singleton store instances + pre-built type index
+│           └── SharedJsonOptions.cs     # 3 static JsonSerializerOptions (avoid per-call allocs)
 │
 ├── data/                                # Per-repo data directories
 │   └── linter/                          # Linter-specific data
@@ -701,3 +713,36 @@ Not in scope for v1, but natural extensions:
 | SSE/HTTP transport for remote use | Low | Medium |
 | Multi-repo support (scan multiple assemblies) | Medium | Low |
 | Publish to NuGet as a dotnet tool | Medium | Medium |
+
+---
+
+## 16. Performance Architecture
+
+### Problem
+
+MCP tool calls are stateless function invocations — each must return quickly since the agent is blocked waiting. The JSONL data files total ~1.2MB (1,176 types + 539 coverage classes + 157 test files + 70 gotchas + 12 mock recipes). Without caching, every tool call re-reads and re-parses the files from disk.
+
+### Solution: Three-layer caching
+
+```
+Layer 1: RepoConfig              — cached data path (env var read once)
+Layer 2: StoreRegistry            — singleton JsonLineStore<T> per data file
+Layer 3: Pre-built type index     — Dictionary<string, TypeRecord> for O(1) name lookups
+```
+
+### Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `StoreRegistry` | `Infrastructure/StoreRegistry.cs` | Static properties returning singleton `JsonLineStore<T>` instances. All tools share the same stores, so the in-memory cache persists across tool calls within the MCP server process lifecycle. |
+| `SharedJsonOptions` | `Infrastructure/SharedJsonOptions.cs` | Three static `JsonSerializerOptions` instances (CamelCase, CamelCaseIndented, Indented). System.Text.Json caches reflection metadata inside the options object — reusing gives ~3x speedup on subsequent serializations. |
+| `RepoConfig` cache | `Infrastructure/RepoConfig.cs` | `GetDataPath()` caches the resolved path after first call. Eliminates repeated `Environment.GetEnvironmentVariable()` + `Path.GetFullPath()` calls. |
+| Type name index | `StoreRegistry.GetTypeIndex()` | Builds `Dictionary<string, TypeRecord>` (exact + case-insensitive) on first call. Turns `resolve_type` and `get_context` exact lookups from O(n) linear scan to O(1) dictionary lookup. Auto-invalidates when the underlying cache refreshes. |
+| Cache-aware `Count()`/`HasData()` | `Infrastructure/JsonLineStore.cs` | When the in-memory cache is populated, returns `_cache.Count` instead of re-reading the file from disk. |
+| Startup pre-warm | `Program.cs` | `ValidateDataOnStartup()` calls `LoadAll()` on every store and builds the type index before any tool call arrives. First tool call hits memory, not disk. |
+
+### Cache Invalidation
+
+`JsonLineStore<T>` tracks `File.GetLastWriteTimeUtc()`. If the file changes on disk (e.g., after a `scan` command or `add_gotcha`), the next `LoadAll()` call detects the timestamp change and reloads from disk. `Append()` and `WriteAll()` set `_cache = null` to force reload on next access.
+
+The type name index (`StoreRegistry.GetTypeIndex()`) tracks the list reference from `LoadAll()`. When the cache refreshes (new list allocated), the index rebuilds automatically.

@@ -78,6 +78,19 @@ Create `.vscode/mcp.json` in your target workspace (e.g., the Linter repo):
 
 Restart VS Code. The MCP server starts automatically when Copilot initializes.
 
+**Startup behavior**: On first launch, the server pre-loads all JSONL data into memory and builds O(1) lookup indexes. You'll see validation output in the MCP server's stderr:
+```
+[Total.Recall] data dir: C:\...\data\linter
+  ✓ type-registry: 1176 records (cached)
+  ✓ coverage-gaps: 539 records (cached)
+  ✓ test-inventory: 157 records (cached)
+  ✓ gotchas: 70 records (cached)
+  ✓ mock-recipes: 12 records (cached)
+  ⚡ type index: 1176 entries (O(1) lookups ready)
+```
+
+Every subsequent tool call hits the in-memory cache — no disk I/O unless the JSONL files were modified since last load.
+
 ## 4. Use the Tools
 
 Once wired, Copilot sees 6 tools. Use them naturally in your prompts or they'll be auto-discovered:
@@ -152,3 +165,39 @@ You should see the tool invoked and return type metadata. If it doesn't appear, 
 | Test inventory | `data/linter/test-inventory.jsonl` | `--tests` scan |
 | Gotchas | `data/linter/gotchas.jsonl` | `add_gotcha` tool + manual seeding |
 | Mock recipes | `data/linter/mock-recipes.jsonl` | Manual curation |
+
+## 7. Integrate with Coverage Skill (No Skill Changes Required)
+
+Total.Recall integrates with the `coverage-uplift` skill through **repo-level files only** — the skill itself is never modified. See [ADR-001](ADR-001-repo-level-integration.md) for the full rationale.
+
+### Add to `.github/copilot-instructions.md`
+
+Create or append to `.github/copilot-instructions.md` in your target repo:
+
+```markdown
+## Total.Recall MCP Server
+
+This workspace has a `Total.Recall` MCP server connected (configured in `.vscode/mcp.json`).
+It provides persistent memory across sessions for the coverage uplift workflow.
+
+**When generating tests or working on coverage**, prefer MCP tools over reading source files:
+
+- **`GetContext(typeName)`** — Use this FIRST. Returns type metadata, gotchas, test inventory, and mock recipes in one call.
+- **`GetCoverageGaps(top, sortBy)`** — ROI-ranked list of what to test next. Use `sortBy: "roi"`.
+- **`ResolveType(typeName)`** — Type signatures when you just need constructors/properties.
+- **`AddGotcha(typeName, category, gotcha)`** — Persist pitfalls for future sessions.
+- **`GetMockRecipe(interfaceName)`** — Ready-to-use Moq setup code.
+- **`GetTestInventory(className)`** — Check what's already tested before generating duplicates.
+
+**Fall back to reading `.cs` files** only when you need method body logic (MCP gives signatures, not implementations).
+```
+
+### Add to `AGENTS.md`
+
+Add a `## Total.Recall MCP Integration` section to your repo's AGENTS.md. See the Linter repo's AGENTS.md for the exact format — it includes a tool reference table, workflow steps, re-scan commands, and fallback guidance.
+
+### Why This Works
+
+The coverage-uplift skill reads `AGENTS.md` at the start of every workflow step. When it finds the MCP section, the agent uses MCP tools for type surveys instead of reading production source files. If MCP isn't available (server not running, different repo), the skill's standard file-reading workflow runs unchanged.
+
+The `.github/copilot-instructions.md` file is auto-injected by VS Code into every Copilot conversation, providing the "MCP is available" signal even before the skill activates.

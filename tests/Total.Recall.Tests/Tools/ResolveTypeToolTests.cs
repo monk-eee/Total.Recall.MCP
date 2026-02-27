@@ -20,10 +20,12 @@ public sealed class ResolveTypeToolTests : IDisposable
         Directory.CreateDirectory(_tempDir);
         _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
+        StoreRegistry.Reset();
     }
 
     public void Dispose()
     {
+        StoreRegistry.Reset();
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
@@ -245,4 +247,5 @@ public sealed class ResolveTypeToolTests : IDisposable
         // Should only get the Auditing namespace one
         Assert.DoesNotContain("Parsing", result);
     }
+
 }
