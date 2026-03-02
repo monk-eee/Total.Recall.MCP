@@ -67,6 +67,16 @@ public static class Metrics
     public const string ToolAddAssessment = "tool.add_assessment";
     public const string ToolGetAssessments = "tool.get_assessments";
     public const string ToolGetMetrics = "tool.get_metrics";
+    public const string ToolGetTestableTargets = "tool.get_testable_targets";
+    public const string ToolGetSourceSnippet = "tool.get_source_snippet";
+    public const string ToolGenerateTestScaffold = "tool.generate_test_scaffold";
+    public const string ToolLogSession = "tool.log_session";
+    public const string ToolGetSessions = "tool.get_sessions";
+    public const string ToolGetUncoveredMethods = "tool.get_uncovered_methods";
+    public const string ToolGetStubClasses = "tool.get_stub_classes";
+    public const string ToolGetGotchaInsights = "tool.get_gotcha_insights";
+    public const string ToolLearnTestPatterns = "tool.learn_test_patterns";
+    public const string ToolRefreshCoverage = "tool.refresh_coverage";
 
     // Cache behavior
     public const string CacheHit = "cache.hit";
