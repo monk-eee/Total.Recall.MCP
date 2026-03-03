@@ -6,6 +6,11 @@ using Total.Recall.Models;
 
 namespace Total.Recall.Tools;
 
+/// <summary>
+/// MCP tool for querying coverage gap data. Returns classes ranked by ROI score
+/// (factoring in uncovered lines, testability, and existing test count) to help
+/// AI agents prioritize which classes to write tests for next.
+/// </summary>
 [McpServerToolType]
 public static class CoverageGapsTool
 {
@@ -21,6 +26,7 @@ public static class CoverageGapsTool
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetCoverageGaps);
+        Log.Debug($"[GetCoverageGaps] top={top} skipUntestable={skipUntestable} sortBy='{sortBy}' ns='{ns ?? "(default)"}'");
         try
         {
             return GetCoverageGapsCore(top, skipUntestable, sortBy, ns);
@@ -37,9 +43,13 @@ public static class CoverageGapsTool
         var stores = StoreRegistry.ForNamespace(ns);
 
         if (!stores.CoverageGaps.HasData())
+        {
+            Log.Debug("[GetCoverageGaps] no coverage data found");
             return "No coverage data found. Run 'total-recall scan --coverage <cobertura.xml>' first.";
+        }
 
         var all = stores.CoverageGaps.LoadAll();
+        Log.Debug($"[GetCoverageGaps] loaded {all.Count} classes, applying filters (skipUntestable={skipUntestable})");
 
         IEnumerable<CoverageGap> filtered = all;
         if (skipUntestable)

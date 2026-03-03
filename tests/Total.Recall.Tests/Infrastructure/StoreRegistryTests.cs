@@ -67,6 +67,22 @@ public sealed class StoreRegistryTests : IDisposable
     }
 
     [Fact]
+    public void Assessments_ReturnsSameInstanceOnSecondCall()
+    {
+        var first = StoreRegistry.Assessments;
+        var second = StoreRegistry.Assessments;
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void Sessions_ReturnsSameInstanceOnSecondCall()
+    {
+        var first = StoreRegistry.Sessions;
+        var second = StoreRegistry.Sessions;
+        Assert.Same(first, second);
+    }
+
+    [Fact]
     public void Reset_ClearsAllInstances()
     {
         var before = StoreRegistry.TypeRegistry;
@@ -143,6 +159,76 @@ public sealed class StoreRegistryTests : IDisposable
         var (exact, _) = StoreRegistry.GetTypeIndex();
 
         Assert.Equal("App.V1", exact["Widget"].Namespace);
+    }
+
+    // ── ResolveType tests ──
+
+    [Fact]
+    public void ResolveType_ExactMatch_ReturnsRecord()
+    {
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        store.WriteAll([
+            new TypeRecord { Name = "MyService", Namespace = "App" }
+        ]);
+
+        var stores = StoreRegistry.ForNamespace();
+        var result = stores.ResolveType("MyService");
+
+        Assert.NotNull(result);
+        Assert.Equal("MyService", result.Name);
+    }
+
+    [Fact]
+    public void ResolveType_CaseInsensitiveMatch_ReturnsRecord()
+    {
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        store.WriteAll([
+            new TypeRecord { Name = "MyService", Namespace = "App" }
+        ]);
+
+        var stores = StoreRegistry.ForNamespace();
+        var result = stores.ResolveType("myservice");
+
+        Assert.NotNull(result);
+        Assert.Equal("MyService", result.Name);
+    }
+
+    [Fact]
+    public void ResolveType_ContainsFallback_ReturnsRecord()
+    {
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        store.WriteAll([
+            new TypeRecord { Name = "MyLongServiceName", Namespace = "App" }
+        ]);
+
+        var stores = StoreRegistry.ForNamespace();
+        var result = stores.ResolveType("LongService");
+
+        Assert.NotNull(result);
+        Assert.Equal("MyLongServiceName", result.Name);
+    }
+
+    [Fact]
+    public void ResolveType_NoMatch_ReturnsNull()
+    {
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        store.WriteAll([
+            new TypeRecord { Name = "MyService", Namespace = "App" }
+        ]);
+
+        var stores = StoreRegistry.ForNamespace();
+        var result = stores.ResolveType("NonExistentType");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveType_EmptyRegistry_ReturnsNull()
+    {
+        var stores = StoreRegistry.ForNamespace();
+        var result = stores.ResolveType("AnyType");
+
+        Assert.Null(result);
     }
 
 }

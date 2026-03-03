@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Total.Recall.Models;
 
 namespace Total.Recall.Infrastructure;
@@ -27,6 +28,7 @@ public static class StoreRegistry
         return s_namespaces.GetOrAdd(dataDir, _ =>
         {
             Log.Info($"initializing stores for namespace '{displayName}' → {dataDir}");
+            Log.Debug($"[StoreRegistry] creating 7 JsonLineStore instances for '{displayName}'");
             return new NamespaceStores(displayName, dataDir);
         });
     }
@@ -39,6 +41,7 @@ public static class StoreRegistry
     public static JsonLineStore<Gotcha> Gotchas => ForNamespace().Gotchas;
     public static JsonLineStore<MockRecipe> MockRecipes => ForNamespace().MockRecipes;
     public static JsonLineStore<Assessment> Assessments => ForNamespace().Assessments;
+    public static JsonLineStore<SessionRecord> Sessions => ForNamespace().Sessions;
 
     /// <summary>
     /// Get pre-built name→TypeRecord dictionaries for O(1) lookups (default namespace).
@@ -69,6 +72,10 @@ public sealed class NamespaceStores
     private Dictionary<string, TypeRecord>? _typeByCiName;
     private int _typeIndexVersion;
 
+    // Lazy-loaded namespace config (framework, mock library, namespace pattern)
+    private NamespaceConfig? _config;
+    private bool _configLoaded;
+
     public NamespaceStores(string name, string dataDir)
     {
         Name = name;
@@ -80,6 +87,7 @@ public sealed class NamespaceStores
         Gotchas = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(dataDir));
         MockRecipes = new JsonLineStore<MockRecipe>(RepoConfig.MockRecipesPath(dataDir));
         Assessments = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(dataDir));
+        Sessions = new JsonLineStore<SessionRecord>(RepoConfig.SessionsPath(dataDir));
     }
 
     public string Name { get; }
@@ -91,6 +99,38 @@ public sealed class NamespaceStores
     public JsonLineStore<Gotcha> Gotchas { get; }
     public JsonLineStore<MockRecipe> MockRecipes { get; }
     public JsonLineStore<Assessment> Assessments { get; }
+    public JsonLineStore<SessionRecord> Sessions { get; }
+
+    /// <summary>
+    /// Gets the namespace configuration (test framework, mock library, namespace pattern).
+    /// Lazy-loaded from config.json on first access. Returns defaults (xUnit/Moq) if not found.
+    /// </summary>
+    public NamespaceConfig Config
+    {
+        get
+        {
+            if (!_configLoaded)
+            {
+                var configPath = RepoConfig.ConfigJsonPath(_dataDir);
+                if (File.Exists(configPath))
+                {
+                    try
+                    {
+                        var json = File.ReadAllText(configPath);
+                        _config = JsonSerializer.Deserialize<NamespaceConfig>(json, SharedJsonOptions.CamelCase);
+                        Log.Debug($"[NamespaceStores] loaded config for '{Name}': framework={_config?.TestFramework}, mock={_config?.MockLibrary}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn($"[NamespaceStores] failed to load config.json for '{Name}': {ex.Message}");
+                    }
+                }
+                _config ??= new NamespaceConfig();
+                _configLoaded = true;
+            }
+            return _config!;
+        }
+    }
 
     /// <summary>
     /// Get pre-built name→TypeRecord dictionaries for O(1) lookups.
@@ -111,6 +151,7 @@ public sealed class NamespaceStores
 
             // Build both dictionaries in a single pass
             Metrics.Increment(Metrics.TypeIndexRebuild);
+            Log.Debug($"[TypeIndex] rebuilding index for '{Name}' ({all.Count} types)");
             var exact = new Dictionary<string, TypeRecord>(all.Count, StringComparer.Ordinal);
             var ci = new Dictionary<string, TypeRecord>(all.Count, StringComparer.OrdinalIgnoreCase);
 
@@ -126,5 +167,39 @@ public sealed class NamespaceStores
 
             return (exact, ci);
         }
+    }
+
+    /// <summary>
+    /// Resolve a type name using the 3-step strategy: exact → case-insensitive → contains.
+    /// Returns null if no match found. Tracks lookup metrics automatically.
+    /// This centralizes the type resolution pattern used by ContextTool, TestScaffoldTool,
+    /// and TestableTargetsTool.
+    /// </summary>
+    public TypeRecord? ResolveType(string typeName)
+    {
+        Log.Debug($"[ResolveType] resolving '{typeName}' in namespace '{Name}'");
+        var (exactIndex, ciIndex) = GetTypeIndex();
+
+        if (exactIndex.TryGetValue(typeName, out var exact))
+        {
+            Metrics.Increment(Metrics.LookupExact);
+            Log.Debug($"[ResolveType] exact match: {exact.Name} ({exact.Namespace})");
+            return exact;
+        }
+
+        if (ciIndex.TryGetValue(typeName, out var ci))
+        {
+            Metrics.Increment(Metrics.LookupCaseInsensitive);
+            Log.Debug($"[ResolveType] case-insensitive match: {ci.Name} ({ci.Namespace})");
+            return ci;
+        }
+
+        // Contains fallback — linear scan only when dictionary misses
+        var match = TypeRegistry.LoadAll().FirstOrDefault(t =>
+            t.Name.Contains(typeName, StringComparison.OrdinalIgnoreCase));
+
+        Metrics.Increment(match is not null ? Metrics.LookupContains : Metrics.LookupMiss);
+        Log.Debug($"[ResolveType] contains scan: {(match is not null ? match.Name : "miss")}");
+        return match;
     }
 }

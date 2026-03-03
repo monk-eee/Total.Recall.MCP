@@ -6,6 +6,11 @@ using Total.Recall.Models;
 
 namespace Total.Recall.Tools;
 
+/// <summary>
+/// MCP tool for querying and recording type-specific pitfalls (gotchas).
+/// Tracks construction traps, namespace issues, enum quirks, and API surprises
+/// discovered during test generation sessions.
+/// </summary>
 [McpServerToolType]
 public static class GotchaTool
 {
@@ -18,15 +23,21 @@ public static class GotchaTool
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetGotchas);
+        Log.Debug($"[GetGotchas] typeName='{typeName}' ns='{ns ?? "(default)"}'");
         try
         {
             var stores = StoreRegistry.ForNamespace(ns);
 
             if (!stores.Gotchas.HasData())
+            {
+                Log.Debug($"[GetGotchas] no gotchas data for ns='{stores.Name}'");
                 return $"No gotchas database found. No known issues for '{typeName}'.";
+            }
 
             var matches = stores.Gotchas.Query(g =>
                 g.Type.Contains(typeName, StringComparison.OrdinalIgnoreCase));
+
+            Log.Debug($"[GetGotchas] found {matches.Count} matches for '{typeName}'");
 
             if (matches.Count == 0)
                 return $"No gotchas found for '{typeName}'. Looks clean!";
@@ -51,6 +62,7 @@ public static class GotchaTool
         [Description("Optional: namespace/session to write to (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolAddGotcha);
+        Log.Debug($"[AddGotcha] typeName='{typeName}' category='{category}' ns='{ns ?? "(default)"}'");
         try
         {
             var stores = StoreRegistry.ForNamespace(ns);
@@ -64,6 +76,7 @@ public static class GotchaTool
             };
 
             stores.Gotchas.Append(record);
+            Log.Debug($"[AddGotcha] appended gotcha for '{typeName}'");
 
             return $"Added gotcha for '{typeName}' [{category}]: {gotcha}";
         }

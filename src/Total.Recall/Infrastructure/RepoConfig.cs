@@ -153,6 +153,8 @@ public static class RepoConfig
     public static string GotchasPath(string dataDir) => Path.Combine(dataDir, "gotchas.jsonl");
     public static string TestInventoryPath(string dataDir) => Path.Combine(dataDir, "test-inventory.jsonl");
     public static string AssessmentsPath(string dataDir) => Path.Combine(dataDir, "assessments.jsonl");
+    public static string SessionsPath(string dataDir) => Path.Combine(dataDir, "sessions.jsonl");
+    public static string ConfigJsonPath(string dataDir) => Path.Combine(dataDir, "config.json");
 
     /// <summary>
     /// Clear all cached paths. Used by tests to ensure fresh env var resolution.

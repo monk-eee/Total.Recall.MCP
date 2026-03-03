@@ -10,8 +10,11 @@ namespace Total.Recall.Scanners;
 /// </summary>
 public static partial class TestProjectScanner
 {
-    // Matches [Fact] or [Theory] followed by a public method signature
-    [GeneratedRegex(@"\[(Fact|Theory)(?:\(.*?\))?\]", RegexOptions.Compiled)]
+    // Matches test method attributes across all supported frameworks:
+    // xUnit:  [Fact], [Theory]
+    // NUnit:  [Test], [TestCase], [TestCaseSource]
+    // MSTest: [TestMethod], [DataTestMethod]
+    [GeneratedRegex(@"\[(Fact|Theory|Test|TestCase|TestCaseSource|TestMethod|DataTestMethod)(?:\(.*?\))?\]", RegexOptions.Compiled)]
     private static partial Regex TestAttributeRegex();
 
     // Matches: public (async Task|void) MethodName(

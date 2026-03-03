@@ -5,33 +5,8 @@ using Total.Recall.Tools;
 namespace Total.Recall.Tests.Tools;
 
 [Collection("ToolTests")]
-public sealed class CoverageGapsToolTests : IDisposable
+public sealed class CoverageGapsToolTests : ToolTestBase
 {
-    private readonly string _tempDir;
-    private readonly string? _originalEnv;
-
-    public CoverageGapsToolTests()
-    {
-        _tempDir = Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
-        StoreRegistry.Reset();
-    }
-
-    public void Dispose()
-    {
-        StoreRegistry.Reset();
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    private void SeedCoverageGaps(params CoverageGap[] records)
-    {
-        var store = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(_tempDir));
-        store.WriteAll(records);
-    }
 
     [Fact]
     public void GetCoverageGaps_NoData_ReturnsNotFoundMessage()
@@ -193,4 +168,13 @@ public sealed class CoverageGapsToolTests : IDisposable
         Assert.Contains("roiScore", result);
     }
 
+    // ── Error path coverage ──
+
+    [Fact]
+    public void GetCoverageGaps_InvalidNamespace_ReturnsError()
+    {
+        var result = CoverageGapsTool.GetCoverageGaps(ns: "\0");
+
+        Assert.StartsWith("ERROR in GetCoverageGaps", result);
+    }
 }

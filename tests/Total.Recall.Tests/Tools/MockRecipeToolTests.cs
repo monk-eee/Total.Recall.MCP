@@ -5,33 +5,8 @@ using Total.Recall.Tools;
 namespace Total.Recall.Tests.Tools;
 
 [Collection("ToolTests")]
-public sealed class MockRecipeToolTests : IDisposable
+public sealed class MockRecipeToolTests : ToolTestBase
 {
-    private readonly string _tempDir;
-    private readonly string? _originalEnv;
-
-    public MockRecipeToolTests()
-    {
-        _tempDir = Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
-        StoreRegistry.Reset();
-    }
-
-    public void Dispose()
-    {
-        StoreRegistry.Reset();
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    private void SeedMockRecipes(params MockRecipe[] records)
-    {
-        var store = new JsonLineStore<MockRecipe>(RepoConfig.MockRecipesPath(_tempDir));
-        store.WriteAll(records);
-    }
 
     [Fact]
     public void GetMockRecipe_NoData_ReturnsNotFoundMessage()
@@ -129,4 +104,13 @@ public sealed class MockRecipeToolTests : IDisposable
         Assert.Contains("IJobInput", result);
     }
 
+    // ── Error path coverage ──
+
+    [Fact]
+    public void GetMockRecipe_InvalidNamespace_ReturnsError()
+    {
+        var result = MockRecipeTool.GetMockRecipe("Any", ns: "\0");
+
+        Assert.StartsWith("ERROR in GetMockRecipe", result);
+    }
 }

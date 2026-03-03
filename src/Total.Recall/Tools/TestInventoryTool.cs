@@ -6,6 +6,10 @@ using Total.Recall.Models;
 
 namespace Total.Recall.Tools;
 
+/// <summary>
+/// MCP tool for querying existing test methods for a class. Returns test file paths,
+/// method names, and inferred method coverage to prevent writing duplicate tests.
+/// </summary>
 [McpServerToolType]
 public static class TestInventoryTool
 {
@@ -17,15 +21,21 @@ public static class TestInventoryTool
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetTestInventory);
+        Log.Debug($"[GetTestInventory] className='{className}' ns='{ns ?? "(default)"}'");
         try
         {
             var stores = StoreRegistry.ForNamespace(ns);
 
             if (!stores.TestInventory.HasData())
+            {
+                Log.Debug("[GetTestInventory] no test inventory data found");
                 return $"No test inventory found. Run 'total-recall scan --tests <dir>' first.";
+            }
 
             var matches = stores.TestInventory.Query(t =>
                 t.Class.Contains(className, StringComparison.OrdinalIgnoreCase));
+
+            Log.Debug($"[GetTestInventory] found {matches.Count} matches for '{className}'");
 
             if (matches.Count == 0)
                 return $"No existing tests found for '{className}'.";

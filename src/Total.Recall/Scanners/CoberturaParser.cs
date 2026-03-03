@@ -33,13 +33,15 @@ public static class CoberturaParser
             }
         }
 
-        // Deduplicate by class name (Cobertura sometimes duplicates partial classes)
+        // Deduplicate by namespace + class name (Cobertura sometimes duplicates partial classes).
+        // Using namespace-qualified key prevents merging classes with the same short name
+        // from different namespaces (e.g. ZonePivot in Models vs ContentBlocks).
         records = records
-            .GroupBy(r => r.Class)
+            .GroupBy(r => $"{r.Namespace}.{r.Class}", StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
                 if (g.Count() == 1) return g.First();
-                // Merge: sum lines, combine uncovered methods
+                // Merge: sum lines, combine uncovered methods (partial classes in same namespace)
                 var first = g.First();
                 first.TotalLines = g.Sum(x => x.TotalLines);
                 first.CoveredLines = g.Sum(x => x.CoveredLines);

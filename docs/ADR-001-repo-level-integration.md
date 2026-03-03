@@ -73,28 +73,35 @@ If Total.Recall's MCP server isn't running, the agent sees no MCP tools. It read
 ## Integration Points
 
 ```
-┌─────────────────────────┐     ┌──────────────────────┐
-│  coverage-uplift skill  │     │    Total.Recall MCP   │
-│  (UNCHANGED)            │     │    (separate repo)    │
-│                         │     │                       │
-│  SKILL.md               │     │  GetContext            │
-│  prompts/               │     │  ResolveType           │
-│  instructions/          │     │  GetCoverageGaps       │
-│                         │     │  GetGotchas/AddGotcha  │
-│  reads ↓                │     │  GetMockRecipe         │
-│  AGENTS.md              │     │  GetTestInventory      │
-│  (repo-specific)        │     │                       │
-└────────────┬────────────┘     └──────────┬───────────┘
-             │                              │
-             │    ┌─────────────────────┐   │
-             └────│  Target Repo        │───┘
+┌─────────────────────────┐     ┌──────────────────────────┐
+│  coverage-uplift skill  │     │    Total.Recall MCP       │
+│  (UNCHANGED)            │     │    (separate repo)        │
+│                         │     │                           │
+│  SKILL.md               │     │  v2 Decision Engine:      │
+│  prompts/               │     │    GetTestableTargets     │
+│  instructions/          │     │    GetSourceSnippet       │
+│                         │     │    GenerateTestScaffold   │
+│  reads ↓                │     │    LogSession/GetSessions │
+│  AGENTS.md              │     │                           │
+│  (repo-specific)        │     │  v1 Lookup Index:         │
+│                         │     │    GetContext/ResolveType  │
+│                         │     │    GetCoverageGaps         │
+│                         │     │    GetGotchas/AddGotcha   │
+│                         │     │    GetMockRecipe           │
+│                         │     │    GetTestInventory        │
+│                         │     │    Add/GetAssessments     │
+│                         │     │    GetMetrics              │
+└────────────┬────────────┘     └────────────┬─────────────┘
+             │                                │
+             │    ┌─────────────────────┐     │
+             └────│  Target Repo        │─────┘
                   │  (e.g. Linter)      │
                   │                     │
                   │  AGENTS.md          │ ← MCP section added here
                   │  .github/copilot-   │ ← auto-injected by VS Code
                   │    instructions.md  │
-                  │  .vscode/mcp.json   │ ← wires MCP server
+                  │  .vscode/mcp.json   │ ← wires MCP server (4 env vars)
                   └─────────────────────┘
 ```
 
-The skill reads AGENTS.md → finds MCP guidance → uses MCP tools for type survey. If MCP isn't there, the skill's standard file-reading workflow runs unchanged.
+The skill reads AGENTS.md → finds MCP guidance → uses MCP tools for type survey, target scoring, scaffold generation, and session logging. If MCP isn't there, the skill's standard file-reading workflow runs unchanged.

@@ -6,15 +6,11 @@ namespace Total.Recall.Infrastructure;
 /// Generic JSONL (JSON Lines) file store. One JSON object per line.
 /// Provides read-all, query, and append operations.
 /// Caches data in memory and reloads only when the file changes on disk.
+/// Reuses <see cref="SharedJsonOptions.CamelCase"/> for serialization to benefit
+/// from System.Text.Json's shared reflection cache.
 /// </summary>
 public sealed class JsonLineStore<T> where T : class
 {
-    private static readonly JsonSerializerOptions s_options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = false
-    };
-
     private readonly string _filePath;
     private List<T>? _cache;
     private DateTime _cacheTimestamp;
@@ -34,13 +30,21 @@ public sealed class JsonLineStore<T> where T : class
     {
         if (!File.Exists(_filePath))
         {
+            Log.Debug($"[JsonLineStore<{typeof(T).Name}>] file not found: {Path.GetFileName(_filePath)}");
             _cache = null;
             return [];
         }
 
         var lastWrite = File.GetLastWriteTimeUtc(_filePath);
         if (_cache is not null && lastWrite == _cacheTimestamp)
+        {
+            Log.Debug($"[JsonLineStore<{typeof(T).Name}>] cache hit ({_cache.Count} records) for {Path.GetFileName(_filePath)}");
+            Metrics.Increment(Metrics.CacheHit);
             return _cache;
+        }
+
+        Log.Debug($"[JsonLineStore<{typeof(T).Name}>] loading from disk: {Path.GetFileName(_filePath)}");
+        Metrics.Increment(_cache is null ? Metrics.CacheMiss : Metrics.CacheReload);
 
         var results = new List<T>();
         var lineNum = 0;
@@ -53,7 +57,7 @@ public sealed class JsonLineStore<T> where T : class
 
             try
             {
-                var record = JsonSerializer.Deserialize<T>(line, s_options);
+                var record = JsonSerializer.Deserialize<T>(line, SharedJsonOptions.CamelCase);
                 if (record is not null)
                     results.Add(record);
             }
@@ -98,7 +102,7 @@ public sealed class JsonLineStore<T> where T : class
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
 
-            var line = JsonSerializer.Serialize(record, s_options);
+            var line = JsonSerializer.Serialize(record, SharedJsonOptions.CamelCase);
             File.AppendAllText(_filePath, line + Environment.NewLine);
             _cache = null; // invalidate cache
         }
@@ -121,7 +125,7 @@ public sealed class JsonLineStore<T> where T : class
         using var writer = new StreamWriter(_filePath, append: false);
         foreach (var record in records)
         {
-            var line = JsonSerializer.Serialize(record, s_options);
+            var line = JsonSerializer.Serialize(record, SharedJsonOptions.CamelCase);
             writer.WriteLine(line);
         }
         _cache = null; // invalidate cache

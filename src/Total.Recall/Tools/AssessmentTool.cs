@@ -6,6 +6,11 @@ using Total.Recall.Models;
 
 namespace Total.Recall.Tools;
 
+/// <summary>
+/// MCP tool for recording and querying testability assessments.
+/// Persists verdicts (testable, coupled, skip, deferred) so future sessions
+/// can skip re-evaluating already-assessed classes.
+/// </summary>
 [McpServerToolType]
 public static class AssessmentTool
 {
@@ -22,6 +27,7 @@ public static class AssessmentTool
         [Description("Optional: namespace/session to write to (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolAddAssessment);
+        Log.Debug($"[AddAssessment] className='{className}' verdict='{verdict}' ns='{ns ?? "(default)"}'");
         try
         {
             var stores = StoreRegistry.ForNamespace(ns);
@@ -37,7 +43,8 @@ public static class AssessmentTool
                 Date = DateTime.UtcNow.ToString("yyyy-MM-dd")
             };
 
-            StoreRegistry.ForNamespace(ns).Assessments.Append(record);
+            stores.Assessments.Append(record);
+            Log.Debug($"[AddAssessment] recorded assessment for '{className}': {verdict}");
 
             var depsText = record.Dependencies.Count > 0
                 ? $" deps=[{string.Join(", ", record.Dependencies)}]"
@@ -66,14 +73,19 @@ public static class AssessmentTool
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetAssessments);
+        Log.Debug($"[GetAssessments] className='{className ?? "(all)"}' verdict='{verdict ?? "(all)"}' ns='{ns ?? "(default)"}'");
         try
         {
             var stores = StoreRegistry.ForNamespace(ns);
 
             if (!stores.Assessments.HasData())
+            {
+                Log.Debug("[GetAssessments] no assessment data found");
                 return "No assessments recorded yet. Use add_assessment during testability analysis.";
+            }
 
             var all = stores.Assessments.LoadAll();
+            Log.Debug($"[GetAssessments] loaded {all.Count} raw records");
 
             // Deduplicate: latest assessment wins per class (append-only, so last = latest)
             var latest = new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
@@ -91,6 +103,7 @@ public static class AssessmentTool
                     a.Verdict.Equals(verdict.Trim(), StringComparison.OrdinalIgnoreCase));
 
             var list = results.OrderBy(a => a.Verdict).ThenBy(a => a.Class).ToList();
+            Log.Debug($"[GetAssessments] returning {list.Count} deduplicated assessments (from {latest.Count} unique classes)");
 
             if (list.Count == 0)
             {
