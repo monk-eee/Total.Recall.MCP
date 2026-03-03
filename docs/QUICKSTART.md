@@ -1,10 +1,11 @@
-# Total.Recall — Quick Start Guide
+# Total.Recall v2 — Quick Start Guide
 
 ## Prerequisites
 
 - .NET 8.0 SDK (8.0.400+)
-- VS Code with GitHub Copilot
+- VS Code with GitHub Copilot (agent mode)
 - The target repo built (assembly DLL must exist)
+- Coverage report generated (`dotnet test --collect:"XPlat Code Coverage"`)
 
 ## 1. Build Total.Recall
 
@@ -15,47 +16,63 @@ dotnet build src/Total.Recall/Total.Recall.csproj
 
 ## 2. Scan Your Target Repo
 
-Run all three scanners in one command:
+### Full scan (recommended for first run)
 
 ```bash
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --assembly "C:\Users\lyndonswan\Repos\Linter\src\LanguageServer\Server\bin\Debug\net8.0\win-x64\Server.dll" ^
-  --coverage "C:\Users\lyndonswan\Repos\Linter\TestResults\<guid>\coverage.cobertura.xml" ^
-  --tests "C:\Users\lyndonswan\Repos\Linter\src\LanguageServer\UnitTest" ^
-  --output "C:\Users\lyndonswan\Repos\Total.Recall\data\linter"
+  --assembly "C:\path\to\Server.dll" ^
+  --coverage "C:\path\to\coverage.cobertura.xml" ^
+  --tests "C:\path\to\UnitTest" ^
+  --source-root "C:\path\to\Server\src" ^
+  --namespace myproject ^
+  --enrich
 ```
 
-Or scan individually:
+### What each flag does
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--assembly` | no* | Path to target .NET assembly (.dll) — builds type registry |
+| `--coverage` | no* | Path to Cobertura XML coverage report — builds coverage gaps |
+| `--tests` | no* | Path to test project directory — builds test inventory |
+| `--source-root` | no | Path to target repo source root — enables `get_source_snippet` tool |
+| `--namespace` | no | Namespace subdirectory under `TOTAL_RECALL_DATA` (default: env var) |
+| `--output` | no | Override data output directory entirely |
+| `--enrich` | no | Cross-reference coverage with type registry + test inventory |
+| `--help` | — | Print usage |
+
+\* At least one of `--assembly`, `--coverage`, `--tests`, or `--enrich` is required.
+
+### Example output
+
+```
+Total.Recall Scanner v2 — output: C:\...\data\myproject
+  Scanning assembly... ✓ type-registry.jsonl — 1176 types
+  Parsing coverage... ✓ coverage-gaps.jsonl — 539 classes
+  Scanning tests... ✓ test-inventory.jsonl — 157 test files
+  Enriching coverage data... ✓ 412 classes enriched with test counts + testability
+  ✓ config.json updated
+Done. [types:1176, coverage-classes:539, test-files:157, enriched:412]
+```
+
+### Incremental re-scans
+
+After running tests with fresh coverage, you don't need a full scan — just update what changed:
 
 ```bash
-# Assembly only (type registry)
+# Re-scan coverage after a test run + enrich
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --assembly "path\to\Server.dll" ^
-  --output "data\linter"
+  --coverage "C:\path\to\new-coverage.cobertura.xml" ^
+  --namespace myproject --enrich
 
-# Coverage only
+# Just re-enrich existing data (no new scans)
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --coverage "path\to\coverage.cobertura.xml" ^
-  --output "data\linter"
-
-# Tests only
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --tests "path\to\UnitTest" ^
-  --output "data\linter"
-```
-
-**Output:**
-```
-Total.Recall Scanner — output: C:\...\data\linter
-Scanning assembly... ✓ type-registry.jsonl — 1176 types
-Parsing coverage... ✓ coverage-gaps.jsonl — 539 classes
-Scanning tests... ✓ test-inventory.jsonl — 157 test files
-Done.
+  --namespace myproject --enrich
 ```
 
 ## 3. Wire Up VS Code
 
-Create `.vscode/mcp.json` in your target workspace (e.g., the Linter repo):
+Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for):
 
 ```json
 {
@@ -69,7 +86,10 @@ Create `.vscode/mcp.json` in your target workspace (e.g., the Linter repo):
         "C:\\Users\\lyndonswan\\Repos\\Total.Recall\\src\\Total.Recall\\Total.Recall.csproj"
       ],
       "env": {
-        "TOTAL_RECALL_DATA": "C:\\Users\\lyndonswan\\Repos\\Total.Recall\\data\\linter"
+        "TOTAL_RECALL_DATA": "C:\\Users\\lyndonswan\\Repos\\Total.Recall\\data",
+        "TOTAL_RECALL_NAMESPACE": "myproject",
+        "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\Server\\src",
+        "TOTAL_RECALL_LOG_LEVEL": "info"
       }
     }
   }
@@ -78,126 +98,97 @@ Create `.vscode/mcp.json` in your target workspace (e.g., the Linter repo):
 
 Restart VS Code. The MCP server starts automatically when Copilot initializes.
 
-**Startup behavior**: On first launch, the server pre-loads all JSONL data into memory and builds O(1) lookup indexes. You'll see validation output in the MCP server's stderr:
+> **Note:** `TOTAL_RECALL_SOURCE_ROOT` is optional. If you provided `--source-root` during scanning, the value is persisted in `config.json` and the server reads it automatically.
+
+### Startup validation
+
+On first launch the server pre-loads all JSONL data and builds O(1) lookup indexes:
+
 ```
-[Total.Recall] data dir: C:\...\data\linter
+[Total.Recall] data dir: C:\...\data\myproject
   ✓ type-registry: 1176 records (cached)
   ✓ coverage-gaps: 539 records (cached)
   ✓ test-inventory: 157 records (cached)
   ✓ gotchas: 70 records (cached)
   ✓ mock-recipes: 12 records (cached)
+  ✓ sessions: 0 records (cached)
   ⚡ type index: 1176 entries (O(1) lookups ready)
 ```
 
-Every subsequent tool call hits the in-memory cache — no disk I/O unless the JSONL files were modified since last load.
-
 ## 4. Use the Tools
 
-Once wired, Copilot sees 6 tools. Use them naturally in your prompts or they'll be auto-discovered:
+Total.Recall exposes **15 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
 
-### resolve_type
-> "Resolve the type `ContentBlock` — I need its namespace, constructors, and properties"
+### Step 1 — Pick targets
 
-Returns full type metadata from the registry. Supports partial name matching.
+> "Get the top 5 testable targets with max 4 constructor params"
 
-### get_mock_recipe
-> "Get the mock recipe for `IJobOutputInstance`"
+Uses `get_testable_targets` — cross-joins 6 data sources, pre-filters by DI complexity, and returns a scored list. **This replaces 4+ manual tool calls and manual reasoning.**
 
-Returns pre-built Moq setup code with required usings and known gotchas.
+### Step 2 — Understand the code
 
-### get_coverage_gaps
-> "Show me the top 10 classes with the most uncovered lines"
+> "Show me the source of ContentBlock.BuildBlocks"
 
-Returns ranked list of classes by uncovered line count, with method-level detail.
+Uses `get_source_snippet` — serves actual C# source from the target repo. **No more `read_file` calls to the target repo.**
 
-### get_gotchas
-> "What gotchas exist for `ContentRange`?"
+### Step 3 — Generate scaffold
 
-Returns all known pitfalls for a type — constructor traps, enum quirks, namespace issues.
+> "Generate a test scaffold for ContentBlock"
 
-### add_gotcha
-> "Record a gotcha: ExportOutput 4-string ctor with empty filename throws ArgumentException"
+Uses `generate_test_scaffold` — produces a complete `.cs` test file with correct `using` statements, mock wiring, constructor setup, and `[Fact]` stubs for every uncovered method.
 
-Persists a new gotcha to disk for future sessions.
+### Step 4 — Write tests
 
-### get_test_inventory
-> "What tests already exist for `AuditEntry`?"
+Fill in the scaffold stubs. Use the other tools as needed:
 
-Returns existing test methods, files, and inferred method coverage.
+| Tool | When to use |
+|------|-------------|
+| `get_context` | Combined type + gotchas + tests + mocks for a type |
+| `resolve_type` | Just need constructor/property signatures |
+| `get_mock_recipe` | Pre-built Moq setup code for an interface |
+| `get_gotchas` | Known pitfalls before testing a type |
+| `add_gotcha` | Record a new pitfall discovered during testing |
+| `get_test_inventory` | Check what's already tested before generating duplicates |
+| `get_coverage_gaps` | ROI-ranked list of uncovered classes |
+| `add_assessment` / `get_assessments` | Testability verdicts for classes |
+| `get_source_snippet` | Read specific method implementations from target repo |
+| `get_metrics` | Server telemetry (cache hits, tool calls) |
 
-## 5. Re-scan After Changes
+### Step 5 — Log the session
 
-After running tests with coverage, re-scan to update the data:
+> "Log this session: claude-sonnet-4-20250514, 850K prompt tokens, 320K completion tokens, attempted ContentBlock+DocSet+ArtifactSchema, all succeeded, 45 tests, coverage 25.66 to 38.2"
 
-```bash
-# Re-scan coverage (after dotnet test with coverage)
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --coverage "C:\...\TestResults\<new-guid>\coverage.cobertura.xml" ^
-  --output "data\linter"
+Uses `log_session` — persists outcomes for cross-session analytics. Call `get_sessions` in future sessions to see what worked.
 
-# Re-scan tests (after adding new test files)
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --tests "C:\...\UnitTest" ^
-  --output "data\linter"
+## 5. Verify It's Working
 
-# Re-scan assembly (after adding new source types)
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --assembly "C:\...\Server.dll" ^
-  --output "data\linter"
-```
+In Copilot chat, try: `get testable targets with top 3`
 
-## 6. Verify It's Working
+You should see a scored list of classes. If it doesn't appear:
 
-In your Copilot chat, type: `@Total.Recall resolve AuditEntry`
-
-You should see the tool invoked and return type metadata. If it doesn't appear, check:
 1. `.vscode/mcp.json` exists in the workspace root
 2. VS Code was restarted after adding the file
 3. `dotnet run --project <path>` works from terminal
 4. `TOTAL_RECALL_DATA` env var points to a directory with `.jsonl` files
+5. The namespace directory exists and contains data
 
-## Data File Locations
+## 6. Data File Locations
 
-| File | Path | Updated By |
-|------|------|-----------|
-| Type registry | `data/linter/type-registry.jsonl` | `--assembly` scan |
-| Coverage gaps | `data/linter/coverage-gaps.jsonl` | `--coverage` scan |
-| Test inventory | `data/linter/test-inventory.jsonl` | `--tests` scan |
-| Gotchas | `data/linter/gotchas.jsonl` | `add_gotcha` tool + manual seeding |
-| Mock recipes | `data/linter/mock-recipes.jsonl` | Manual curation |
+| File | Updated By | Description |
+|------|-----------|-------------|
+| `type-registry.jsonl` | `--assembly` scan | Every public/internal type in the target assembly |
+| `coverage-gaps.jsonl` | `--coverage` scan | Uncovered lines/methods per class |
+| `test-inventory.jsonl` | `--tests` scan | Existing test methods per class |
+| `gotchas.jsonl` | `add_gotcha` tool + manual seeding | Type-specific traps and workarounds |
+| `mock-recipes.jsonl` | Manual curation | Pre-built Moq setup code per interface |
+| `assessments.jsonl` | `add_assessment` tool | Testability verdicts from agent analysis |
+| `sessions.jsonl` | `log_session` tool | Session outcomes for cross-session learning |
+| `config.json` | Scanner `--source-root` | Persisted scan config (source root, paths, timestamp) |
 
-## 7. Integrate with Coverage Skill (No Skill Changes Required)
+All files live under `$TOTAL_RECALL_DATA/{namespace}/`.
 
-Total.Recall integrates with the `coverage-uplift` skill through **repo-level files only** — the skill itself is never modified. See [ADR-001](ADR-001-repo-level-integration.md) for the full rationale.
+## 7. Integrate with Your Agent Workflow
 
-### Add to `.github/copilot-instructions.md`
+Total.Recall is **standalone** — it doesn't depend on any specific skill or workflow. But it works best when the agent knows it exists.
 
-Create or append to `.github/copilot-instructions.md` in your target repo:
-
-```markdown
-## Total.Recall MCP Server
-
-This workspace has a `Total.Recall` MCP server connected (configured in `.vscode/mcp.json`).
-It provides persistent memory across sessions for the coverage uplift workflow.
-
-**When generating tests or working on coverage**, prefer MCP tools over reading source files:
-
-- **`GetContext(typeName)`** — Use this FIRST. Returns type metadata, gotchas, test inventory, and mock recipes in one call.
-- **`GetCoverageGaps(top, sortBy)`** — ROI-ranked list of what to test next. Use `sortBy: "roi"`.
-- **`ResolveType(typeName)`** — Type signatures when you just need constructors/properties.
-- **`AddGotcha(typeName, category, gotcha)`** — Persist pitfalls for future sessions.
-- **`GetMockRecipe(interfaceName)`** — Ready-to-use Moq setup code.
-- **`GetTestInventory(className)`** — Check what's already tested before generating duplicates.
-
-**Fall back to reading `.cs` files** only when you need method body logic (MCP gives signatures, not implementations).
-```
-
-### Add to `AGENTS.md`
-
-Add a `## Total.Recall MCP Integration` section to your repo's AGENTS.md. See the Linter repo's AGENTS.md for the exact format — it includes a tool reference table, workflow steps, re-scan commands, and fallback guidance.
-
-### Why This Works
-
-The coverage-uplift skill reads `AGENTS.md` at the start of every workflow step. When it finds the MCP section, the agent uses MCP tools for type surveys instead of reading production source files. If MCP isn't available (server not running, different repo), the skill's standard file-reading workflow runs unchanged.
-
-The `.github/copilot-instructions.md` file is auto-injected by VS Code into every Copilot conversation, providing the "MCP is available" signal even before the skill activates.
+See [INTEGRATION.md](INTEGRATION.md) for ready-to-copy templates for `.github/copilot-instructions.md` and `AGENTS.md` injection in your target repo. The integration guide is self-contained and explains everything a new user needs.

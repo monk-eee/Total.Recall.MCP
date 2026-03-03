@@ -5,33 +5,8 @@ using Total.Recall.Tools;
 namespace Total.Recall.Tests.Tools;
 
 [Collection("ToolTests")]
-public sealed class GotchaToolTests : IDisposable
+public sealed class GotchaToolTests : ToolTestBase
 {
-    private readonly string _tempDir;
-    private readonly string? _originalEnv;
-
-    public GotchaToolTests()
-    {
-        _tempDir = Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
-        StoreRegistry.Reset();
-    }
-
-    public void Dispose()
-    {
-        StoreRegistry.Reset();
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    private void SeedGotchas(params Gotcha[] records)
-    {
-        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(_tempDir));
-        store.WriteAll(records);
-    }
 
     [Fact]
     public void GetGotchas_NoData_ReturnsNotFoundMessage()
@@ -90,7 +65,7 @@ public sealed class GotchaToolTests : IDisposable
         Assert.Contains("MyClass", result);
 
         // Verify it was persisted
-        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(_tempDir));
+        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(TempDir));
         var all = store.LoadAll();
         Assert.Single(all);
         Assert.Equal("MyClass", all[0].Type);
@@ -105,7 +80,7 @@ public sealed class GotchaToolTests : IDisposable
         GotchaTool.AddGotcha("B", "enum", "second");
         GotchaTool.AddGotcha("A", "mock", "third");
 
-        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(_tempDir));
+        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(TempDir));
         var all = store.LoadAll();
         Assert.Equal(3, all.Count);
     }
@@ -115,7 +90,7 @@ public sealed class GotchaToolTests : IDisposable
     {
         GotchaTool.AddGotcha("X", "bug", "test");
 
-        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(_tempDir));
+        var store = new JsonLineStore<Gotcha>(RepoConfig.GotchasPath(TempDir));
         var record = store.LoadAll().Single();
         Assert.Equal(DateTime.UtcNow.ToString("yyyy-MM-dd"), record.Date);
     }
@@ -128,6 +103,24 @@ public sealed class GotchaToolTests : IDisposable
         var result = GotchaTool.GetGotchas("Widget");
 
         Assert.Contains("HasInit is unreliable", result);
+    }
+
+    // ── Error path coverage ──
+
+    [Fact]
+    public void GetGotchas_InvalidNamespace_ReturnsError()
+    {
+        var result = GotchaTool.GetGotchas("Any", ns: "\0");
+
+        Assert.StartsWith("ERROR in GetGotchas", result);
+    }
+
+    [Fact]
+    public void AddGotcha_InvalidNamespace_ReturnsError()
+    {
+        var result = GotchaTool.AddGotcha("Any", "bug", "test", ns: "\0");
+
+        Assert.StartsWith("ERROR in AddGotcha", result);
     }
 
 }

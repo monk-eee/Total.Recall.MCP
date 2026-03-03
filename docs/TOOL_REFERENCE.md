@@ -1,10 +1,127 @@
 # Total.Recall — Tool Reference
 
-Complete reference for all 6 MCP tools exposed by the server.
+Complete reference for all 15 MCP tools exposed by the server.
+
+All tools accept an optional `ns` parameter to target a specific namespace dataset.
 
 ---
 
-## resolve_type
+## v2 Tools (Decision Engine)
+
+### get_testable_targets
+
+**Purpose**: Pre-scored, pre-filtered list of "here's your next N classes to test." Cross-joins 6 data sources so you don't have to.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `top` | int | no | 10 | Max results to return |
+| `maxCtorParams` | int | no | 5 | Max constructor params to include (lower = simpler DI) |
+| `maxTotalLines` | int | no | 500 | Max total lines in class |
+| `excludeAbstract` | bool | no | true | Exclude abstract classes |
+| `excludeAssessed` | bool | no | true | Exclude classes with "skip"/"coupled" assessments |
+| `requireZeroTests` | bool | no | false | Only show classes with zero existing tests |
+
+**Scoring formula**:
+```
+score = uncoveredLines
+      × testabilityMultiplier (1.0 high, 0.7 medium, 0.3 low)
+      × ctorSimplicity (1.0 for 0-2, 0.7 for 3-4, 0.3 for 5+)
+      × mockCoverage (1.0 all mocked, 0.7 partial, 0.5 none)
+      / (1 + existingTestCount)
+      / (1 + gotchaCount × 0.1)
+```
+
+**Returns**: Array of `TestableTarget` objects with class, score, reason, uncoveredMethods, ctorParams, and all cross-joined metadata.
+
+**When to use**: **First tool call of every coverage session.** Replaces 4+ manual tool calls and manual target selection reasoning.
+
+---
+
+### get_source_snippet
+
+**Purpose**: Serve actual C# source code from the target repo. Eliminates "I have to read_file anyway."
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | yes | Class name to get source for |
+| `methodName` | string | no | Specific method to extract (returns just that method) |
+| `maxLines` | int | no | Max lines to return (default: 200) |
+
+**Resolution**: className → `coverage-gaps.jsonl` (file path) → source root + relative path → read file.
+
+**Requires**: `TOTAL_RECALL_SOURCE_ROOT` env var or scanner `--source-root` (persisted to `config.json`).
+
+**Returns**: JSON with `filePath`, `startLine`, `endLine`, `source` (string), `totalLines`.
+
+**When to use**: After picking a target — read the implementation before writing tests. Replaces `read_file` calls to the target repo.
+
+---
+
+### generate_test_scaffold
+
+**Purpose**: Complete C# test class skeleton combining type metadata + mock recipes + coverage gaps + gotchas.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | yes | Class to generate test scaffold for |
+
+**Generates**:
+- All required `using` statements (type namespace + dependencies + Moq + Xunit)
+- `Mock<T>` field declarations for every interface constructor parameter
+- Default values for concrete params (`string` → `""`, `int` → `0`, etc.)
+- Test class with constructor that wires mocks → SUT
+- One `[Fact]` method stub per uncovered method
+- `// ⚠️ GOTCHA:` comments for known pitfalls
+- Mock recipe `Setup()` calls in constructor
+
+**Returns**: Complete `.cs` file content as a string.
+
+**When to use**: After `get_testable_targets` + `get_source_snippet` — scaffold the test file, then fill in assertions.
+
+---
+
+### log_session
+
+**Purpose**: Write session outcomes for cross-session learning. Bidirectional — the agent writes data *back* to Total.Recall.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `model` | string | yes | — | LLM model used (e.g., "claude-sonnet-4-20250514") |
+| `promptTokens` | long | no | 0 | Approximate prompt tokens consumed |
+| `completionTokens` | long | no | 0 | Approximate completion tokens consumed |
+| `classesAttempted` | string | no | "" | Comma-separated class names attempted |
+| `classesSucceeded` | string | no | "" | Comma-separated class names that compiled + passed |
+| `classesFailed` | string | no | "" | Comma-separated "ClassName:reason" pairs |
+| `testsGenerated` | int | no | 0 | Total test methods generated |
+| `coverageBefore` | double | no | 0 | Line coverage % before session |
+| `coverageAfter` | double | no | 0 | Line coverage % after session |
+| `gotchasDiscovered` | int | no | 0 | New gotchas added this session |
+| `assessmentsRecorded` | int | no | 0 | New assessments added this session |
+| `notes` | string | no | null | Free-form session notes |
+
+**Returns**: Confirmation + session ID.
+
+**When to use**: **End of every coverage session.** Captures what happened for future analytics.
+
+---
+
+### get_sessions
+
+**Purpose**: Session history + aggregate analytics.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `last` | int | no | 5 | Number of recent sessions to return |
+
+**Returns**: JSON with recent sessions + aggregates: total tests generated, total coverage delta, average tokens per test, success rate, top patterns.
+
+**When to use**: Start of a session to see what worked previously, or for ROI measurement.
+
+---
+
+## v1 Tools (Lookup Index)
+
+### resolve_type
 
 **Purpose**: Look up any .NET type from the scanned assembly by name.
 
@@ -221,3 +338,64 @@ Complete reference for all 6 MCP tools exposed by the server.
 ```
 
 **When to use**: Before writing new tests — avoid duplicating existing coverage.
+
+---
+
+## get_context
+
+**Purpose**: Combined query — returns type metadata, gotchas, test inventory, and mock recipes in a single call.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `typeName` | string | yes | Type name to look up |
+
+**Returns**: JSON object with `type` (TypeRecord), `gotchas` (Gotcha[]), `testInventory` (TestInventoryEntry), `mockRecipes` (MockRecipe[]), and `assessments` (Assessment[]).
+
+**When to use**: When you need the full picture for a type before writing tests. Saves 4-5 individual tool calls.
+
+---
+
+## add_assessment
+
+**Purpose**: Record a testability verdict for a class.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | yes | Class being assessed |
+| `verdict` | string | yes | One of: `testable`, `skip`, `coupled`, `complex`, `trivial` |
+| `reasoning` | string | yes | Why this verdict was given |
+| `deps` | string | no | Comma-separated key dependencies |
+| `cluster` | string | no | Related class cluster name |
+
+**Returns**: Confirmation message.
+
+**When to use**: After evaluating a class — persist the verdict so future sessions (and `get_testable_targets`) can skip already-assessed classes.
+
+---
+
+## get_assessments
+
+**Purpose**: Retrieve previous testability assessments.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | no | Filter by class name (returns all if omitted) |
+| `verdict` | string | no | Filter by verdict |
+
+**Returns**: Array of Assessment objects. Deduplicates by class name (last assessment wins).
+
+**When to use**: Check if a class was already assessed before spending time evaluating it.
+
+---
+
+## get_metrics
+
+**Purpose**: Server telemetry — tool call counts, cache hit/miss rates, type index stats.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| (none) | — | — | — |
+
+**Returns**: JSON object with all counter values.
+
+**When to use**: Debugging server performance or verifying tool usage.

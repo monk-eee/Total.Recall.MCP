@@ -337,6 +337,45 @@ public sealed class CoberturaParserTests : IDisposable
     }
 
     [Fact]
+    public void Parse_MethodWithNoLines_IsSkipped()
+    {
+        var xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage>
+              <packages>
+                <package name="MyApp">
+                  <classes>
+                    <class name="MyApp.Service.Empty" filename="Empty.cs">
+                      <methods>
+                        <method name="NoLines" signature="()void">
+                          <lines />
+                        </method>
+                        <method name="HasLines" signature="()void">
+                          <lines>
+                            <line number="10" hits="0" />
+                          </lines>
+                        </method>
+                      </methods>
+                      <lines>
+                        <line number="10" hits="0" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """;
+        var coberturaPath = WriteCoberturaXml(xml);
+
+        CoberturaParser.Parse(coberturaPath, _tempDir);
+
+        var content = File.ReadAllText(Path.Combine(_tempDir, "coverage-gaps.jsonl"));
+        // The method with no lines should be skipped; only HasLines should appear
+        Assert.DoesNotContain("NoLines", content);
+        Assert.Contains("HasLines", content);
+    }
+
+    [Fact]
     public void Parse_CoveragePercentCalculatedCorrectly()
     {
         var xml = """
@@ -367,5 +406,82 @@ public sealed class CoberturaParserTests : IDisposable
         var content = File.ReadAllText(outputPath);
         // 2 covered / 4 total = 50%
         Assert.Contains("\"coveragePercent\":50", content);
+    }
+
+    // ── Namespace-qualified deduplication ──
+
+    [Fact]
+    public void Parse_SameClassDifferentNamespaces_KeptSeparate()
+    {
+        var xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage>
+              <packages>
+                <package name="MyApp">
+                  <classes>
+                    <class name="MyApp.Models.ZonePivot" filename="Models/ZonePivot.cs">
+                      <methods />
+                      <lines>
+                        <line number="1" hits="0" />
+                        <line number="2" hits="0" />
+                      </lines>
+                    </class>
+                    <class name="MyApp.ContentBlocks.ZonePivot" filename="ContentBlocks/ZonePivot.cs">
+                      <methods />
+                      <lines>
+                        <line number="10" hits="0" />
+                        <line number="11" hits="0" />
+                        <line number="12" hits="0" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """;
+        var coberturaPath = WriteCoberturaXml(xml);
+
+        var count = CoberturaParser.Parse(coberturaPath, _tempDir);
+
+        // Two separate records — should NOT be merged
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public void Parse_SameClassSameNamespace_StillMergedAsPartials()
+    {
+        var xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <coverage>
+              <packages>
+                <package name="MyApp">
+                  <classes>
+                    <class name="MyApp.Service.Worker" filename="Worker.cs">
+                      <methods />
+                      <lines>
+                        <line number="1" hits="1" />
+                        <line number="2" hits="0" />
+                      </lines>
+                    </class>
+                    <class name="MyApp.Service.Worker" filename="Worker.Generated.cs">
+                      <methods />
+                      <lines>
+                        <line number="10" hits="1" />
+                        <line number="11" hits="0" />
+                      </lines>
+                    </class>
+                  </classes>
+                </package>
+              </packages>
+            </coverage>
+            """;
+        var coberturaPath = WriteCoberturaXml(xml);
+
+        var count = CoberturaParser.Parse(coberturaPath, _tempDir);
+
+        // Same namespace + same class → merged as partial
+        Assert.Equal(1, count);
+        var content = File.ReadAllText(Path.Combine(_tempDir, "coverage-gaps.jsonl"));
+        Assert.Contains("\"totalLines\":4", content);
     }
 }

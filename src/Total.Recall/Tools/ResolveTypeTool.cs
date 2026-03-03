@@ -19,6 +19,7 @@ public static class ResolveTypeTool
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolResolveType);
+        Log.Debug($"[ResolveType] typeName='{typeName}' namespacePart='{namespacePart ?? "(none)"}' filePath='{filePath ?? "(none)"}' ns='{ns ?? "(default)"}'");
         try
         {
             return ResolveTypeCore(typeName, namespacePart, filePath, ns);
@@ -35,10 +36,14 @@ public static class ResolveTypeTool
         var stores = StoreRegistry.ForNamespace(ns);
 
         if (!stores.TypeRegistry.HasData())
+        {
+            Log.Debug("[ResolveType] no type registry data found");
             return "No type registry found. Run 'total-recall scan --assembly <dll>' first.";
+        }
 
         // Use pre-built dictionary index for exact/case-insensitive lookups (O(1))
         var (exactIndex, ciIndex) = stores.GetTypeIndex();
+        Log.Debug($"[ResolveType] index has {exactIndex.Count} entries");
         List<TypeRecord> matches;
 
         // 1. Exact name match via dictionary
@@ -103,12 +108,16 @@ public static class ResolveTypeTool
         }
 
         if (matches.Count == 0)
+        {
+            Log.Debug($"[ResolveType] no matches for '{typeName}'");
             return $"No type found matching '{typeName}'" +
                    (namespacePart is not null ? $" in namespace '{namespacePart}'" : "") +
                    (filePath is not null ? $" in file '{filePath}'" : "") +
                    ".";
+        }
 
         var results = matches.Take(5).ToList();
+        Log.Debug($"[ResolveType] returning {results.Count} result(s) for '{typeName}'");
         return JsonSerializer.Serialize(results, SharedJsonOptions.CamelCaseIndented);
     }
 }

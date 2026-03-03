@@ -78,44 +78,25 @@ public sealed class RepoConfigTests : IDisposable
         Assert.Equal(Path.GetFullPath("data"), result);
     }
 
-    [Fact]
-    public void TypeRegistryPath_CombinesCorrectly()
+    [Theory]
+    [InlineData(nameof(RepoConfig.TypeRegistryPath), "type-registry.jsonl")]
+    [InlineData(nameof(RepoConfig.MockRecipesPath), "mock-recipes.jsonl")]
+    [InlineData(nameof(RepoConfig.CoverageGapsPath), "coverage-gaps.jsonl")]
+    [InlineData(nameof(RepoConfig.GotchasPath), "gotchas.jsonl")]
+    [InlineData(nameof(RepoConfig.TestInventoryPath), "test-inventory.jsonl")]
+    [InlineData(nameof(RepoConfig.ConfigJsonPath), "config.json")]
+    public void DataFilePath_CombinesCorrectly(string methodName, string expectedFileName)
     {
-        var result = RepoConfig.TypeRegistryPath(@"C:\data");
+        var method = typeof(RepoConfig).GetMethod(methodName,
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static,
+            null, new[] { typeof(string) }, null);
+        Assert.NotNull(method);
 
-        Assert.Equal(Path.Combine(@"C:\data", "type-registry.jsonl"), result);
-    }
+        var result = (string)method.Invoke(null, new object[] { @"C:\data" })!;
 
-    [Fact]
-    public void MockRecipesPath_CombinesCorrectly()
-    {
-        var result = RepoConfig.MockRecipesPath(@"C:\data");
-
-        Assert.Equal(Path.Combine(@"C:\data", "mock-recipes.jsonl"), result);
-    }
-
-    [Fact]
-    public void CoverageGapsPath_CombinesCorrectly()
-    {
-        var result = RepoConfig.CoverageGapsPath(@"C:\data");
-
-        Assert.Equal(Path.Combine(@"C:\data", "coverage-gaps.jsonl"), result);
-    }
-
-    [Fact]
-    public void GotchasPath_CombinesCorrectly()
-    {
-        var result = RepoConfig.GotchasPath(@"C:\data");
-
-        Assert.Equal(Path.Combine(@"C:\data", "gotchas.jsonl"), result);
-    }
-
-    [Fact]
-    public void TestInventoryPath_CombinesCorrectly()
-    {
-        var result = RepoConfig.TestInventoryPath(@"C:\data");
-
-        Assert.Equal(Path.Combine(@"C:\data", "test-inventory.jsonl"), result);
+        Assert.NotNull(result);
+        Assert.Equal(Path.Combine(@"C:\data", expectedFileName), result);
+        Assert.True(result.EndsWith(expectedFileName), $"Path should end with {expectedFileName}");
     }
 
     [Fact]
@@ -124,4 +105,41 @@ public sealed class RepoConfigTests : IDisposable
         // This tests integration: consumers depend on this exact string
         Assert.Equal("TOTAL_RECALL_DATA", RepoConfig.EnvVarName);
     }
+
+    // ── GetRootPath with explicit path (covers L29-32) ──
+
+    [Fact]
+    public void GetRootPath_ExplicitPath_ReturnsResolvedPath()
+    {
+        var result = RepoConfig.GetRootPath(@"C:\my\root");
+
+        Assert.Equal(Path.GetFullPath(@"C:\my\root"), result);
+    }
+
+    [Fact]
+    public void GetRootPath_ExplicitPath_BypassesCache()
+    {
+        // First call via env var → caches
+        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, @"C:\cached\root");
+        var cached = RepoConfig.GetRootPath();
+        Assert.Equal(Path.GetFullPath(@"C:\cached\root"), cached);
+
+        // Second call with explicit → ignores cache
+        var explicit_ = RepoConfig.GetRootPath(@"C:\explicit\root");
+        Assert.Equal(Path.GetFullPath(@"C:\explicit\root"), explicit_);
+    }
+
+    // ── ListNamespaces with non-existent root (covers L118) ──
+
+    [Fact]
+    public void ListNamespaces_NonExistentRoot_ReturnsEmpty()
+    {
+        var nonExistent = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "does-not-exist");
+
+        var result = RepoConfig.ListNamespaces(nonExistent);
+
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
 }

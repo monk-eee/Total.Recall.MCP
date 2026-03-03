@@ -36,6 +36,14 @@ public sealed class TestableTarget
     [JsonPropertyName("existingTestCount")]
     public int ExistingTestCount { get; set; }
 
+    /// <summary>Whether a test file already exists for this class (extending is cheaper than creating).</summary>
+    [JsonPropertyName("hasTestFile")]
+    public bool HasTestFile { get; set; }
+
+    /// <summary>Paths to existing test files for this class.</summary>
+    [JsonPropertyName("testFiles")]
+    public List<string> TestFiles { get; set; } = [];
+
     /// <summary>Number of constructor parameters (proxy for DI complexity).</summary>
     [JsonPropertyName("ctorParamCount")]
     public int CtorParamCount { get; set; }
@@ -52,6 +60,18 @@ public sealed class TestableTarget
     [JsonPropertyName("recipeCoveredParams")]
     public int RecipeCoveredParams { get; set; }
 
+    /// <summary>How many ctor params are concrete classes (not interfaces — harder to mock).</summary>
+    [JsonPropertyName("concreteParamCount")]
+    public int ConcreteParamCount { get; set; }
+
+    /// <summary>How many concrete ctor params are skip/coupled in assessments (worst case).</summary>
+    [JsonPropertyName("coupledParamCount")]
+    public int CoupledParamCount { get; set; }
+
+    /// <summary>Names of concrete (non-interface) ctor param types for visibility.</summary>
+    [JsonPropertyName("concreteParamNames")]
+    public List<string> ConcreteParamNames { get; set; } = [];
+
     [JsonPropertyName("baseType")]
     public string? BaseType { get; set; }
 
@@ -64,6 +84,14 @@ public sealed class TestableTarget
     /// <summary>Previous assessment verdict, if any.</summary>
     [JsonPropertyName("previousVerdict")]
     public string? PreviousVerdict { get; set; }
+
+    /// <summary>Number of past sessions where this class's tests were successfully written.</summary>
+    [JsonPropertyName("pastSuccesses")]
+    public int PastSuccesses { get; set; }
+
+    /// <summary>Number of past sessions where this class failed (compilation/test errors).</summary>
+    [JsonPropertyName("pastFailures")]
+    public int PastFailures { get; set; }
 
     /// <summary>Number of known gotchas for this type.</summary>
     [JsonPropertyName("gotchaCount")]

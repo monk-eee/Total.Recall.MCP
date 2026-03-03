@@ -1,0 +1,10 @@
+{
+  "sourceRoot": "C:\\Users\\lyndonswan\\Repos\\Linter\\src\\LanguageServer\\Server",
+  "scannedUtc": "2026-03-02T23:34:32.4173475Z",
+  "assemblyPath": "C:\\Users\\lyndonswan\\Repos\\Linter\\src\\LanguageServer\\Server\\bin\\Debug\\net8.0\\win-x64\\Server.dll",
+  "coveragePath": "C:\\Users\\lyndonswan\\Repos\\Linter\\TestResults\\7ce2b67f-75da-4d68-8eb1-3377e5185dbb\\coverage.cobertura.xml",
+  "testsPath": "C:\\Users\\lyndonswan\\Repos\\Linter\\src\\LanguageServer\\UnitTest",
+  "testFramework": "XUnit",
+  "mockLibrary": "Moq",
+  "testNamespacePattern": "{Namespace}.Tests"
+}

@@ -46,6 +46,13 @@ public sealed class TestProjectScannerTests : IDisposable
         var count = TestProjectScanner.Scan(emptyDir, _dataDir);
 
         Assert.Equal(0, count);
+        var outputPath = Path.Combine(_dataDir, "test-inventory.jsonl");
+        if (File.Exists(outputPath))
+        {
+            var content = File.ReadAllText(outputPath);
+            Assert.True(string.IsNullOrWhiteSpace(content),
+                "Output file for empty directory should have no entries");
+        }
     }
 
     [Fact]
@@ -207,6 +214,10 @@ public sealed class TestProjectScannerTests : IDisposable
 
         var content = File.ReadAllText(Path.Combine(_dataDir, "test-inventory.jsonl"));
         Assert.Contains("\"testCount\":3", content);
+        Assert.Contains("\"class\":\"Bar\"", content);
+        Assert.Contains("First", content);
+        Assert.Contains("Second", content);
+        Assert.Contains("Third", content);
     }
 
     [Fact]
@@ -252,6 +263,9 @@ public sealed class TestProjectScannerTests : IDisposable
         var count = TestProjectScanner.Scan(_tempDir, _dataDir);
 
         Assert.Equal(1, count);
+        var content = File.ReadAllText(Path.Combine(_dataDir, "test-inventory.jsonl"));
+        Assert.Contains("Deep", content);
+        Assert.Contains("Deep_Works", content);
     }
 
     [Fact]
@@ -270,13 +284,45 @@ public sealed class TestProjectScannerTests : IDisposable
         var count = TestProjectScanner.Scan(_tempDir, _dataDir);
 
         // File matches *Tests*.cs but has no test methods → inferred class has 0 methods
-        // Since InferProductionClass returns "Helper", an entry is created with 0 test methods
         var outputPath = Path.Combine(_dataDir, "test-inventory.jsonl");
         if (count > 0)
         {
+            Assert.True(File.Exists(outputPath));
             var content = File.ReadAllText(outputPath);
             Assert.Contains("\"testCount\":0", content);
+            Assert.Contains("\"class\":\"Helper\"", content);
         }
+        else
+        {
+            // Scanner chose not to emit an entry for a 0-method class
+            Assert.Equal(0, count);
+        }
+    }
+
+    [Fact]
+    public void Scan_FileNameIsJustTests_SkipsEntry()
+    {
+        // A file named "Tests.cs" → InferProductionClass("Tests") strips the suffix → empty → continue at L44
+        WriteTestFile("Tests.cs", """
+            using Xunit;
+            public class Tests
+            {
+                [Fact]
+                public void SomeTest() { }
+            }
+            """);
+
+        TestProjectScanner.Scan(_tempDir, _dataDir);
+
+        var outputPath = Path.Combine(_dataDir, "test-inventory.jsonl");
+        if (File.Exists(outputPath))
+        {
+            var content = File.ReadAllText(outputPath);
+            // Production class would be "" after stripping, so no entry is produced
+            Assert.True(string.IsNullOrWhiteSpace(content),
+                "File named 'Tests.cs' should not produce an entry after stripping suffix");
+        }
+        // Either file doesn't exist or content is empty — both are correct
     }
 
     [Fact]

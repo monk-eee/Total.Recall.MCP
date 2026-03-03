@@ -5,33 +5,8 @@ using Total.Recall.Tools;
 namespace Total.Recall.Tests.Tools;
 
 [Collection("ToolTests")]
-public sealed class TestInventoryToolTests : IDisposable
+public sealed class TestInventoryToolTests : ToolTestBase
 {
-    private readonly string _tempDir;
-    private readonly string? _originalEnv;
-
-    public TestInventoryToolTests()
-    {
-        _tempDir = Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
-        StoreRegistry.Reset();
-    }
-
-    public void Dispose()
-    {
-        StoreRegistry.Reset();
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    private void SeedTestInventory(params TestInventoryEntry[] records)
-    {
-        var store = new JsonLineStore<TestInventoryEntry>(RepoConfig.TestInventoryPath(_tempDir));
-        store.WriteAll(records);
-    }
 
     [Fact]
     public void GetTestInventory_NoData_ReturnsNotFoundMessage()
@@ -109,4 +84,13 @@ public sealed class TestInventoryToolTests : IDisposable
         Assert.Contains("MyService", result);
     }
 
+    // ── Error path coverage ──
+
+    [Fact]
+    public void GetTestInventory_InvalidNamespace_ReturnsError()
+    {
+        var result = TestInventoryTool.GetTestInventory("Any", ns: "\0");
+
+        Assert.StartsWith("ERROR in GetTestInventory", result);
+    }
 }

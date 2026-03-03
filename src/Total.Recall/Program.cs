@@ -10,12 +10,15 @@ using Total.Recall.Scanners;
 
 try
 {
-    Log.Info("starting Total.Recall");
+    var version = AppVersion.Current;
+    Log.Info($"starting Total.Recall v{version}");
     Log.Info($"  PID: {Environment.ProcessId}");
     Log.Info($"  args: [{string.Join(", ", args)}]");
     Log.Info($"  cwd: {Environment.CurrentDirectory}");
+    Log.Info($"  log level: {Log.Level}");
     Log.Info($"  env TOTAL_RECALL_DATA: {Environment.GetEnvironmentVariable(RepoConfig.EnvVarName) ?? "(not set)"}");
     Log.Info($"  env TOTAL_RECALL_NAMESPACE: {Environment.GetEnvironmentVariable(RepoConfig.NamespaceEnvVar) ?? "(not set)"}");
+    Log.Info($"  env TOTAL_RECALL_LOG_LEVEL: {Environment.GetEnvironmentVariable(Log.LogLevelEnvVar) ?? "(not set)"}");
 
     if (args.Length > 0 && args[0].Equals("scan", StringComparison.OrdinalIgnoreCase))
     {
@@ -120,6 +123,7 @@ static void ValidateDataOnStartup()
     LogStore("gotchas", () => StoreRegistry.Gotchas);
     LogStore("mock-recipes", () => StoreRegistry.MockRecipes);
     LogStore("assessments", () => StoreRegistry.Assessments);
+    LogStore("sessions", () => StoreRegistry.Sessions);
 
     // Pre-build the type name index
     try
@@ -141,59 +145,75 @@ static async Task RunScannerAsync(string[] args)
 {
     Log.Info("mode: scanner CLI");
 
-    string? assemblyPath = null;
-    string? coveragePath = null;
-    string? testsPath = null;
-    string? outputPath = null;
-    string? namespaceName = null;
+    var options = ParseScanOptions(args);
 
-    for (int i = 1; i < args.Length - 1; i++)
+    if (options.ShowHelp)
     {
-        switch (args[i].ToLowerInvariant())
-        {
-            case "--assembly":
-                assemblyPath = args[++i];
-                break;
-            case "--coverage":
-                coveragePath = args[++i];
-                break;
-            case "--tests":
-                testsPath = args[++i];
-                break;
-            case "--output":
-                outputPath = args[++i];
-                break;
-            case "--namespace":
-                namespaceName = args[++i];
-                break;
-        }
+        PrintScanHelp();
+        return;
     }
 
-    // Resolve data directory: --namespace composes {root}/{name}/, --output overrides entirely
+    // Validate: at least one scan action required
+    if (string.IsNullOrEmpty(options.AssemblyPath) &&
+        string.IsNullOrEmpty(options.CoveragePath) &&
+        string.IsNullOrEmpty(options.TestsPath) &&
+        !options.Enrich &&
+        !options.Analyze)
+    {
+        Console.WriteLine("Error: At least one of --assembly, --coverage, --tests, --enrich, or --analyze is required.");
+        Console.WriteLine("Run with --help for usage.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    // Validate paths exist
+    if (!string.IsNullOrEmpty(options.AssemblyPath) && !File.Exists(options.AssemblyPath))
+    {
+        Console.WriteLine($"Error: Assembly not found: {options.AssemblyPath}");
+        Environment.ExitCode = 1;
+        return;
+    }
+    if (!string.IsNullOrEmpty(options.CoveragePath) && !File.Exists(options.CoveragePath))
+    {
+        Console.WriteLine($"Error: Coverage XML not found: {options.CoveragePath}");
+        Environment.ExitCode = 1;
+        return;
+    }
+    if (!string.IsNullOrEmpty(options.TestsPath) && !Directory.Exists(options.TestsPath))
+    {
+        Console.WriteLine($"Error: Test directory not found: {options.TestsPath}");
+        Environment.ExitCode = 1;
+        return;
+    }
+    if (!string.IsNullOrEmpty(options.SourceRoot) && !Directory.Exists(options.SourceRoot))
+    {
+        Console.WriteLine($"Error: Source root directory not found: {options.SourceRoot}");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    // Resolve data directory
     string dataDir;
-    if (!string.IsNullOrEmpty(outputPath))
-    {
-        dataDir = RepoConfig.GetDataPath(outputPath);
-    }
-    else if (!string.IsNullOrEmpty(namespaceName))
-    {
-        dataDir = RepoConfig.GetNamespacePath(namespaceName);
-    }
+    if (!string.IsNullOrEmpty(options.OutputPath))
+        dataDir = RepoConfig.GetDataPath(options.OutputPath);
+    else if (!string.IsNullOrEmpty(options.NamespaceName))
+        dataDir = RepoConfig.GetNamespacePath(options.NamespaceName);
     else
-    {
         dataDir = RepoConfig.GetDataPath();
-    }
+
     Directory.CreateDirectory(dataDir);
+    Console.WriteLine($"Total.Recall Scanner v{AppVersion.Current} — output: {dataDir}");
 
-    Console.WriteLine($"Total.Recall Scanner — output: {dataDir}");
+    var scanResults = new List<string>();
 
-    if (!string.IsNullOrEmpty(assemblyPath))
+    if (!string.IsNullOrEmpty(options.AssemblyPath))
     {
         try
         {
-            Console.Write("Scanning assembly... ");
-            var count = AssemblyScanner.Scan(assemblyPath, dataDir);
+            Console.Write("  Scanning assembly... ");
+            var count = AssemblyScanner.Scan(options.AssemblyPath, dataDir);
             Console.WriteLine($"✓ type-registry.jsonl — {count} types");
+            scanResults.Add($"types:{count}");
         }
         catch (Exception ex)
         {
@@ -202,13 +222,14 @@ static async Task RunScannerAsync(string[] args)
         }
     }
 
-    if (!string.IsNullOrEmpty(coveragePath))
+    if (!string.IsNullOrEmpty(options.CoveragePath))
     {
         try
         {
-            Console.Write("Parsing coverage... ");
-            var count = CoberturaParser.Parse(coveragePath, dataDir);
+            Console.Write("  Parsing coverage... ");
+            var count = CoberturaParser.Parse(options.CoveragePath, dataDir);
             Console.WriteLine($"✓ coverage-gaps.jsonl — {count} classes");
+            scanResults.Add($"coverage-classes:{count}");
         }
         catch (Exception ex)
         {
@@ -217,13 +238,14 @@ static async Task RunScannerAsync(string[] args)
         }
     }
 
-    if (!string.IsNullOrEmpty(testsPath))
+    if (!string.IsNullOrEmpty(options.TestsPath))
     {
         try
         {
-            Console.Write("Scanning tests... ");
-            var count = TestProjectScanner.Scan(testsPath, dataDir);
+            Console.Write("  Scanning tests... ");
+            var count = TestProjectScanner.Scan(options.TestsPath, dataDir);
             Console.WriteLine($"✓ test-inventory.jsonl — {count} test files");
+            scanResults.Add($"test-files:{count}");
         }
         catch (Exception ex)
         {
@@ -232,6 +254,295 @@ static async Task RunScannerAsync(string[] args)
         }
     }
 
-    Console.WriteLine("Done.");
+    // Enrichment: cross-reference coverage gaps with type registry + test inventory
+    if (options.Enrich)
+    {
+        try
+        {
+            Console.Write("  Enriching coverage data... ");
+            var enriched = EnrichCoverageGaps(dataDir);
+            Console.WriteLine($"✓ {enriched} classes enriched with test counts + testability");
+            scanResults.Add($"enriched:{enriched}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ Enrichment FAILED: {ex.GetType().Name}: {ex.Message}");
+            Log.Error($"Enrichment failed: {ex}");
+        }
+    }
+
+    // Static analysis: dependency graph, coupling metrics, cluster detection
+    if (options.Analyze)
+    {
+        try
+        {
+            Console.Write("  Running static analysis... ");
+            var (metricsCount, edgeCount) = DependencyAnalyzer.Analyze(dataDir);
+            Console.WriteLine($"✓ {metricsCount} classes analyzed, {edgeCount} dependency edges, see dependency-graph.md");
+            scanResults.Add($"metrics:{metricsCount}");
+            scanResults.Add($"edges:{edgeCount}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ Analysis FAILED: {ex.GetType().Name}: {ex.Message}");
+            Log.Error($"Static analysis failed: {ex}");
+        }
+    }
+
+    // Write config.json with scan metadata
+    WriteConfig(dataDir, options);
+
+    Console.WriteLine($"Done. [{string.Join(", ", scanResults)}]");
     await Task.CompletedTask;
+}
+
+/// <summary>
+/// Cross-reference coverage gaps with type registry and test inventory
+/// to fill in existingTestCount and testability fields.
+/// </summary>
+static int EnrichCoverageGaps(string dataDir)
+{
+    var coverageStore = new JsonLineStore<Total.Recall.Models.CoverageGap>(RepoConfig.CoverageGapsPath(dataDir));
+    if (!coverageStore.HasData())
+        return 0;
+
+    var gaps = coverageStore.LoadAll();
+
+    // Load type registry for testability heuristics
+    var typeStore = new JsonLineStore<Total.Recall.Models.TypeRecord>(RepoConfig.TypeRegistryPath(dataDir));
+    var typeMap = typeStore.HasData()
+        ? typeStore.LoadAll()
+            .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+        : new Dictionary<string, Total.Recall.Models.TypeRecord>(StringComparer.OrdinalIgnoreCase);
+
+    // Load test inventory for test counts
+    var testStore = new JsonLineStore<Total.Recall.Models.TestInventoryEntry>(RepoConfig.TestInventoryPath(dataDir));
+    var testMap = testStore.HasData()
+        ? testStore.LoadAll()
+            .GroupBy(t => t.Class, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+        : new Dictionary<string, Total.Recall.Models.TestInventoryEntry>(StringComparer.OrdinalIgnoreCase);
+
+    var enrichedCount = 0;
+    foreach (var gap in gaps)
+    {
+        // Enrich test count
+        if (testMap.TryGetValue(gap.Class, out var testEntry))
+        {
+            gap.ExistingTestCount = testEntry.TestCount;
+            enrichedCount++;
+        }
+
+        // Enrich testability based on type metadata
+        if (typeMap.TryGetValue(gap.Class, out var typeRecord))
+        {
+            gap.Testability = ClassifyTestability(typeRecord);
+        }
+    }
+
+    coverageStore.WriteAll(gaps);
+    return enrichedCount;
+}
+
+static string ClassifyTestability(Total.Recall.Models.TypeRecord type)
+{
+    // Heuristic testability classification
+    if (type.IsAbstract || type.IsInterface)
+        return "low";
+
+    if (type.IsStatic)
+        return "medium"; // static classes can be tested but need special handling
+
+    var maxCtorParams = type.Constructors.Count > 0
+        ? type.Constructors.Max(c => c.Params.Count)
+        : 0;
+
+    if (maxCtorParams == 0)
+        return "high"; // parameterless = very easy to test
+
+    if (maxCtorParams <= 3)
+        return "high";
+
+    if (maxCtorParams <= 6)
+        return "medium";
+
+    return "low"; // heavy DI = hard to test
+}
+
+static void WriteConfig(string dataDir, ScanOptions options)
+{
+    var config = new Total.Recall.Models.NamespaceConfig
+    {
+        SourceRoot = options.SourceRoot,
+        ScannedUtc = DateTime.UtcNow.ToString("o"),
+        AssemblyPath = options.AssemblyPath,
+        CoveragePath = options.CoveragePath,
+        TestsPath = options.TestsPath
+    };
+
+    // Parse test framework if specified
+    if (!string.IsNullOrEmpty(options.TestFramework) &&
+        Enum.TryParse<Total.Recall.Models.TestFramework>(options.TestFramework, ignoreCase: true, out var fw))
+        config.TestFramework = fw;
+
+    // Parse mock library if specified
+    if (!string.IsNullOrEmpty(options.MockLibrary) &&
+        Enum.TryParse<Total.Recall.Models.MockLibrary>(options.MockLibrary, ignoreCase: true, out var ml))
+        config.MockLibrary = ml;
+
+    // Set test namespace pattern if specified
+    if (!string.IsNullOrEmpty(options.TestNamespacePattern))
+        config.TestNamespacePattern = options.TestNamespacePattern;
+
+    // Merge with existing config to preserve settings not specified this run
+    var configPath = RepoConfig.ConfigJsonPath(dataDir);
+    if (File.Exists(configPath))
+    {
+        try
+        {
+            var existing = System.Text.Json.JsonSerializer.Deserialize<Total.Recall.Models.NamespaceConfig>(
+                File.ReadAllText(configPath), SharedJsonOptions.CamelCase);
+            if (existing is not null)
+            {
+                if (string.IsNullOrEmpty(options.SourceRoot) && existing.SourceRoot is not null)
+                    config.SourceRoot = existing.SourceRoot;
+                if (string.IsNullOrEmpty(options.TestFramework))
+                    config.TestFramework = existing.TestFramework;
+                if (string.IsNullOrEmpty(options.MockLibrary))
+                    config.MockLibrary = existing.MockLibrary;
+                if (string.IsNullOrEmpty(options.TestNamespacePattern) && existing.TestNamespacePattern != "{Namespace}.Tests")
+                    config.TestNamespacePattern = existing.TestNamespacePattern;
+            }
+        }
+        catch { /* ignore corrupt config */ }
+    }
+
+    var json = System.Text.Json.JsonSerializer.Serialize(config, SharedJsonOptions.CamelCaseIndented);
+    File.WriteAllText(configPath, json);
+    Console.WriteLine($"  ✓ config.json updated");
+}
+
+static ScanOptions ParseScanOptions(string[] args)
+{
+    var options = new ScanOptions();
+
+    for (int i = 1; i < args.Length; i++)
+    {
+        var arg = args[i].ToLowerInvariant();
+        switch (arg)
+        {
+            case "--assembly" when i + 1 < args.Length:
+                options.AssemblyPath = args[++i];
+                break;
+            case "--coverage" when i + 1 < args.Length:
+                options.CoveragePath = args[++i];
+                break;
+            case "--tests" when i + 1 < args.Length:
+                options.TestsPath = args[++i];
+                break;
+            case "--output" when i + 1 < args.Length:
+                options.OutputPath = args[++i];
+                break;
+            case "--namespace" when i + 1 < args.Length:
+                options.NamespaceName = args[++i];
+                break;
+            case "--source-root" when i + 1 < args.Length:
+                options.SourceRoot = args[++i];
+                break;
+            case "--enrich":
+                options.Enrich = true;
+                break;
+            case "--analyze":
+                options.Analyze = true;
+                break;
+            case "--test-framework" when i + 1 < args.Length:
+                options.TestFramework = args[++i];
+                break;
+            case "--mock-library" when i + 1 < args.Length:
+                options.MockLibrary = args[++i];
+                break;
+            case "--test-namespace-pattern" when i + 1 < args.Length:
+                options.TestNamespacePattern = args[++i];
+                break;
+            case "--help" or "-h":
+                options.ShowHelp = true;
+                break;
+            default:
+                if (arg.StartsWith("--"))
+                    Console.WriteLine($"Warning: unknown option '{args[i]}'");
+                break;
+        }
+    }
+
+    return options;
+}
+
+static void PrintScanHelp()
+{
+    Console.WriteLine($$"""
+        Total.Recall Scanner v{{AppVersion.Current}}
+
+        Usage: dotnet run -- scan [options]
+
+        Options:
+          --assembly <path>      Path to target .NET assembly (.dll) for type registry scan
+          --coverage <path>      Path to Cobertura XML coverage report for coverage gaps
+          --tests <path>         Path to test project directory for test inventory scan
+          --source-root <path>   Path to target repo source root (enables get_source_snippet)
+          --output <path>        Override data output directory
+          --namespace <name>     Namespace subdirectory under TOTAL_RECALL_DATA root
+          --enrich               Cross-reference coverage with type registry + test inventory
+          --analyze              Run static analysis: dependency graph, coupling metrics, clusters
+          --test-framework <fw>  Test framework: xunit (default), nunit, mstest
+          --mock-library <lib>   Mock library: moq (default), nsubstitute, fakeiteasy
+          --test-namespace-pattern <pat>  Namespace pattern for test classes (default: "{Namespace}.Tests")
+                                          Use {Namespace} for full, {RootNamespace}/{Rest} for split
+          --help, -h             Show this help
+
+        Examples:
+          # Full scan with source root
+          dotnet run -- scan \
+            --assembly "path/to/Server.dll" \
+            --coverage "path/to/coverage.cobertura.xml" \
+            --tests "path/to/UnitTest" \
+            --source-root "path/to/Server/src" \
+            --namespace linter \
+            --enrich --analyze
+
+          # Full scan for an NUnit + NSubstitute project
+          dotnet run -- scan \
+            --assembly "path/to/MyApp.dll" \
+            --tests "path/to/MyApp.Tests" \
+            --namespace myapp \
+            --test-framework nunit \
+            --mock-library nsubstitute \
+            --enrich
+
+          # Just re-parse coverage after a new test run
+          dotnet run -- scan --coverage "path/to/coverage.cobertura.xml" --namespace linter --enrich
+
+          # Enrich existing data without re-scanning
+          dotnet run -- scan --namespace linter --enrich
+
+        Environment:
+          TOTAL_RECALL_DATA       Root data directory (default: "data")
+          TOTAL_RECALL_NAMESPACE  Default namespace (default: "default")
+        """);
+}
+
+record ScanOptions
+{
+    public string? AssemblyPath { get; set; }
+    public string? CoveragePath { get; set; }
+    public string? TestsPath { get; set; }
+    public string? OutputPath { get; set; }
+    public string? NamespaceName { get; set; }
+    public string? SourceRoot { get; set; }
+    public bool Enrich { get; set; }
+    public bool Analyze { get; set; }
+    public bool ShowHelp { get; set; }
+    public string? TestFramework { get; set; }
+    public string? MockLibrary { get; set; }
+    public string? TestNamespacePattern { get; set; }
 }

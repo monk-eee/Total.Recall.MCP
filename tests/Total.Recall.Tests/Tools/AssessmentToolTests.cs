@@ -6,37 +6,9 @@ using Total.Recall.Tools;
 namespace Total.Recall.Tests.Tools;
 
 [Collection("ToolTests")]
-public sealed class AssessmentToolTests : IDisposable
+public sealed class AssessmentToolTests : ToolTestBase
 {
-    private readonly string _tempDir;
-    private readonly string? _originalEnv;
-    private readonly string? _originalNsEnv;
-
-    public AssessmentToolTests()
-    {
-        _tempDir = Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
-        _originalNsEnv = Environment.GetEnvironmentVariable(RepoConfig.NamespaceEnvVar);
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
-        Environment.SetEnvironmentVariable(RepoConfig.NamespaceEnvVar, null);
-        StoreRegistry.Reset();
-    }
-
-    public void Dispose()
-    {
-        StoreRegistry.Reset();
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
-        Environment.SetEnvironmentVariable(RepoConfig.NamespaceEnvVar, _originalNsEnv);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    private void SeedAssessments(params Assessment[] records)
-    {
-        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(_tempDir));
-        store.WriteAll(records);
-    }
+    public AssessmentToolTests() : base(saveNamespace: true) { }
 
     [Fact]
     public void AddAssessment_Testable_ReturnsConfirmation()
@@ -53,7 +25,7 @@ public sealed class AssessmentToolTests : IDisposable
     {
         AssessmentTool.AddAssessment("CoupledClass", "coupled", "Heavy deps", "ILogger,IRepo,IConfig");
 
-        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(_tempDir));
+        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(TempDir));
         var all = store.LoadAll();
         Assert.Single(all);
         Assert.Equal(3, all[0].Dependencies.Count);
@@ -67,7 +39,7 @@ public sealed class AssessmentToolTests : IDisposable
     {
         AssessmentTool.AddAssessment("Widget", "testable", "OK", cluster: "widget-cluster");
 
-        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(_tempDir));
+        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(TempDir));
         var record = store.LoadAll().Single();
         Assert.Equal("widget-cluster", record.Cluster);
     }
@@ -77,7 +49,7 @@ public sealed class AssessmentToolTests : IDisposable
     {
         AssessmentTool.AddAssessment("Simple", "testable", "No deps");
 
-        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(_tempDir));
+        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(TempDir));
         var record = store.LoadAll().Single();
         Assert.Empty(record.Dependencies);
     }
@@ -87,7 +59,7 @@ public sealed class AssessmentToolTests : IDisposable
     {
         AssessmentTool.AddAssessment("X", "skip", "Not worth it");
 
-        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(_tempDir));
+        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(TempDir));
         var record = store.LoadAll().Single();
         Assert.Equal(DateTime.UtcNow.ToString("yyyy-MM-dd"), record.Date);
     }
@@ -97,7 +69,7 @@ public sealed class AssessmentToolTests : IDisposable
     {
         AssessmentTool.AddAssessment("X", "TESTABLE", "OK");
 
-        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(_tempDir));
+        var store = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(TempDir));
         var record = store.LoadAll().Single();
         Assert.Equal("testable", record.Verdict);
     }
@@ -214,5 +186,23 @@ public sealed class AssessmentToolTests : IDisposable
         AssessmentTool.GetAssessments();
 
         Assert.Equal(1, Metrics.Get(Metrics.ToolGetAssessments));
+    }
+
+    // ── Error path coverage ──
+
+    [Fact]
+    public void AddAssessment_InvalidNamespace_ReturnsError()
+    {
+        var result = AssessmentTool.AddAssessment("X", "testable", "OK", ns: "\0");
+
+        Assert.StartsWith("ERROR in AddAssessment", result);
+    }
+
+    [Fact]
+    public void GetAssessments_InvalidNamespace_ReturnsError()
+    {
+        var result = AssessmentTool.GetAssessments(ns: "\0");
+
+        Assert.StartsWith("ERROR in GetAssessments", result);
     }
 }

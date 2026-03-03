@@ -9,39 +9,8 @@ namespace Total.Recall.Tests.Tools;
 /// Overrides TOTAL_RECALL_DATA env var to point to temp data.
 /// </summary>
 [Collection("ToolTests")]
-public sealed class ResolveTypeToolTests : IDisposable
+public sealed class ResolveTypeToolTests : ToolTestBase
 {
-    private readonly string _tempDir;
-    private readonly string? _originalEnv;
-
-    public ResolveTypeToolTests()
-    {
-        _tempDir = Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
-        _originalEnv = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
-        StoreRegistry.Reset();
-    }
-
-    public void Dispose()
-    {
-        StoreRegistry.Reset();
-        Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _originalEnv);
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    private void SeedTypeRegistry(params TypeRecord[] records)
-    {
-        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
-        store.WriteAll(records);
-    }
-
-    private void SeedCoverageGaps(params CoverageGap[] records)
-    {
-        var store = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(_tempDir));
-        store.WriteAll(records);
-    }
 
     [Fact]
     public void ResolveType_NoData_ReturnsNotFoundMessage()
@@ -248,4 +217,13 @@ public sealed class ResolveTypeToolTests : IDisposable
         Assert.DoesNotContain("Parsing", result);
     }
 
+    // ── Error path coverage ──
+
+    [Fact]
+    public void ResolveType_InvalidNamespace_ReturnsError()
+    {
+        var result = ResolveTypeTool.ResolveType("Any", ns: "\0");
+
+        Assert.StartsWith("ERROR in ResolveType", result);
+    }
 }

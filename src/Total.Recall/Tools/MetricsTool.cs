@@ -14,6 +14,7 @@ public static class MetricsTool
     public static string GetMetrics()
     {
         Metrics.Increment(Metrics.ToolGetMetrics);
+        Log.Debug("[GetMetrics] collecting telemetry");
         try
         {
             var counters = Metrics.GetAll();
