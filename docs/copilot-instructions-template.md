@@ -29,7 +29,7 @@ registry, test inventory, assessments, gotchas, and mock recipes into a composit
 #### 2. Read source — `GetSourceSnippet`
 
 ```
-GetSourceSnippet(className: "ContentBlock", methodName: "BuildBlocks")
+GetSourceSnippet(className: "OrderService", methodName: "ProcessOrder")
 ```
 
 Serves actual C# source from the target repo. Use instead of `read_file` for any code
@@ -38,7 +38,7 @@ in the scanned assembly.
 #### 3. Scaffold tests — `GenerateTestScaffold`
 
 ```
-GenerateTestScaffold(className: "ContentBlock")
+GenerateTestScaffold(className: "OrderService")
 ```
 
 Generates a complete `.cs` test file: correct `using` statements, mock field declarations,
@@ -59,12 +59,20 @@ Use these tools as needed while writing test bodies:
 | `GetCoverageGaps(top: 10, sortBy: "roi")` | ROI-ranked uncovered classes |
 | `AddAssessment(className, verdict, reasoning)` | Record testability verdict (`testable`, `coupled`, `skip`, `deferred`) |
 | `GetAssessments(verdict: "skip")` | Query previous verdicts |
+| `GetUncoveredMethods(top: 10)` | Method-level ROI targets when class-level is exhausted |
+| `GetStubClasses(top: 10)` | Zero-coverage trivially-testable classes |
+| `GetClassMetrics(className)` | Coupling, instability, archetype for a class |
+| `GetDependencyGraph(className)` | Visualize dependency neighborhood (Mermaid) |
+| `GetAnalysisSummary()` | Architectural overview: hot interfaces, clusters |
+| `LearnTestPatterns()` | Learn naming, assertion, mock conventions from existing tests |
+| `GetGotchaInsights()` | Cluster gotchas into patterns, generate Footguns docs |
+| `RefreshCoverage()` | Re-parse Cobertura XML after a test run, mid-session |
 
 #### 5. Log the session — `LogSession`
 
 ```
 LogSession(model: "claude-sonnet-4-20250514", promptTokens: 50000, completionTokens: 15000,
-  classesAttempted: ["ContentBlock", "AuditEntry"], classesSucceeded: ["ContentBlock", "AuditEntry"],
+  classesAttempted: ["OrderService", "UserController"], classesSucceeded: ["OrderService", "UserController"],
   testsGenerated: 24, coverageBefore: 45.2, coverageAfter: 48.7,
   gotchasDiscovered: 2, assessmentsRecorded: 1)
 ```
@@ -85,3 +93,4 @@ what worked, what failed, and how coverage is trending.
 - Type lookups are O(1) via pre-built dictionary indexes
 - Tool responses are sub-millisecond (memory reads, not disk I/O)
 - Cache auto-invalidates when JSONL files change on disk (after re-scan)
+- **Watch mode** (`--watch` on scanner) auto-rescans when assembly/coverage/test files change — no manual re-scans needed during active development

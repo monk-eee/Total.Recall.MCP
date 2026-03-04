@@ -46,12 +46,12 @@ All lines are prefixed with `[Total.Recall]`:
 [Total.Recall] starting Total.Recall
 [Total.Recall]   PID: 12345
 [Total.Recall]   args: []
-[Total.Recall]   cwd: C:\Users\lyndonswan\Repos\Total.Recall
-[Total.Recall]   env TOTAL_RECALL_DATA: C:\Users\lyndonswan\Repos\Total.Recall\data
-[Total.Recall]   env TOTAL_RECALL_NAMESPACE: linter
+[Total.Recall]   cwd: C:\path\to\Total.Recall
+[Total.Recall]   env TOTAL_RECALL_DATA: C:\path\to\Total.Recall\data
+[Total.Recall]   env TOTAL_RECALL_NAMESPACE: myproject
 [Total.Recall] mode: MCP server (stdio)
-[Total.Recall] default namespace: 'linter'
-[Total.Recall] data dir: C:\...\data\linter
+[Total.Recall] default namespace: 'myproject'
+[Total.Recall] data dir: C:\...\data\myproject
 [Total.Recall]   ✓ type-registry: 1176 records (cached)
 [Total.Recall]   ✓ coverage-gaps: 539 records (cached)
 [Total.Recall]   ✓ test-inventory: 157 records (cached)
@@ -114,7 +114,7 @@ Counter categories:
 
 | Category | Counters | What they tell you |
 |----------|----------|-------------------|
-| **Tool calls** | `tool.resolve_type`, `tool.get_context`, `tool.get_coverage_gaps`, `tool.get_gotchas`, `tool.add_gotcha`, `tool.get_mock_recipe`, `tool.get_test_inventory`, `tool.add_assessment`, `tool.get_assessments`, `tool.get_metrics`, `tool.get_testable_targets`, `tool.get_source_snippet`, `tool.generate_test_scaffold`, `tool.log_session`, `tool.get_sessions` | Which tools agents actually use (and which they don't) |
+| **Tool calls** | `tool.resolve_type`, `tool.get_context`, `tool.get_coverage_gaps`, `tool.get_gotchas`, `tool.add_gotcha`, `tool.get_mock_recipe`, `tool.get_test_inventory`, `tool.add_assessment`, `tool.get_assessments`, `tool.get_metrics`, `tool.get_testable_targets`, `tool.get_source_snippet`, `tool.generate_test_scaffold`, `tool.log_session`, `tool.get_sessions`, `tool.get_uncovered_methods`, `tool.get_stub_classes`, `tool.get_class_metrics`, `tool.get_dependency_graph`, `tool.get_analysis_summary`, `tool.learn_test_patterns`, `tool.get_gotcha_insights`, `tool.refresh_coverage` | Which tools agents actually use (and which they don't) |
 | **Cache** | `cache.hit`, `cache.miss`, `cache.reload` | How well the in-memory cache is working. High miss rate = files changing frequently |
 | **Type index** | `typeindex.hit`, `typeindex.rebuild` | O(1) index effectiveness. Rebuilds happen when JSONL changes on disk |
 | **Lookup strategy** | `lookup.exact`, `lookup.case_insensitive`, `lookup.contains`, `lookup.interface`, `lookup.namespace`, `lookup.miss` | How agents search for types — exact is best, contains/interface = fallback |
@@ -191,7 +191,7 @@ Or programmatically — the tool returns JSON:
 $TOTAL_RECALL_DATA/{namespace}/sessions.jsonl
 ```
 
-e.g., `data/linter/sessions.jsonl`
+e.g., `data/myproject/sessions.jsonl`
 
 Each line is one JSON object — one session record. Append-only, never modified.
 
@@ -272,19 +272,19 @@ Sessions are plain JSONL — grep/parse with any tool:
 
 ```powershell
 # All sessions sorted by coverage delta
-Get-Content data/linter/sessions.jsonl |
+Get-Content data/myproject/sessions.jsonl |
   ForEach-Object { $_ | ConvertFrom-Json } |
   Sort-Object coverageDelta -Descending |
   Format-Table model, testsGenerated, coverageBefore, coverageAfter, coverageDelta
 
 # Total tokens burned
-Get-Content data/linter/sessions.jsonl |
+Get-Content data/myproject/sessions.jsonl |
   ForEach-Object { $_ | ConvertFrom-Json } |
   Measure-Object -Property totalTokens -Sum |
   Select-Object Sum
 
 # Classes that always fail
-Get-Content data/linter/sessions.jsonl |
+Get-Content data/myproject/sessions.jsonl |
   ForEach-Object { $_ | ConvertFrom-Json } |
   ForEach-Object { $_.classesFailed } |
   Group-Object class |
@@ -360,6 +360,18 @@ Get-Content data/linter/sessions.jsonl |
 | Coverage XML valid? | Open in browser/editor — must be Cobertura format |
 | Test directory exists? | Scanner walks `.cs` files looking for `[Fact]`/`[Theory]` attributes |
 
+### Watch mode issues
+
+**Symptom**: `--watch` doesn't detect file changes.
+
+| Check | Fix |
+|-------|-----|
+| Network drive or Docker mount? | `FileSystemWatcher` may not receive events — use manual re-scans instead |
+| Files in obj/bin/? | Test directory watchers ignore obj/ and bin/ subdirectories by design |
+| Re-scanning too often? | Normal — rapid build events are debounced (1.5s). If excessive, check antivirus real-time scanning |
+| Coverage not updating? | Watcher auto-discovers newest `coverage.cobertura.xml` in TestResults/ hierarchy |
+| Assembly locked by process? | Build may fail to overwrite DLL — stop the process holding it, rebuild, watcher will re-scan |
+
 ---
 
 ## 5. Data File Forensics
@@ -380,7 +392,7 @@ All data under `$TOTAL_RECALL_DATA/{namespace}/`:
 ### Quick health check
 
 ```powershell
-$ns = "linter"
+$ns = "myproject"
 $dir = "data/$ns"
 
 # File sizes and record counts
@@ -397,7 +409,7 @@ Get-ChildItem "$dir/*.jsonl" | ForEach-Object {
 
 ```powershell
 # Find lines that aren't valid JSON
-$file = "data/linter/gotchas.jsonl"
+$file = "data/myproject/gotchas.jsonl"
 $lineNum = 0
 Get-Content $file | ForEach-Object {
     $lineNum++

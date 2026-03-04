@@ -158,7 +158,8 @@ static async Task RunScannerAsync(string[] args)
         string.IsNullOrEmpty(options.CoveragePath) &&
         string.IsNullOrEmpty(options.TestsPath) &&
         !options.Enrich &&
-        !options.Analyze)
+        !options.Analyze &&
+        !options.Watch)
     {
         Console.WriteLine("Error: At least one of --assembly, --coverage, --tests, --enrich, or --analyze is required.");
         Console.WriteLine("Run with --help for usage.");
@@ -173,11 +174,32 @@ static async Task RunScannerAsync(string[] args)
         Environment.ExitCode = 1;
         return;
     }
-    if (!string.IsNullOrEmpty(options.CoveragePath) && !File.Exists(options.CoveragePath))
+    if (!string.IsNullOrEmpty(options.CoveragePath))
     {
-        Console.WriteLine($"Error: Coverage XML not found: {options.CoveragePath}");
-        Environment.ExitCode = 1;
-        return;
+        if (Directory.Exists(options.CoveragePath))
+        {
+            // User passed a directory — auto-discover the latest coverage XML
+            var dir = new DirectoryInfo(options.CoveragePath);
+            var candidates = dir.GetFiles("coverage.cobertura.xml", SearchOption.AllDirectories);
+            if (candidates.Length > 0)
+            {
+                var newest = candidates.OrderByDescending(f => f.LastWriteTimeUtc).First();
+                Console.WriteLine($"  Resolved coverage directory to: {newest.FullName}");
+                options.CoveragePath = newest.FullName;
+            }
+            else
+            {
+                Console.WriteLine($"Error: No coverage.cobertura.xml found in: {options.CoveragePath}");
+                Environment.ExitCode = 1;
+                return;
+            }
+        }
+        else if (!File.Exists(options.CoveragePath))
+        {
+            Console.WriteLine($"Error: Coverage XML not found: {options.CoveragePath}");
+            Environment.ExitCode = 1;
+            return;
+        }
     }
     if (!string.IsNullOrEmpty(options.TestsPath) && !Directory.Exists(options.TestsPath))
     {
@@ -269,6 +291,27 @@ static async Task RunScannerAsync(string[] args)
             Console.WriteLine($"✗ Enrichment FAILED: {ex.GetType().Name}: {ex.Message}");
             Log.Error($"Enrichment failed: {ex}");
         }
+
+        // Auto-generate mock recipes for popular interfaces (5+ consumers)
+        try
+        {
+            Console.Write("  Auto-generating mock recipes... ");
+            var newRecipes = AutoGenerateMockRecipes(dataDir);
+            if (newRecipes > 0)
+            {
+                Console.WriteLine($"✓ {newRecipes} new mock recipe(s) generated");
+                scanResults.Add($"mock-recipes-generated:{newRecipes}");
+            }
+            else
+            {
+                Console.WriteLine("✓ no new recipes needed");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"✗ Mock recipe generation FAILED: {ex.GetType().Name}: {ex.Message}");
+            Log.Error($"Mock recipe auto-generation failed: {ex}");
+        }
     }
 
     // Static analysis: dependency graph, coupling metrics, cluster detection
@@ -293,7 +336,33 @@ static async Task RunScannerAsync(string[] args)
     WriteConfig(dataDir, options);
 
     Console.WriteLine($"Done. [{string.Join(", ", scanResults)}]");
-    await Task.CompletedTask;
+
+    // Watch mode: keep running and re-scan on file changes
+    if (options.Watch)
+    {
+        // Pass enrichment/analysis as delegates (local functions can't be accessed externally)
+        Func<string, int>? enrichFunc = options.Enrich ? EnrichCoverageGaps : null;
+        Func<string, (int, int)>? analyzeFunc = options.Analyze
+            ? (dir) => DependencyAnalyzer.Analyze(dir)
+            : null;
+
+        using var watcher = new ScannerWatcher(
+            dataDir,
+            options.AssemblyPath,
+            options.CoveragePath,
+            options.TestsPath,
+            enrichFunc,
+            analyzeFunc);
+
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            cts.Cancel();
+        };
+
+        await watcher.WatchAsync(cts.Token);
+    }
 }
 
 /// <summary>
@@ -343,6 +412,95 @@ static int EnrichCoverageGaps(string dataDir)
 
     coverageStore.WriteAll(gaps);
     return enrichedCount;
+}
+
+/// <summary>
+/// Auto-generate basic mock recipes for interfaces that appear as constructor parameters
+/// in 5+ classes. Only generates for interfaces that don't already have a mock recipe.
+/// </summary>
+static int AutoGenerateMockRecipes(string dataDir)
+{
+    var typeStore = new JsonLineStore<Total.Recall.Models.TypeRecord>(RepoConfig.TypeRegistryPath(dataDir));
+    if (!typeStore.HasData())
+        return 0;
+
+    var types = typeStore.LoadAll();
+
+    // Count how many classes use each interface as a ctor param
+    var interfaceConsumerCounts = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+    foreach (var type in types)
+    {
+        if (type.IsInterface || type.IsAbstract)
+            continue;
+
+        foreach (var ctor in type.Constructors)
+        {
+            foreach (var param in ctor.Params)
+            {
+                var paramType = ParamHelper.ExtractTypeName(param);
+                if (ParamHelper.IsInterfaceLike(paramType))
+                {
+                    if (!interfaceConsumerCounts.ContainsKey(paramType))
+                        interfaceConsumerCounts[paramType] = [];
+                    if (!interfaceConsumerCounts[paramType].Contains(type.Name, StringComparer.OrdinalIgnoreCase))
+                        interfaceConsumerCounts[paramType].Add(type.Name);
+                }
+            }
+        }
+    }
+
+    // Load existing mock recipes to avoid duplicates
+    var recipeStore = new JsonLineStore<Total.Recall.Models.MockRecipe>(RepoConfig.MockRecipesPath(dataDir));
+    var existingRecipes = recipeStore.HasData()
+        ? recipeStore.LoadAll()
+            .Select(r => r.Interface)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+        : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    // Find the interface type records (for namespace lookup)
+    var interfaceTypes = types
+        .Where(t => t.IsInterface)
+        .ToDictionary(t => t.Name, t => t, StringComparer.OrdinalIgnoreCase);
+
+    // Generate recipes for popular interfaces (5+ consumers) without existing recipes
+    var newRecipes = new List<Total.Recall.Models.MockRecipe>();
+    foreach (var (iface, consumers) in interfaceConsumerCounts)
+    {
+        if (consumers.Count < 5)
+            continue;
+        if (existingRecipes.Contains(iface))
+            continue;
+
+        // Find our type record for namespace info
+        interfaceTypes.TryGetValue(iface, out var ifaceRecord);
+        var ns = ifaceRecord?.Namespace ?? "";
+
+        // Build basic recipe: new Mock<IFoo>() with no complex setup
+        var cleanName = iface.StartsWith("I") && iface.Length > 1 && char.IsUpper(iface[1])
+            ? iface[1..] : iface;
+        var varName = $"mock{cleanName}";
+
+        var recipe = new Total.Recall.Models.MockRecipe
+        {
+            Interface = iface,
+            Namespace = ns,
+            RequiredUsings = string.IsNullOrEmpty(ns) ? ["Moq"] : ["Moq", $"using {ns}"],
+            Recipe = $"var {varName} = new Mock<{iface}>();",
+            Gotchas = [],
+            UsedByClasses = consumers.Take(10).ToList()
+        };
+
+        newRecipes.Add(recipe);
+        Log.Debug($"[AutoMockRecipes] generated recipe for {iface} (used by {consumers.Count} classes: {string.Join(", ", consumers.Take(5))})");
+    }
+
+    if (newRecipes.Count > 0)
+    {
+        foreach (var recipe in newRecipes)
+            recipeStore.Append(recipe);
+    }
+
+    return newRecipes.Count;
 }
 
 static string ClassifyTestability(Total.Recall.Models.TypeRecord type)
@@ -456,6 +614,9 @@ static ScanOptions ParseScanOptions(string[] args)
             case "--analyze":
                 options.Analyze = true;
                 break;
+            case "--watch":
+                options.Watch = true;
+                break;
             case "--test-framework" when i + 1 < args.Length:
                 options.TestFramework = args[++i];
                 break;
@@ -494,6 +655,7 @@ static void PrintScanHelp()
           --namespace <name>     Namespace subdirectory under TOTAL_RECALL_DATA root
           --enrich               Cross-reference coverage with type registry + test inventory
           --analyze              Run static analysis: dependency graph, coupling metrics, clusters
+          --watch                Watch mode: re-scan automatically when files change (Ctrl+C to stop)
           --test-framework <fw>  Test framework: xunit (default), nunit, mstest
           --mock-library <lib>   Mock library: moq (default), nsubstitute, fakeiteasy
           --test-namespace-pattern <pat>  Namespace pattern for test classes (default: "{Namespace}.Tests")
@@ -522,6 +684,14 @@ static void PrintScanHelp()
           # Just re-parse coverage after a new test run
           dotnet run -- scan --coverage "path/to/coverage.cobertura.xml" --namespace linter --enrich
 
+          # Watch mode: auto-rescan on file changes
+          dotnet run -- scan \
+            --assembly "path/to/Server.dll" \
+            --coverage "path/to/coverage.cobertura.xml" \
+            --tests "path/to/UnitTest" \
+            --namespace linter \
+            --enrich --analyze --watch
+
           # Enrich existing data without re-scanning
           dotnet run -- scan --namespace linter --enrich
 
@@ -541,6 +711,7 @@ record ScanOptions
     public string? SourceRoot { get; set; }
     public bool Enrich { get; set; }
     public bool Analyze { get; set; }
+    public bool Watch { get; set; }
     public bool ShowHelp { get; set; }
     public string? TestFramework { get; set; }
     public string? MockLibrary { get; set; }

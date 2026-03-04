@@ -132,6 +132,21 @@ public static class SessionTool
             Notes = notes ?? ""
         };
 
+        // ── Coverage delta sanity check ──
+        // Agents sometimes pass absolute coverage % (e.g. coverageBefore=54.1, coverageAfter=54.1)
+        // or swap before/after. Flag suspicious deltas so the data isn't silently wrong.
+        if (Math.Abs(record.CoverageDelta) >= 10.0)
+        {
+            warnings.Add($"Coverage delta {record.CoverageDelta:+#.##;-#.##;0}% is unusually large (|Δ| ≥ 10%). " +
+                         $"Verify coverageBefore={coverageBefore} and coverageAfter={coverageAfter} are correct " +
+                         "(should be line coverage percentages, e.g. 25.66 → 27.12).");
+        }
+        else if (record.CoverageDelta < 0 && record.ClassesSucceeded.Count > 0)
+        {
+            warnings.Add($"Coverage went DOWN by {record.CoverageDelta:F2}% despite {record.ClassesSucceeded.Count} succeeded class(es). " +
+                         "This may indicate coverageBefore/coverageAfter values were swapped, or the coverage XML was stale.");
+        }
+
         stores.Sessions.Append(record);
 
         var summary = $"Session logged: {sessionId}\n" +
@@ -381,6 +396,49 @@ public static class SessionTool
             var names = string.Join(", ", successPatterns.Select(p => p.Class));
             recs.Add($"✅ HIGH-ROI PATTERN: Classes tested multiple times with good results: {names}. " +
                      "→ Look for similar classes (same namespace, same base type, similar ctor signature).");
+        }
+
+        // 6. Strategy shift recommendations (when ROI is declining)
+        var sessionsWithCoverage = all.Where(s => s.CoveredLines > 0 && s.TestsGenerated > 0).ToList();
+        if (sessionsWithCoverage.Count >= 3)
+        {
+            var recentLpt = sessionsWithCoverage.TakeLast(3)
+                .Average(s => (double)s.CoveredLines / s.TestsGenerated);
+
+            if (recentLpt < 0.5)
+            {
+                recs.Add("🔄 STRATEGY SHIFT: Class-level targeting is exhausted (lines/test < 0.5). " +
+                         "Recommended approach in priority order:\n" +
+                         "  1. get_uncovered_methods(onlyWithExistingTests=true) — extend existing test files for partially-covered methods\n" +
+                         "  2. get_stub_classes() — find zero-coverage trivially-testable classes (POCOs, static helpers)\n" +
+                         "  3. Focus on integration tests for tightly-coupled clusters\n" +
+                         "  4. Consider branch coverage (if/else paths) instead of line coverage for already-tested classes\n" +
+                         "  5. Refactor tightly-coupled classes to extract testable interfaces");
+            }
+            else if (recentLpt < 1.5)
+            {
+                recs.Add($"📊 ROI SOFTENING: Recent lines/test ({recentLpt:F1}) suggests diminishing returns from standard class targeting. " +
+                         "Consider supplementing with:\n" +
+                         "  • get_stub_classes() for easy wins\n" +
+                         "  • Incremental scaffold mode (methodNames param) for surgical coverage of specific methods");
+            }
+        }
+
+        // 7. Session count milestone recommendations
+        if (all.Count >= 10 && all.Count % 5 == 0)
+        {
+            var totalAttempted = attemptCounts.Values.Sum();
+            var totalSucceeded = successCounts.Values.Sum();
+            var overallSuccessRate = totalAttempted > 0
+                ? 100.0 * totalSucceeded / totalAttempted
+                : 0;
+            if (overallSuccessRate < 50)
+            {
+                recs.Add($"📈 SESSION {all.Count} CHECKPOINT: Overall success rate is {overallSuccessRate:F0}% " +
+                         $"({totalSucceeded}/{totalAttempted}). " +
+                         "If most failures are coupled classes, run get_gotcha_insights() to identify systemic patterns, " +
+                         "then document them in AGENTS.md to prevent future agent reattempts.");
+            }
         }
 
         return recs;

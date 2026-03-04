@@ -31,7 +31,7 @@ public static class TestScaffoldTool
         "Combines type metadata (constructors, namespace), mock recipes (interface setup), " +
         "coverage gaps (uncovered methods), and gotchas (warnings) into a ready-to-fill test file. " +
         "Includes correct using statements, mock field declarations, constructor wiring, " +
-        "and [Fact] stubs for each uncovered method. " +
+        "and [Fact] stubs for each uncovered method with assertion hints and edge cases. " +
         "Use after get_testable_targets to quickly scaffold tests for selected classes. " +
         "Set methodNames to generate only method stubs (incremental mode for extending existing test files).")]
     public static string GenerateTestScaffold(
@@ -39,17 +39,18 @@ public static class TestScaffoldTool
         [Description("Optional comma-separated method names to generate stubs for (incremental mode). " +
             "When set, generates only [Fact] stubs for the specified methods — no class skeleton, " +
             "no constructor, no fields. Use when extending an existing test file.")] string? methodNames = null,
+        [Description("Generate edge case test stubs (null input, empty collection, boundaries) for each method (default: true)")] bool generateEdgeCases = true,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGenerateTestScaffold);
-        Log.Debug($"[GenerateTestScaffold] className='{className}' methodNames='{methodNames ?? "(all)"}' ns='{ns ?? "(default)"}'");
+        Log.Debug($"[GenerateTestScaffold] className='{className}' methodNames='{methodNames ?? "(all)"}' generateEdgeCases={generateEdgeCases} ns='{ns ?? "(default)"}'");
         try
         {
             // Incremental mode: generate only method stubs for specified methods
             if (!string.IsNullOrWhiteSpace(methodNames))
                 return GenerateIncrementalStubs(className, methodNames, ns);
 
-            return GenerateTestScaffoldCore(className, ns);
+            return GenerateTestScaffoldCore(className, generateEdgeCases, ns);
         }
         catch (Exception ex)
         {
@@ -58,7 +59,7 @@ public static class TestScaffoldTool
         }
     }
 
-    private static string GenerateTestScaffoldCore(string className, string? ns)
+    private static string GenerateTestScaffoldCore(string className, bool generateEdgeCases, string? ns)
     {
         var stores = StoreRegistry.ForNamespace(ns);
 
@@ -152,6 +153,14 @@ public static class TestScaffoldTool
         var sortedUsings = usings.OrderBy(u => u).ToList();
 
         // ── Write the file ──
+
+        // Class archetype guidance at the top
+        var archetype = ClassifyArchetype(typeRecord, mockFields.Count, concreteFields.Count, coverageGap);
+        if (archetype is not null)
+        {
+            sb.AppendLine($"// Test Strategy: {archetype}");
+            sb.AppendLine();
+        }
 
         // Gotcha warnings at the top
         if (gotchas.Count > 0)
@@ -308,7 +317,8 @@ public static class TestScaffoldTool
                 sb.AppendLine("    }");
 
                 // Edge case stubs for methods with recognizable parameter patterns
-                AppendEdgeCaseStubs(sb, method.Name, testName, isAsync, typeRecord, testAttr);
+                if (generateEdgeCases)
+                    AppendEdgeCaseStubs(sb, method.Name, testName, isAsync, typeRecord, testAttr);
             }
         }
         else
@@ -865,5 +875,51 @@ public static class TestScaffoldTool
                 || baseType.StartsWith("Action") || baseType.EndsWith("[]") => true,
             _ => false
         };
+    }
+
+    /// <summary>
+    /// Classify the class archetype and return a testing strategy comment.
+    /// Helps agents understand the best approach for testing this class shape.
+    /// </summary>
+    internal static string? ClassifyArchetype(
+        TypeRecord typeRecord, int mockFieldCount, int concreteFieldCount,
+        CoverageGap? coverageGap)
+    {
+        // Static helper class — pure functions, no mocking
+        if (typeRecord.IsStatic)
+            return "STATIC HELPER — Pure function tests. No mocking needed. " +
+                   "Test each method with representative inputs, edge cases (null, empty, boundary values), " +
+                   "and verify return values with Assert.Equal/Assert.Contains.";
+
+        // POCO / data class — no ctor params, many properties
+        if (mockFieldCount == 0 && concreteFieldCount == 0 && typeRecord.Properties.Count > 3)
+            return "POCO/DATA CLASS — Test property round-trips, constructor defaults, " +
+                   "and any computed properties. Verify equality/GetHashCode if it's a record.";
+
+        // Service with all-interface DI
+        if (mockFieldCount > 0 && concreteFieldCount == 0)
+        {
+            if (mockFieldCount >= 5)
+                return $"HEAVY-DI SERVICE ({mockFieldCount} dependencies) — Focus on the most important " +
+                       "interactions. Use mock.Verify sparingly (only essential side-effects). " +
+                       "Consider testing method groups that share common mock setups together.";
+
+            return $"STANDARD SERVICE ({mockFieldCount} dependencies) — Classic mock + verify pattern. " +
+                   "Arrange mock returns, Act on SUT, Assert return values and Verify mock interactions.";
+        }
+
+        // Mixed dependencies (interface + concrete)
+        if (mockFieldCount > 0 && concreteFieldCount > 0)
+            return $"MIXED-DI SERVICE ({mockFieldCount} mocked + {concreteFieldCount} concrete) — " +
+                   "Concrete dependencies can't be mocked; use known-good values. " +
+                   "Focus tests on behavior that doesn't depend on concrete dep internals.";
+
+        // Builder/factory pattern — creates instances
+        if (typeRecord.Name.Contains("Builder") || typeRecord.Name.Contains("Factory")
+            || typeRecord.Name.Contains("Provider") || typeRecord.Name.Contains("Creator"))
+            return "BUILDER/FACTORY — Test the build/create output, not the process. " +
+                   "Verify key properties of created objects. Test with various configurations.";
+
+        return null;
     }
 }

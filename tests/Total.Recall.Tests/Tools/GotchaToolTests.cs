@@ -123,4 +123,75 @@ public sealed class GotchaToolTests : ToolTestBase
         Assert.StartsWith("ERROR in AddGotcha", result);
     }
 
+    // ── Assessment downgrade hint ──
+
+    [Fact]
+    public void AddGotcha_FourthGotcha_TestableAssessment_ReturnsDowngradeHint()
+    {
+        // Seed 3 existing gotchas
+        SeedGotchas(
+            new Gotcha { Type = "HardClass", Category = "mock", Description = "g1", Date = "2025-01-01" },
+            new Gotcha { Type = "HardClass", Category = "enum", Description = "g2", Date = "2025-01-02" },
+            new Gotcha { Type = "HardClass", Category = "bug", Description = "g3", Date = "2025-01-03" }
+        );
+        // Seed assessment as "testable"
+        SeedAssessments(new Assessment { Class = "HardClass", Verdict = "testable", Reasoning = "seemed ok" });
+        StoreRegistry.Reset();
+
+        // Add the 4th gotcha — should trigger downgrade hint
+        var result = GotchaTool.AddGotcha("HardClass", "constructor", "4th issue");
+
+        Assert.Contains("DOWNGRADE HINT", result);
+        Assert.Contains("4 gotchas", result);
+        Assert.Contains("AddAssessment", result);
+    }
+
+    [Fact]
+    public void AddGotcha_FourthGotcha_CoupledAssessment_NoDowngradeHint()
+    {
+        SeedGotchas(
+            new Gotcha { Type = "CoupledClass", Category = "mock", Description = "g1", Date = "2025-01-01" },
+            new Gotcha { Type = "CoupledClass", Category = "enum", Description = "g2", Date = "2025-01-02" },
+            new Gotcha { Type = "CoupledClass", Category = "bug", Description = "g3", Date = "2025-01-03" }
+        );
+        SeedAssessments(new Assessment { Class = "CoupledClass", Verdict = "coupled", Reasoning = "too many deps" });
+        StoreRegistry.Reset();
+
+        var result = GotchaTool.AddGotcha("CoupledClass", "constructor", "4th issue");
+
+        Assert.DoesNotContain("DOWNGRADE HINT", result);
+    }
+
+    [Fact]
+    public void AddGotcha_FourthGotcha_NoAssessment_NoDowngradeHint()
+    {
+        SeedGotchas(
+            new Gotcha { Type = "NewClass", Category = "mock", Description = "g1", Date = "2025-01-01" },
+            new Gotcha { Type = "NewClass", Category = "enum", Description = "g2", Date = "2025-01-02" },
+            new Gotcha { Type = "NewClass", Category = "bug", Description = "g3", Date = "2025-01-03" }
+        );
+        // No assessments seeded at all
+        StoreRegistry.Reset();
+
+        var result = GotchaTool.AddGotcha("NewClass", "constructor", "4th issue");
+
+        Assert.DoesNotContain("DOWNGRADE HINT", result);
+    }
+
+    [Fact]
+    public void AddGotcha_ThreeOrFewerGotchas_NoDowngradeHint()
+    {
+        SeedGotchas(
+            new Gotcha { Type = "FineClass", Category = "mock", Description = "g1", Date = "2025-01-01" },
+            new Gotcha { Type = "FineClass", Category = "enum", Description = "g2", Date = "2025-01-02" }
+        );
+        SeedAssessments(new Assessment { Class = "FineClass", Verdict = "testable", Reasoning = "ok" });
+        StoreRegistry.Reset();
+
+        // Add 3rd gotcha — should NOT trigger (only triggers at >3)
+        var result = GotchaTool.AddGotcha("FineClass", "bug", "3rd issue");
+
+        Assert.DoesNotContain("DOWNGRADE HINT", result);
+    }
+
 }

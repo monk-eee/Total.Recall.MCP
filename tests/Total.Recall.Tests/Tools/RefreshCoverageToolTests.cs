@@ -164,4 +164,161 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
         // Should auto-discover and succeed
         Assert.Contains("\"status\": \"refreshed\"", result);
     }
+
+    // ── reEnrich parameter tests ──
+
+    [Fact]
+    public void RefreshCoverage_WithReEnrich_EnrichesTestCounts()
+    {
+        // Seed type registry with a class
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "EnrichMe",
+            Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = ["ILogger"] }]
+        });
+        // Seed test inventory with existing tests for that class
+        SeedTestInventory(new TestInventoryEntry
+        {
+            Class = "EnrichMe",
+            TestCount = 7,
+            TestMethods = ["Test1", "Test2", "Test3", "Test4", "Test5", "Test6", "Test7"]
+        });
+        StoreRegistry.Reset();
+
+        var xmlPath = WriteCoberturaXml("EnrichMe", "App", totalLines: 50, coveredLines: 20);
+
+        var result = RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
+
+        Assert.Contains("\"status\": \"refreshed\"", result);
+        Assert.Contains("\"enriched\":", result);
+
+        // Verify the coverage gaps were enriched with test counts
+        var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
+        var gap = gaps.First(g => g.Class == "EnrichMe");
+        Assert.Equal(7, gap.ExistingTestCount);
+    }
+
+    [Fact]
+    public void RefreshCoverage_WithReEnrich_ClassifiesTestability()
+    {
+        // Seed type registry: abstract class → low testability
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "AbstractService",
+            Namespace = "App",
+            IsAbstract = true
+        });
+        StoreRegistry.Reset();
+
+        var xmlPath = WriteCoberturaXml("AbstractService", "App", totalLines: 30, coveredLines: 10);
+
+        RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
+
+        var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
+        var gap = gaps.First(g => g.Class == "AbstractService");
+        Assert.Equal("low", gap.Testability);
+    }
+
+    [Fact]
+    public void RefreshCoverage_WithReEnrich_StaticClassGetsMediumTestability()
+    {
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "Helpers",
+            Namespace = "App",
+            IsStatic = true
+        });
+        StoreRegistry.Reset();
+
+        var xmlPath = WriteCoberturaXml("Helpers", "App", totalLines: 20, coveredLines: 5);
+
+        RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
+
+        var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
+        var gap = gaps.First(g => g.Class == "Helpers");
+        Assert.Equal("medium", gap.Testability);
+    }
+
+    [Fact]
+    public void RefreshCoverage_WithReEnrich_SmallCtorGetsHighTestability()
+    {
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "SimpleService",
+            Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = ["ILogger", "IConfig"] }]
+        });
+        StoreRegistry.Reset();
+
+        var xmlPath = WriteCoberturaXml("SimpleService", "App", totalLines: 40, coveredLines: 15);
+
+        RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
+
+        var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
+        var gap = gaps.First(g => g.Class == "SimpleService");
+        Assert.Equal("high", gap.Testability);
+    }
+
+    [Fact]
+    public void RefreshCoverage_WithReEnrich_LargeCtorGetsLowTestability()
+    {
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "ComplexService",
+            Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = ["A", "B", "C", "D", "E", "F", "G"] }]
+        });
+        StoreRegistry.Reset();
+
+        var xmlPath = WriteCoberturaXml("ComplexService", "App", totalLines: 80, coveredLines: 10);
+
+        RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
+
+        var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
+        var gap = gaps.First(g => g.Class == "ComplexService");
+        Assert.Equal("low", gap.Testability);
+    }
+
+    [Fact]
+    public void RefreshCoverage_WithReEnrichFalse_SkipsEnrichment()
+    {
+        SeedTypeRegistry(new TypeRecord { Name = "Svc", Namespace = "App" });
+        SeedTestInventory(new TestInventoryEntry { Class = "Svc", TestCount = 3, TestMethods = ["T1"] });
+        StoreRegistry.Reset();
+
+        var xmlPath = WriteCoberturaXml("Svc", "App", totalLines: 30, coveredLines: 10);
+
+        var result = RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: false);
+
+        Assert.Contains("\"status\": \"refreshed\"", result);
+        // enriched should be null when reEnrich=false
+        Assert.Contains("\"enriched\": null", result);
+    }
+
+    [Fact]
+    public void RefreshCoverage_NewlyCovered_FieldPresentInOutput()
+    {
+        // Verify the newlyCovered field exists in the output JSON
+        var xmlPath = WriteCoberturaXml("FreshClass", "App", totalLines: 20, coveredLines: 10);
+        var result = RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: false);
+
+        Assert.Contains("\"newlyCovered\":", result);
+        Assert.Contains("\"status\": \"refreshed\"", result);
+    }
+
+    [Fact]
+    public void RefreshCoverage_TestResultsExistsButEmpty_ReturnsNotFound()
+    {
+        // Create an empty TestResults dir
+        var testResultsDir = Path.Combine(TempDir, "TestResults");
+        Directory.CreateDirectory(testResultsDir);
+
+        // Point to a non-existent file in the dir that has TestResults
+        var fakePath = Path.Combine(TempDir, "nonexistent.xml");
+        var result = RefreshCoverageTool.RefreshCoverage(fakePath);
+
+        Assert.Contains("Coverage file not found", result);
+        Assert.Contains("Also searched TestResults/", result);
+    }
 }

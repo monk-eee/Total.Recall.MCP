@@ -177,4 +177,67 @@ public sealed class CoverageGapsToolTests : ToolTestBase
 
         Assert.StartsWith("ERROR in GetCoverageGaps", result);
     }
+
+    // ── summaryOnly parameter ──
+
+    [Fact]
+    public void GetCoverageGaps_SummaryOnly_ReturnsCondensedOutput()
+    {
+        SeedCoverageGaps(
+            new CoverageGap
+            {
+                Class = "MyService",
+                Namespace = "App.Services",
+                UncoveredLines = 30,
+                CoveragePercent = 60.5,
+                ExistingTestCount = 2,
+                Testability = "high",
+                File = "MyService.cs",
+                TotalLines = 100,
+                CoveredLines = 70,
+                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = 30, StartLine = 10, EndLine = 40 }]
+            }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps(summaryOnly: true);
+
+        // Should contain summary fields
+        Assert.Contains("\"class\":", result);
+        Assert.Contains("\"namespace\":", result);
+        Assert.Contains("\"uncoveredLines\":", result);
+        Assert.Contains("\"coveragePercent\":", result);
+        Assert.Contains("\"existingTestCount\":", result);
+        Assert.Contains("\"roiScore\":", result);
+
+        // Should NOT contain detailed fields
+        Assert.DoesNotContain("\"uncoveredMethods\":", result);
+        Assert.DoesNotContain("\"file\":", result);
+        Assert.DoesNotContain("\"totalLines\":", result);
+        Assert.DoesNotContain("\"testability\":", result);
+    }
+
+    [Fact]
+    public void GetCoverageGaps_SummaryOnlyFalse_ReturnsDetailedOutput()
+    {
+        SeedCoverageGaps(
+            new CoverageGap
+            {
+                Class = "DetailService",
+                Namespace = "App",
+                UncoveredLines = 20,
+                File = "DetailService.cs",
+                TotalLines = 50,
+                CoveredLines = 30,
+                Testability = "high",
+                UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = 20, StartLine = 5, EndLine = 25 }]
+            }
+        );
+
+        var result = CoverageGapsTool.GetCoverageGaps(summaryOnly: false);
+
+        // Should contain detailed fields
+        Assert.Contains("\"uncoveredMethods\":", result);
+        Assert.Contains("\"file\":", result);
+        Assert.Contains("\"totalLines\":", result);
+    }
 }

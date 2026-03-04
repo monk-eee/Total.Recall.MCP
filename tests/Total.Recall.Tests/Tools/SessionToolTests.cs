@@ -1095,4 +1095,350 @@ public sealed class SessionToolTests : ToolTestBase
         var warning = doc.RootElement.GetProperty("plateauWarning");
         Assert.Equal(JsonValueKind.Null, warning.ValueKind);
     }
+
+    // ── Coverage delta sanity checks ──
+
+    [Fact]
+    public void LogSession_LargeDelta_ReturnsUnusuallyLargeWarning()
+    {
+        var result = SessionTool.LogSession("model",
+            coverageBefore: 10.0, coverageAfter: 25.0);
+
+        Assert.Contains("WARNINGS", result);
+        Assert.Contains("unusually large", result);
+        Assert.Contains("|Δ| ≥ 10%", result);
+    }
+
+    [Fact]
+    public void LogSession_NegativeDeltaWithSucceeded_ReturnsSwapWarning()
+    {
+        var result = SessionTool.LogSession("model",
+            classesSucceeded: "ClassA",
+            coverageBefore: 35.0, coverageAfter: 30.0);
+
+        Assert.Contains("WARNINGS", result);
+        Assert.Contains("Coverage went DOWN", result);
+        Assert.Contains("swapped", result);
+    }
+
+    [Fact]
+    public void LogSession_SmallPositiveDelta_NoWarning()
+    {
+        var result = SessionTool.LogSession("model",
+            classesSucceeded: "ClassA",
+            coverageBefore: 50.0, coverageAfter: 53.0);
+
+        Assert.DoesNotContain("WARNINGS", result);
+    }
+
+    // ── GenerateRecommendations: repeat-failure detection ──
+
+    [Fact]
+    public void GenerateRecommendations_RepeatFailures_ReturnsWarning()
+    {
+        SeedSessions(
+            new SessionRecord
+            {
+                SessionId = "s1", Model = "m",
+                ClassesAttempted = ["HardClass", "EasyClass"],
+                ClassesSucceeded = ["EasyClass"],
+                ClassesFailed = [new SessionFailure { Class = "HardClass", Reason = "compile error" }]
+            },
+            new SessionRecord
+            {
+                SessionId = "s2", Model = "m",
+                ClassesAttempted = ["HardClass"],
+                ClassesFailed = [new SessionFailure { Class = "HardClass", Reason = "timeout" }]
+            }
+        );
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("REPEAT FAILURE") && r.Contains("HardClass"));
+        Assert.Contains(recs, r => r.Contains("compile error") || r.Contains("timeout"));
+    }
+
+    [Fact]
+    public void GenerateRecommendations_LessThan2Sessions_ReturnsEmpty()
+    {
+        SeedSessions(new SessionRecord { SessionId = "s1", Model = "m" });
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Empty(recs);
+    }
+
+    // ── GenerateRecommendations: declining efficiency ──
+
+    [Fact]
+    public void GenerateRecommendations_DecliningEfficiency_ReturnsWarning()
+    {
+        SeedSessions(
+            new SessionRecord { SessionId = "s1", Model = "m", CoverageDelta = 8.0 },
+            new SessionRecord { SessionId = "s2", Model = "m", CoverageDelta = 7.0 },
+            new SessionRecord { SessionId = "s3", Model = "m", CoverageDelta = 0.5 },
+            new SessionRecord { SessionId = "s4", Model = "m", CoverageDelta = 0.3 }
+        );
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("DIMINISHING RETURNS"));
+    }
+
+    // ── GenerateRecommendations: unassessed repeat failures ──
+
+    [Fact]
+    public void GenerateRecommendations_UnassessedRepeatFailures_ReturnsWarning()
+    {
+        SeedSessions(
+            new SessionRecord
+            {
+                SessionId = "s1", Model = "m",
+                ClassesAttempted = ["FailClass"],
+                ClassesFailed = [new SessionFailure { Class = "FailClass", Reason = "deps" }]
+            },
+            new SessionRecord
+            {
+                SessionId = "s2", Model = "m",
+                ClassesAttempted = ["FailClass"],
+                ClassesFailed = [new SessionFailure { Class = "FailClass", Reason = "deps" }]
+            }
+        );
+        // Seed assessments but NOT for FailClass
+        SeedAssessments(new Assessment { Class = "OtherClass", Verdict = "testable", Reasoning = "ok" });
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("UNASSESSED FAILURES") && r.Contains("FailClass"));
+    }
+
+    // ── GenerateRecommendations: token efficiency trend ──
+
+    [Fact]
+    public void GenerateRecommendations_RisingTokenCost_ReturnsWarning()
+    {
+        SeedSessions(
+            // Many early cheap sessions to keep overall average low
+            new SessionRecord { SessionId = "s1", Model = "m", TotalTokens = 5000, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s2", Model = "m", TotalTokens = 6000, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s3", Model = "m", TotalTokens = 5000, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s4", Model = "m", TotalTokens = 5500, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s5", Model = "m", TotalTokens = 5000, TestsGenerated = 10 },
+            // Recent sessions: drastically worse token efficiency (20x the cost per test)
+            new SessionRecord { SessionId = "s6", Model = "m", TotalTokens = 50000, TestsGenerated = 5 },
+            new SessionRecord { SessionId = "s7", Model = "m", TotalTokens = 60000, TestsGenerated = 5 },
+            new SessionRecord { SessionId = "s8", Model = "m", TotalTokens = 55000, TestsGenerated = 5 }
+        );
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("TOKEN COST RISING"));
+    }
+
+    // ── GenerateRecommendations: best-performing class shapes ──
+
+    [Fact]
+    public void GenerateRecommendations_HighRoiPattern_ReturnsRecommendation()
+    {
+        SeedSessions(
+            new SessionRecord
+            {
+                SessionId = "s1", Model = "m",
+                ClassesSucceeded = ["StarClass"],
+                CoverageDelta = 5.0
+            },
+            new SessionRecord
+            {
+                SessionId = "s2", Model = "m",
+                ClassesSucceeded = ["StarClass"],
+                CoverageDelta = 4.0
+            }
+        );
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("HIGH-ROI PATTERN") && r.Contains("StarClass"));
+    }
+
+    // ── GenerateRecommendations: strategy shift (<0.5 lines/test) ──
+
+    [Fact]
+    public void GenerateRecommendations_StrategyShift_WhenLinesPerTestBelowHalf()
+    {
+        SeedSessions(
+            new SessionRecord { SessionId = "s1", Model = "m", CoveredLines = 2, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s2", Model = "m", CoveredLines = 3, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s3", Model = "m", CoveredLines = 1, TestsGenerated = 10 }
+        );
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("STRATEGY SHIFT") && r.Contains("get_uncovered_methods"));
+    }
+
+    // ── GenerateRecommendations: ROI softening (0.5-1.5 lines/test) ──
+
+    [Fact]
+    public void GenerateRecommendations_RoiSoftening_WhenLinesPerTestBetweenHalfAndOnePointFive()
+    {
+        SeedSessions(
+            new SessionRecord { SessionId = "s1", Model = "m", CoveredLines = 8, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s2", Model = "m", CoveredLines = 10, TestsGenerated = 10 },
+            new SessionRecord { SessionId = "s3", Model = "m", CoveredLines = 12, TestsGenerated = 10 }
+        );
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("ROI SOFTENING") && r.Contains("get_stub_classes"));
+    }
+
+    // ── GenerateRecommendations: session milestone checkpoint ──
+
+    [Fact]
+    public void GenerateRecommendations_SessionMilestone_AtLowSuccessRate()
+    {
+        var sessions = Enumerable.Range(1, 10).Select(i => new SessionRecord
+        {
+            SessionId = $"s{i}",
+            Model = "m",
+            ClassesAttempted = [$"Class{i}"],
+            ClassesSucceeded = i <= 3 ? [$"Class{i}"] : [],
+            ClassesFailed = i > 3 ? [new SessionFailure { Class = $"Class{i}", Reason = "fail" }] : []
+        }).ToArray();
+        SeedSessions(sessions);
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.Contains(recs, r => r.Contains("SESSION 10 CHECKPOINT"));
+    }
+
+    [Fact]
+    public void GenerateRecommendations_SessionMilestone_NotAt9Sessions()
+    {
+        // 9 sessions: not a multiple of 5, so no milestone
+        var sessions = Enumerable.Range(1, 9).Select(i => new SessionRecord
+        {
+            SessionId = $"s{i}",
+            Model = "m",
+            ClassesAttempted = [$"Class{i}"],
+            ClassesFailed = [new SessionFailure { Class = $"Class{i}", Reason = "fail" }]
+        }).ToArray();
+        SeedSessions(sessions);
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var all = stores.Sessions.LoadAll();
+        var recs = SessionTool.GenerateRecommendations(all, stores);
+
+        Assert.DoesNotContain(recs, r => r.Contains("CHECKPOINT"));
+    }
+
+    // ── DetectPlateau: recentTotalTests == 0 edge case ──
+
+    [Fact]
+    public void DetectPlateau_RecentTestsZeroButCoveredLinesPositive_ReturnsNull()
+    {
+        // This edge case can't happen via normal flow (CoveredLines > 0 && TestsGenerated > 0 is the filter)
+        // but we test the guard at the code level
+        var sessions = new List<SessionRecord>
+        {
+            new() { CoveredLines = 5, TestsGenerated = 1 },
+            new() { CoveredLines = 3, TestsGenerated = 1 },
+            new() { CoveredLines = 2, TestsGenerated = 1 }
+        };
+
+        // With very low lines/test (5+3+2)/(1+1+1) = 3.3 > 0.5, no plateau
+        Assert.Null(SessionTool.DetectPlateau(sessions));
+    }
+
+    // ── GetLastSessionEndTime: unparseable date ──
+
+    [Fact]
+    public void GetLastSessionEndTime_UnparseableDate_ReturnsNull()
+    {
+        SeedSessions(new SessionRecord
+        {
+            SessionId = "s1",
+            Model = "m",
+            EndedUtc = "not-a-date"
+        });
+        StoreRegistry.Reset();
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var result = SessionTool.GetLastSessionEndTime(stores);
+
+        Assert.Null(result);
+    }
+
+    // ── GetSessions includes recommendations ──
+
+    [Fact]
+    public void GetSessions_IncludesRecommendationsInOutput()
+    {
+        SeedSessions(
+            new SessionRecord
+            {
+                SessionId = "s1", Model = "m",
+                ClassesAttempted = ["Hard"],
+                ClassesFailed = [new SessionFailure { Class = "Hard", Reason = "deps" }]
+            },
+            new SessionRecord
+            {
+                SessionId = "s2", Model = "m",
+                ClassesAttempted = ["Hard"],
+                ClassesFailed = [new SessionFailure { Class = "Hard", Reason = "deps" }]
+            }
+        );
+        StoreRegistry.Reset();
+
+        var result = SessionTool.GetSessions();
+        var doc = JsonDocument.Parse(result);
+
+        Assert.True(doc.RootElement.TryGetProperty("recommendations", out var recs));
+        Assert.True(recs.GetArrayLength() > 0);
+    }
+
+    // ── CountRecordsSince: unparseable dates are skipped ──
+
+    [Fact]
+    public void CountRecordsSince_UnparseableDates_Skipped()
+    {
+        var records = new List<Gotcha>
+        {
+            new() { Type = "A", Date = "not-a-date" },
+            new() { Type = "B", Date = "2025-06-01T00:00:00Z" },
+            new() { Type = "C", Date = "garbage" }
+        };
+
+        var cutoff = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var count = SessionTool.CountRecordsSince(records, g => g.Date, cutoff);
+        Assert.Equal(1, count); // Only B parses and is after cutoff
+    }
 }

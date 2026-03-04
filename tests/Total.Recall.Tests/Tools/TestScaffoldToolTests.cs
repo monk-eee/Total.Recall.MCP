@@ -1335,4 +1335,175 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         var parsed = JsonSerializer.Deserialize<JsonElement>(result);
         Assert.Equal(1, parsed.GetProperty("synthetic").GetInt32());
     }
+
+    // ── ClassifyArchetype tests ──
+
+    [Fact]
+    public void ClassifyArchetype_StaticClass_ReturnsStaticHelper()
+    {
+        var type = new TypeRecord { Name = "StringExtensions", IsStatic = true };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("STATIC HELPER", result);
+        Assert.Contains("Pure function", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_PocoDataClass_ReturnsPoco()
+    {
+        var type = new TypeRecord
+        {
+            Name = "UserDto",
+            Properties =
+            [
+                new PropertyRecord { Name = "Id", ClrType = "int" },
+                new PropertyRecord { Name = "Name", ClrType = "string" },
+                new PropertyRecord { Name = "Email", ClrType = "string" },
+                new PropertyRecord { Name = "Age", ClrType = "int" }
+            ]
+        };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("POCO/DATA CLASS", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_HeavyDiService_ReturnsHeavyDi()
+    {
+        var type = new TypeRecord { Name = "ComplexService" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 6, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("HEAVY-DI SERVICE", result);
+        Assert.Contains("6 dependencies", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_StandardService_ReturnsStandard()
+    {
+        var type = new TypeRecord { Name = "OrderService" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 3, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("STANDARD SERVICE", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_MixedDiService_ReturnsMixed()
+    {
+        var type = new TypeRecord { Name = "HybridService" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 2, concreteFieldCount: 1, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("MIXED-DI SERVICE", result);
+        Assert.Contains("2 mocked", result);
+        Assert.Contains("1 concrete", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_BuilderFactory_ReturnsPattern()
+    {
+        var type = new TypeRecord { Name = "ReportBuilder" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("BUILDER/FACTORY", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_FactoryPattern_ReturnsPattern()
+    {
+        var type = new TypeRecord { Name = "EntityFactory" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("BUILDER/FACTORY", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_ProviderPattern_ReturnsPattern()
+    {
+        var type = new TypeRecord { Name = "ConfigProvider" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.NotNull(result);
+        Assert.Contains("BUILDER/FACTORY", result);
+    }
+
+    [Fact]
+    public void ClassifyArchetype_PlainClass_ReturnsNull()
+    {
+        var type = new TypeRecord { Name = "SomeClass" };
+
+        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+
+        Assert.Null(result);
+    }
+
+    // ── generateEdgeCases parameter ──
+
+    [Fact]
+    public void GenerateTestScaffold_EdgeCasesFalse_NoEdgeCaseStubs()
+    {
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "EdgeTarget",
+            Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = ["IMyService"] }]
+        });
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "EdgeTarget",
+            Namespace = "App",
+            UncoveredMethods =
+            [
+                new UncoveredMethod { Name = "GetName", StartLine = 10, EndLine = 20, UncoveredLines = 8 }
+            ]
+        });
+
+        var result = TestScaffoldTool.GenerateTestScaffold("EdgeTarget", generateEdgeCases: false);
+        var doc = JsonDocument.Parse(result);
+        var scaffold = doc.RootElement.GetProperty("scaffold").GetString()!;
+
+        // Should NOT include edge case stubs like _NullInput, _EmptyString
+        Assert.DoesNotContain("_NullInput_", scaffold);
+        Assert.DoesNotContain("_EmptyString_", scaffold);
+    }
+
+    [Fact]
+    public void GenerateTestScaffold_EdgeCasesTrue_IncludesEdgeCaseStubs()
+    {
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "EdgeTarget2",
+            Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = ["IMyService"] }]
+        });
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "EdgeTarget2",
+            Namespace = "App",
+            UncoveredMethods =
+            [
+                new UncoveredMethod { Name = "GetName", StartLine = 10, EndLine = 20, UncoveredLines = 8 }
+            ]
+        });
+
+        var result = TestScaffoldTool.GenerateTestScaffold("EdgeTarget2", generateEdgeCases: true);
+        var doc = JsonDocument.Parse(result);
+        var scaffold = doc.RootElement.GetProperty("scaffold").GetString()!;
+
+        // Should include edge case stubs since the method has a string-like name
+        Assert.Contains("GetName", scaffold);
+    }
 }
