@@ -5,7 +5,7 @@
 | Key | Value |
 |-----|-------|
 | Solution | `Total.Recall.sln` |
-| Version | 2.2.0 |
+| Version | 2.3.0 |
 | SDK | 8.0.400 (`rollForward: latestFeature`, actual: 8.0.418) |
 | dotnet | `C:\Program Files\dotnet\dotnet.exe` |
 | sourceRoot | `src/Total.Recall/` |
@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 992 passing |
+| tests | 1006 passing |
 
 ## Purpose
 
@@ -96,7 +96,7 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 
 | Assembly | TFM | csproj Path | Status |
 |----------|-----|-------------|--------|
-| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 992 tests |
+| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1006 tests |
 
 ## Data Files
 
@@ -264,6 +264,16 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 46. **Mock recipe usage examples enrichment**: Scanner `--enrich` flag triggers `EnrichMockRecipeUsageExamples` after auto-generating mock recipes. Scans test files for `Mock<InterfaceName>` patterns and extracts 1–2 real usage snippets (creation + nearby Setup/Verify lines) per interface. `MockRecipe.UsageExamples` (List<string>) stores these snippets. Rewrites the mock-recipes.jsonl file with enriched data to avoid growing the file with duplicates.
 
 47. **Multi-method source snippets**: `get_source_snippet` accepts comma-separated method names (e.g., `"Validate,Process,Execute"`). When multiple methods are requested, returns an envelope `{className, requestedMethods, returnedMethods, notFound, methods[]}` with each method's source extracted independently. Per-method `maxLines` is auto-scaled (`maxLines / methodCount`, min 50). Single-method requests preserve the original response format for backward compatibility.
+
+48. **Unified data directory resolution**: Scanner CLI resolves the data directory via a single `RepoConfig.GetNamespacePath(ns, outputPath)` call that handles all four input combinations: `--output X --namespace Y` → `X/Y/`, `--output X` → `X/{envNs}/`, `--namespace Y` → `{TOTAL_RECALL_DATA}/Y/`, neither → `{TOTAL_RECALL_DATA}/{TOTAL_RECALL_NAMESPACE}/`. Previously, the 3-branch if/else treated `--output` and `--namespace` as mutually exclusive and when only `--namespace` was provided, `GetNamespacePath` fell back to `CWD/data` as root instead of `TOTAL_RECALL_DATA`.
+
+49. **Data directory mismatch warning**: After resolving the scan output directory, the scanner checks whether it diverges from the path the MCP server would use (via `TOTAL_RECALL_DATA`). If the paths differ, a `⚠ WARNING` is printed explaining the mismatch and that scanned data won't be visible to the server. Also warns when `--output` is used without `TOTAL_RECALL_DATA` being set.
+
+50. **Watch mode graceful shutdown**: The `--watch` mode wraps `watcher.WatchAsync(cts.Token)` in a try/catch for `OperationCanceledException` in `Program.cs`, ensuring Ctrl+C always produces exit code 0. The watcher itself also handles cancellation internally, but the outer catch is defensive against edge cases in timer/callback propagation.
+
+51. **Scan summary output**: After all scanning, enrichment, and analysis steps, the scanner prints a "Data Summary" table showing record counts per JSONL file in the output directory. This gives operators immediate visibility into data volumes without requiring a separate tool call.
+
+52. **RepoConfig.ClearCache() public API**: `RepoConfig.ClearCache()` (public) replaces the internal `ResetCache()` method for clearing cached root path and default namespace. `ResetCache()` is preserved as an internal alias for backward compatibility. Used in tests and after runtime environment variable changes.
 
 ## Footguns
 

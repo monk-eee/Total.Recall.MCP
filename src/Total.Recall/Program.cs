@@ -214,14 +214,32 @@ static async Task RunScannerAsync(string[] args)
         return;
     }
 
-    // Resolve data directory
-    string dataDir;
-    if (!string.IsNullOrEmpty(options.OutputPath))
-        dataDir = RepoConfig.GetDataPath(options.OutputPath);
-    else if (!string.IsNullOrEmpty(options.NamespaceName))
-        dataDir = RepoConfig.GetNamespacePath(options.NamespaceName);
-    else
-        dataDir = RepoConfig.GetDataPath();
+    // Resolve data directory — single call handles all combinations:
+    //   --output X --namespace Y  →  X/Y/
+    //   --output X (no namespace) →  X/ (uses env/default namespace)
+    //   --namespace Y (no output) →  {TOTAL_RECALL_DATA}/Y/
+    //   neither flag              →  {TOTAL_RECALL_DATA}/{TOTAL_RECALL_NAMESPACE}/
+    string dataDir = RepoConfig.GetNamespacePath(options.NamespaceName, options.OutputPath);
+
+    // Warn if the resolved data directory diverges from what the MCP server would use.
+    // This catches the common mistake of running 'scan --output ...' from a different CWD
+    // than the MCP server, which causes the server to read stale/empty data.
+    var envDataRoot = Environment.GetEnvironmentVariable(RepoConfig.EnvVarName);
+    if (!string.IsNullOrEmpty(envDataRoot))
+    {
+        var mcpPath = RepoConfig.GetNamespacePath(options.NamespaceName);
+        if (!string.Equals(Path.GetFullPath(dataDir), Path.GetFullPath(mcpPath), StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"  ⚠ WARNING: Scan output '{dataDir}' differs from MCP server path '{mcpPath}'");
+            Console.WriteLine($"             MCP server uses {RepoConfig.EnvVarName}={envDataRoot}");
+            Console.WriteLine($"             Scanned data will NOT be visible to the MCP server.");
+        }
+    }
+    else if (!string.IsNullOrEmpty(options.OutputPath))
+    {
+        Console.WriteLine($"  ⚠ WARNING: {RepoConfig.EnvVarName} env var is not set.");
+        Console.WriteLine($"             If your MCP server uses a different data root, scan output may not be visible.");
+    }
 
     Directory.CreateDirectory(dataDir);
     Console.WriteLine($"Total.Recall Scanner v{AppVersion.Current} — output: {dataDir}");
@@ -354,6 +372,9 @@ static async Task RunScannerAsync(string[] args)
     // Write config.json with scan metadata
     WriteConfig(dataDir, options);
 
+    // Print data source summary — shows record counts per JSONL file in the data directory
+    PrintDataSummary(dataDir);
+
     Console.WriteLine($"Done. [{string.Join(", ", scanResults)}]");
 
     // Watch mode: keep running and re-scan on file changes
@@ -380,7 +401,14 @@ static async Task RunScannerAsync(string[] args)
             cts.Cancel();
         };
 
-        await watcher.WatchAsync(cts.Token);
+        try
+        {
+            await watcher.WatchAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Ctrl+C graceful shutdown — exit code 0
+        }
     }
 }
 
@@ -707,6 +735,42 @@ static void WriteConfig(string dataDir, ScanOptions options)
     var json = System.Text.Json.JsonSerializer.Serialize(config, SharedJsonOptions.CamelCaseIndented);
     File.WriteAllText(configPath, json);
     Console.WriteLine($"  ✓ config.json updated");
+}
+
+/// <summary>
+/// Print a summary table of record counts per JSONL data file in the data directory.
+/// Helps operators verify that scan output + enrichment produced expected data volumes.
+/// </summary>
+static void PrintDataSummary(string dataDir)
+{
+    Console.WriteLine();
+    Console.WriteLine("  ── Data Summary ──");
+
+    var files = new (string Label, string Path)[]
+    {
+        ("type-registry",  RepoConfig.TypeRegistryPath(dataDir)),
+        ("coverage-gaps",  RepoConfig.CoverageGapsPath(dataDir)),
+        ("test-inventory", RepoConfig.TestInventoryPath(dataDir)),
+        ("mock-recipes",   RepoConfig.MockRecipesPath(dataDir)),
+        ("gotchas",        RepoConfig.GotchasPath(dataDir)),
+        ("assessments",    RepoConfig.AssessmentsPath(dataDir)),
+        ("sessions",       RepoConfig.SessionsPath(dataDir)),
+    };
+
+    foreach (var (label, path) in files)
+    {
+        if (File.Exists(path))
+        {
+            var lineCount = File.ReadLines(path).Count(l => !string.IsNullOrWhiteSpace(l));
+            Console.WriteLine($"    {label,-16} {lineCount,5} records");
+        }
+        else
+        {
+            Console.WriteLine($"    {label,-16}     — (not found)");
+        }
+    }
+
+    Console.WriteLine();
 }
 
 static ScanOptions ParseScanOptions(string[] args)

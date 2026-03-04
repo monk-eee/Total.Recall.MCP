@@ -157,11 +157,15 @@ public static class RepoConfig
     public static string ConfigJsonPath(string dataDir) => Path.Combine(dataDir, "config.json");
 
     /// <summary>
-    /// Clear all cached paths. Used by tests to ensure fresh env var resolution.
+    /// Clear all cached paths. Use in tests to ensure fresh env var resolution,
+    /// or after changing environment variables at runtime.
     /// </summary>
-    internal static void ResetCache()
+    public static void ClearCache()
     {
         s_cachedRootPath = null;
         s_cachedDefaultNamespace = null;
     }
+
+    /// <summary>Alias for <see cref="ClearCache"/> — kept for backward compat.</summary>
+    internal static void ResetCache() => ClearCache();
 }
