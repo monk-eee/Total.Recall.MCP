@@ -107,6 +107,29 @@ public static class SessionTool
             }
         }
 
+        // ── Auto-compute coverage delta when callers don't provide values ──
+        // Many callers pass 0/0 for coverageBefore/coverageAfter, resulting in null deltas.
+        // Auto-compute by: coverageAfter from current coverage-gaps store, coverageBefore from last session.
+        var autoCoverage = false;
+        if (coverageBefore == 0 && coverageAfter == 0 && stores.CoverageGaps.HasData())
+        {
+            var currentCoverage = ComputeOverallCoverage(stores);
+            if (currentCoverage > 0)
+            {
+                coverageAfter = currentCoverage;
+
+                // Get coverageBefore from last session's coverageAfter (if available)
+                if (stores.Sessions.HasData())
+                {
+                    var prevSessions = stores.Sessions.LoadAll();
+                    var lastWithCoverage = prevSessions.LastOrDefault(s => s.CoverageAfter > 0);
+                    if (lastWithCoverage is not null)
+                        coverageBefore = lastWithCoverage.CoverageAfter;
+                }
+                autoCoverage = true;
+            }
+        }
+
         var sessionId = Guid.NewGuid().ToString();
         var now = DateTime.UtcNow;
 
@@ -149,18 +172,28 @@ public static class SessionTool
 
         stores.Sessions.Append(record);
 
+        // ── Negative feedback loop ──
+        // When classes fail in a session, automatically:
+        // 1. Add a gotcha noting the failure
+        // 2. Downgrade 'testable' assessments to 'deferred'
+        // This prevents future sessions from repeatedly attempting the same problematic classes.
+        var feedbackActions = ApplyNegativeFeedback(record, stores, sessionId);
+
         var summary = $"Session logged: {sessionId}\n" +
                       $"  Model: {model}\n" +
                       $"  Tokens: {record.TotalTokens:N0} ({promptTokens:N0} prompt + {completionTokens:N0} completion)\n" +
                       $"  Classes: {record.ClassesAttempted.Count} attempted, {record.ClassesSucceeded.Count} succeeded, {record.ClassesFailed.Count} failed\n" +
                       $"  Tests: {testsGenerated}{(autoTests ? " (estimated from past session avg)" : "")}\n" +
-                      $"  Coverage: {coverageBefore}% → {coverageAfter}% (Δ{record.CoverageDelta:+#.##;-#.##;0}%)\n" +
+                      $"  Coverage: {coverageBefore}% → {coverageAfter}% (Δ{record.CoverageDelta:+#.##;-#.##;0}%){(autoCoverage ? " (auto-computed from coverage data)" : "")}\n" +
                       (coveredLines > 0 ? $"  Covered lines: {coveredLines} ({(testsGenerated > 0 ? $"{(double)coveredLines / testsGenerated:F1} lines/test" : "n/a")})\n" : "") +
                       $"  Gotchas: {gotchasDiscovered} new{(autoGotchas ? " (auto-counted from store)" : "")}, " +
                       $"Assessments: {assessmentsRecorded} new{(autoAssessments ? " (auto-counted from store)" : "")}";
 
         if (warnings.Count > 0)
             summary += "\n\n⚠ WARNINGS:\n  " + string.Join("\n  ", warnings);
+
+        if (feedbackActions.Count > 0)
+            summary += "\n\n🔄 FEEDBACK LOOP:\n  " + string.Join("\n  ", feedbackActions);
 
         return summary;
     }
@@ -172,6 +205,61 @@ public static class SessionTool
     internal static bool LooksLikeCount(string value)
     {
         return !string.IsNullOrWhiteSpace(value) && long.TryParse(value.Trim(), out _);
+    }
+
+    /// <summary>
+    /// Apply negative feedback for failed classes:
+    /// 1. Add a gotcha noting the session failure for each failed class
+    /// 2. Downgrade 'testable' assessments to 'deferred' for failed classes
+    /// Returns a list of actions taken for the summary.
+    /// </summary>
+    internal static List<string> ApplyNegativeFeedback(SessionRecord record, NamespaceStores stores, string sessionId)
+    {
+        var actions = new List<string>();
+
+        if (record.ClassesFailed.Count == 0)
+            return actions;
+
+        // Build latest assessments lookup for downgrade detection
+        var latestAssessments = new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
+        if (stores.Assessments.HasData())
+        {
+            foreach (var a in stores.Assessments.LoadAll())
+                latestAssessments[a.Class] = a;
+        }
+
+        foreach (var failure in record.ClassesFailed)
+        {
+            // 1. Add gotcha noting the failure
+            var gotcha = new Gotcha
+            {
+                Type = failure.Class,
+                Category = "session-failure",
+                Description = $"Failed in session {sessionId}: {failure.Reason}",
+                Date = DateTime.UtcNow.ToString("yyyy-MM-dd")
+            };
+            stores.Gotchas.Append(gotcha);
+            actions.Add($"Added gotcha for '{failure.Class}': session failure ({failure.Reason})");
+
+            // 2. Downgrade 'testable' assessment to 'deferred'
+            if (latestAssessments.TryGetValue(failure.Class, out var assessment)
+                && assessment.Verdict == "testable")
+            {
+                var downgrade = new Assessment
+                {
+                    Class = failure.Class,
+                    Verdict = "deferred",
+                    Reasoning = $"Auto-downgraded: failed in session {sessionId} ({failure.Reason})",
+                    Dependencies = assessment.Dependencies,
+                    Cluster = assessment.Cluster,
+                    Date = DateTime.UtcNow.ToString("yyyy-MM-dd")
+                };
+                stores.Assessments.Append(downgrade);
+                actions.Add($"Downgraded '{failure.Class}' assessment: testable → deferred");
+            }
+        }
+
+        return actions;
     }
 
     [McpServerTool, Description(
@@ -633,5 +721,25 @@ public static class SessionTool
         if (withTests.Count == 0) return 0;
         var avg = withTests.Average(s => (double)s.TestsGenerated / s.ClassesSucceeded.Count);
         return (int)Math.Round(avg * succeededCount);
+    }
+
+    /// <summary>
+    /// Compute overall coverage percentage from the coverage-gaps store.
+    /// Returns the weighted average: sum(coveredLines) / sum(totalLines) * 100.
+    /// Returns 0 if no coverage data available.
+    /// </summary>
+    internal static double ComputeOverallCoverage(NamespaceStores stores)
+    {
+        if (!stores.CoverageGaps.HasData())
+            return 0;
+
+        var gaps = stores.CoverageGaps.LoadAll();
+        var totalLines = gaps.Sum(g => g.TotalLines);
+        var coveredLines = gaps.Sum(g => g.CoveredLines);
+
+        if (totalLines == 0)
+            return 0;
+
+        return Math.Round(100.0 * coveredLines / totalLines, 2);
     }
 }

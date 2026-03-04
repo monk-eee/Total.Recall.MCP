@@ -1506,4 +1506,118 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         // Should include edge case stubs since the method has a string-like name
         Assert.Contains("GetName", scaffold);
     }
+
+    // ── Item #1: Overload disambiguation ──
+
+    [Fact]
+    public void ExtractParamSuffix_SystemObject_ReturnsObject()
+    {
+        var result = TestScaffoldTool.ExtractParamSuffix("(System.Object)System.Boolean");
+        Assert.Equal("Object", result);
+    }
+
+    [Fact]
+    public void ExtractParamSuffix_MultipleParams_ReturnsJoined()
+    {
+        var result = TestScaffoldTool.ExtractParamSuffix("(System.String, System.Int32)System.Void");
+        Assert.Equal("String_Int32", result);
+    }
+
+    [Fact]
+    public void ExtractParamSuffix_EmptySignature_ReturnsNoArgs()
+    {
+        Assert.Equal("NoArgs", TestScaffoldTool.ExtractParamSuffix(""));
+        Assert.Equal("NoArgs", TestScaffoldTool.ExtractParamSuffix(null!));
+    }
+
+    [Fact]
+    public void ExtractParamSuffix_EmptyParens_ReturnsNoArgs()
+    {
+        var result = TestScaffoldTool.ExtractParamSuffix("()System.Void");
+        Assert.Equal("NoArgs", result);
+    }
+
+    [Fact]
+    public void ExtractParamSuffix_GenericParam_StripsArity()
+    {
+        var result = TestScaffoldTool.ExtractParamSuffix("(System.Collections.Generic.List`1)System.Void");
+        Assert.Equal("List", result);
+    }
+
+    [Fact]
+    public void BuildDisambiguatedNames_NoCollisions_UsesSimpleNames()
+    {
+        var methods = new List<UncoveredMethod>
+        {
+            new() { Name = "ProcessA", Signature = "(System.String)System.Void" },
+            new() { Name = "ProcessB", Signature = "(System.Int32)System.Void" }
+        };
+
+        var result = TestScaffoldTool.BuildDisambiguatedNames(methods);
+
+        Assert.Equal("ProcessA", result[methods[0]]);
+        Assert.Equal("ProcessB", result[methods[1]]);
+    }
+
+    [Fact]
+    public void BuildDisambiguatedNames_Overloads_AppendsParamSuffix()
+    {
+        var methods = new List<UncoveredMethod>
+        {
+            new() { Name = "Equals", Signature = "(System.Object)System.Boolean" },
+            new() { Name = "Equals", Signature = "(MyApp.FileToken)System.Boolean" }
+        };
+
+        var result = TestScaffoldTool.BuildDisambiguatedNames(methods);
+
+        Assert.Equal("Equals_Object", result[methods[0]]);
+        Assert.Equal("Equals_FileToken", result[methods[1]]);
+    }
+
+    [Fact]
+    public void BuildDisambiguatedNames_OverloadsSameParams_FallsBackToNumeric()
+    {
+        var methods = new List<UncoveredMethod>
+        {
+            new() { Name = "DoWork", Signature = "(System.String)System.Void" },
+            new() { Name = "DoWork", Signature = "(System.String)System.Boolean" }
+        };
+
+        var result = TestScaffoldTool.BuildDisambiguatedNames(methods);
+
+        // Both have same param type (String), so one gets numeric suffix
+        var names = result.Values.ToList();
+        Assert.Equal(2, names.Distinct().Count()); // Must be unique
+        Assert.Contains(names, n => n.StartsWith("DoWork_String"));
+    }
+
+    [Fact]
+    public void GenerateTestScaffold_OverloadedMethods_ProducesUniqueTestNames()
+    {
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "FileToken", Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = [] }]
+        });
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "FileToken", Namespace = "App", File = "src/FileToken.cs",
+            TotalLines = 50, CoveredLines = 20, UncoveredLines = 30,
+            UncoveredMethods =
+            [
+                new UncoveredMethod { Name = "Equals", Signature = "(System.Object)System.Boolean", StartLine = 10, EndLine = 20, UncoveredLines = 5 },
+                new UncoveredMethod { Name = "Equals", Signature = "(App.FileToken)System.Boolean", StartLine = 25, EndLine = 35, UncoveredLines = 5 }
+            ]
+        });
+
+        var result = TestScaffoldTool.GenerateTestScaffold("FileToken");
+        var doc = JsonDocument.Parse(result);
+        var scaffold = doc.RootElement.GetProperty("scaffold").GetString()!;
+
+        // Both overloads should have unique test names
+        Assert.Contains("Equals_Object", scaffold);
+        Assert.Contains("Equals_FileToken", scaffold);
+        // Should NOT have a plain "Equals_ShouldWork" (that would be ambiguous)
+        Assert.DoesNotContain("Equals_ShouldWork", scaffold);
+    }
 }

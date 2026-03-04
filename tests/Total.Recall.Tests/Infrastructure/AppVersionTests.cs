@@ -18,8 +18,8 @@ public class AppVersionTests
     [Fact]
     public void Current_MatchesCsprojVersion()
     {
-        // The csproj sets Version to 2.1.0
-        Assert.Equal("2.1.0", AppVersion.Current);
+        // The csproj sets Version to 2.2.0
+        Assert.Equal("2.2.0", AppVersion.Current);
     }
 
     [Fact]

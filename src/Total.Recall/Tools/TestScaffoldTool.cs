@@ -282,12 +282,15 @@ public static class TestScaffoldTool
         var uncoveredMethods = coverageGap?.UncoveredMethods ?? [];
         if (uncoveredMethods.Count > 0)
         {
+            // Build disambiguated names for overloaded methods
+            var disambiguatedNames = BuildDisambiguatedNames(uncoveredMethods);
+
             sb.AppendLine();
             sb.AppendLine("    // ── Uncovered methods (from coverage data) ──");
 
             foreach (var method in uncoveredMethods)
             {
-                var testName = SanitizeMethodName(method.Name);
+                var testName = disambiguatedNames.TryGetValue(method, out var dn) ? dn : SanitizeMethodName(method.Name);
                 var isAsync = IsAsyncMethod(method.Name, typeRecord);
                 sb.AppendLine();
                 sb.AppendLine($"    {testAttr}");
@@ -465,9 +468,12 @@ public static class TestScaffoldTool
 
         sb.AppendLine($"    // ── Incremental stubs for {typeRecord.Name} ({allMethods.Count} methods) ──");
 
+        // Build disambiguated names for overloaded methods
+        var disambiguatedNames = BuildDisambiguatedNames(allMethods);
+
         foreach (var method in allMethods)
         {
-            var testName = SanitizeMethodName(method.Name);
+            var testName = disambiguatedNames.TryGetValue(method, out var dn) ? dn : SanitizeMethodName(method.Name);
             var isAsync = IsAsyncMethod(method.Name, typeRecord);
 
             sb.AppendLine();
@@ -576,6 +582,107 @@ public static class TestScaffoldTool
         if (typeName.StartsWith(prefix) && typeName.EndsWith(">"))
             return typeName[prefix.Length..^1];
         return "object";
+    }
+
+    /// <summary>
+    /// Build a disambiguation map for overloaded methods.
+    /// When multiple UncoveredMethods share the same sanitized test name,
+    /// appends parameter type info to differentiate them.
+    /// Single-instance methods keep the simpler name format.
+    /// </summary>
+    internal static Dictionary<UncoveredMethod, string> BuildDisambiguatedNames(IList<UncoveredMethod> methods)
+    {
+        var result = new Dictionary<UncoveredMethod, string>();
+
+        // Group by sanitized base name to find collisions
+        var groups = methods
+            .GroupBy(m => SanitizeMethodName(m.Name), StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var grp in groups)
+        {
+            var list = grp.ToList();
+            if (list.Count == 1)
+            {
+                // No collision — use simple name
+                result[list[0]] = grp.Key;
+                continue;
+            }
+
+            // Collision — disambiguate using signature param types
+            foreach (var method in list)
+            {
+                var suffix = ExtractParamSuffix(method.Signature);
+                result[method] = $"{grp.Key}_{suffix}";
+            }
+
+            // If disambiguation still produces duplicates (e.g. both have same param types),
+            // fall back to numeric suffixes
+            var usedNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var method in list)
+            {
+                var name = result[method];
+                if (!usedNames.Add(name))
+                {
+                    // Append numeric suffix until unique
+                    var counter = 2;
+                    while (!usedNames.Add($"{name}_{counter}"))
+                        counter++;
+                    result[method] = $"{name}_{counter}";
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Extract a human-readable parameter suffix from a Cobertura CLR signature.
+    /// Examples:
+    ///   "(System.Object)System.Boolean" → "Object"
+    ///   "(System.String, System.Int32)System.Void" → "String_Int32"
+    ///   "()" or "" → "NoArgs"
+    /// </summary>
+    internal static string ExtractParamSuffix(string signature)
+    {
+        if (string.IsNullOrEmpty(signature))
+            return "NoArgs";
+
+        // Extract content between parens: "(ParamTypes)ReturnType"
+        var openParen = signature.IndexOf('(');
+        var closeParen = signature.IndexOf(')');
+
+        if (openParen < 0 || closeParen <= openParen + 1)
+            return "NoArgs";
+
+        var paramSection = signature[(openParen + 1)..closeParen].Trim();
+        if (string.IsNullOrEmpty(paramSection))
+            return "NoArgs";
+
+        // Split params (may use comma or space as separator depending on format)
+        var paramTypes = paramSection.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var parts = new List<string>();
+        foreach (var param in paramTypes)
+        {
+            // Take short name: "System.Object" → "Object", "System.Collections.Generic.List`1" → "List"
+            var shortName = param;
+            var lastDot = param.LastIndexOf('.');
+            if (lastDot >= 0 && lastDot < param.Length - 1)
+                shortName = param[(lastDot + 1)..];
+
+            // Strip generic arity markers: "List`1" → "List"
+            var backtick = shortName.IndexOf('`');
+            if (backtick > 0)
+                shortName = shortName[..backtick];
+
+            // Remove non-alphanumeric
+            var clean = new string(shortName.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
+            if (!string.IsNullOrEmpty(clean))
+                parts.Add(clean);
+        }
+
+        return parts.Count > 0 ? string.Join("_", parts) : "NoArgs";
     }
 
     /// <summary>

@@ -1931,4 +1931,106 @@ public sealed class TestableTargetsToolTests : ToolTestBase
 
         Assert.Contains("test file exists", reason);
     }
+
+    // ── Item #2: Configurable ROI threshold + sessionROITrend ──
+
+    [Fact]
+    public void GetTestableTargets_LowScore_TriggersRoiWarning()
+    {
+        // Seed a class that will score very low (coupled assessment)
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "Tiny", Namespace = "App", File = "Tiny.cs",
+            TotalLines = 10, CoveredLines = 8, UncoveredLines = 2,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 5, UncoveredLines = 2 }]
+        });
+        SeedTypeRegistry(new TypeRecord { Name = "Tiny", Namespace = "App" });
+
+        // Use a high threshold so warning always triggers
+        var result = TestableTargetsTool.GetTestableTargets(roiThreshold: 999.0);
+        var doc = JsonDocument.Parse(result);
+
+        Assert.True(doc.RootElement.TryGetProperty("warning", out var warning));
+        Assert.Contains("below threshold 999", warning.GetString());
+    }
+
+    [Fact]
+    public void GetTestableTargets_CustomRoiThreshold_AppearsInFilters()
+    {
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "Foo", Namespace = "App", File = "Foo.cs",
+            TotalLines = 100, CoveredLines = 50, UncoveredLines = 50,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 50, UncoveredLines = 50 }]
+        });
+        SeedTypeRegistry(new TypeRecord { Name = "Foo", Namespace = "App" });
+
+        var result = TestableTargetsTool.GetTestableTargets(roiThreshold: 7.5);
+        var doc = JsonDocument.Parse(result);
+
+        var filters = doc.RootElement.GetProperty("filters");
+        Assert.Equal(7.5, filters.GetProperty("roiThreshold").GetDouble());
+    }
+
+    [Fact]
+    public void BuildSessionROITrend_NoSessions_ReturnsNull()
+    {
+        var result = TestableTargetsTool.BuildSessionROITrend([], 50.0);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void BuildSessionROITrend_WithSessions_ReturnsFields()
+    {
+        var sessions = new List<SessionRecord>
+        {
+            new()
+            {
+                SessionId = "s1", Model = "m", CoverageDelta = 2.5,
+                TestsGenerated = 10, CoveredLines = 30,
+                ClassesAttempted = ["A"], ClassesSucceeded = ["A"],
+                ClassesFailed = [],
+                StartedUtc = "2025-01-01T00:00:00Z", EndedUtc = "2025-01-01T01:00:00Z"
+            }
+        };
+
+        var result = TestableTargetsTool.BuildSessionROITrend(sessions, 42.0);
+        Assert.NotNull(result);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        var doc = JsonDocument.Parse(json);
+
+        Assert.Equal(42.0, doc.RootElement.GetProperty("currentTopScore").GetDouble());
+        Assert.Equal(1, doc.RootElement.GetProperty("sessionCount").GetInt32());
+        Assert.Equal(2.5, doc.RootElement.GetProperty("lastSession").GetProperty("coverageDelta").GetDouble());
+    }
+
+    [Fact]
+    public void GetTestableTargets_WithSessionData_IncludesSessionROITrend()
+    {
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "BigClass", Namespace = "App", File = "BigClass.cs",
+            TotalLines = 200, CoveredLines = 50, UncoveredLines = 150,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 150, UncoveredLines = 150 }]
+        });
+        SeedTypeRegistry(new TypeRecord
+        {
+            Name = "BigClass", Namespace = "App",
+            Constructors = [new ConstructorRecord { Params = [] }]
+        });
+        SeedSessions(new SessionRecord
+        {
+            SessionId = "s1", Model = "claude", CoverageDelta = 5.0,
+            TestsGenerated = 10, CoveredLines = 25,
+            ClassesAttempted = ["X"], ClassesSucceeded = ["X"], ClassesFailed = [],
+            StartedUtc = "2025-01-01T00:00:00Z", EndedUtc = "2025-01-01T01:00:00Z"
+        });
+
+        var result = TestableTargetsTool.GetTestableTargets();
+        var doc = JsonDocument.Parse(result);
+
+        Assert.True(doc.RootElement.TryGetProperty("sessionROITrend", out var trend));
+        Assert.Equal(1, trend.GetProperty("sessionCount").GetInt32());
+    }
 }

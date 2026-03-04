@@ -47,6 +47,13 @@ public sealed class UncoveredMethod
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
+    /// <summary>
+    /// CLR method signature from Cobertura XML, e.g. "(System.Object)System.Boolean".
+    /// Used to disambiguate overloaded methods in scaffold generation.
+    /// </summary>
+    [JsonPropertyName("signature")]
+    public string Signature { get; set; } = "";
+
     [JsonPropertyName("startLine")]
     public int StartLine { get; set; }
 

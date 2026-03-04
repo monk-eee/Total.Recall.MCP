@@ -25,4 +25,11 @@ public sealed class MockRecipe
 
     [JsonPropertyName("usedByClasses")]
     public List<string> UsedByClasses { get; set; } = [];
+
+    /// <summary>
+    /// Real usage examples from the test codebase showing how this mock is configured.
+    /// Populated during --enrich when test files contain Mock&lt;IFoo&gt; patterns.
+    /// </summary>
+    [JsonPropertyName("usageExamples")]
+    public List<string> UsageExamples { get; set; } = [];
 }
