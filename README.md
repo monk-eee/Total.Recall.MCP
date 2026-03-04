@@ -11,7 +11,7 @@ When an AI agent writes tests for a large .NET codebase, it burns 60–70% of it
 Total.Recall converts ephemeral agent knowledge into durable, queryable data:
 
 - **Scanners** extract type metadata, coverage gaps, and test inventories into JSONL files
-- **20 MCP tools** let agents query this data instantly — one tool call replaces 10–15 file reads
+- **23 MCP tools** let agents query this data instantly — one tool call replaces 10–15 file reads
 - **Agents write back** gotchas, assessments, and session logs, creating a feedback loop that makes each session smarter than the last
 
 ## Design Principles
@@ -35,6 +35,8 @@ Total.Recall converts ephemeral agent knowledge into durable, queryable data:
 | `generate_test_scaffold` | Complete test class skeleton: usings, mocks, constructor, [Fact] stubs, gotcha comments |
 | `log_session` | Write session outcomes for cross-session learning. **Last call of every session.** |
 | `get_sessions` | Session history + aggregate analytics (tokens, coverage deltas, success rates) |
+| `get_uncovered_methods` | Method-level ROI targets — use when class-level targeting is exhausted |
+| `get_stub_classes` | Zero-coverage trivially-testable classes (POCOs, stubs, static helpers) |
 
 ### v1 — Lookup Index
 
@@ -47,21 +49,29 @@ Total.Recall converts ephemeral agent knowledge into durable, queryable data:
 | `get_gotchas` / `add_gotcha` | Known pitfalls for a type / record new ones |
 | `get_test_inventory` | Existing test methods per class (prevent duplication) |
 | `add_assessment` / `get_assessments` | Record and query testability verdicts |
-| `get_metrics` | Server telemetry: tool calls, cache hit rates, lookup strategy distribution |
 
 ### Static Analysis
 
 | Tool | Purpose |
-|------|---------||
+|------|--------|
 | `get_class_metrics` | Per-class coupling (Ca/Ce), instability, archetype, cluster, dependency lists |
 | `get_dependency_graph` | Local subgraph for a class — deps, consumers, Mermaid diagram |
 | `get_analysis_summary` | Architectural overview: hot interfaces, most coupled classes, clusters |
+
+### Observability & Learning
+
+| Tool | Purpose |
+|------|--------|
+| `get_metrics` | Server telemetry: tool calls, cache hit rates, lookup strategy distribution |
+| `learn_test_patterns` | Analyze existing test files to learn naming, assertion, and mock conventions |
+| `get_gotcha_insights` | Cluster gotchas into patterns, generate Footguns documentation |
+| `refresh_coverage` | Re-parse Cobertura XML mid-session without a full rescan |
 
 See [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) for complete parameter documentation.
 
 ## How It Works
 
-VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot initializes. The server stays alive for the session, and Copilot auto-discovers all 20 tools over stdio JSON-RPC.
+VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot initializes. The server stays alive for the session, and Copilot auto-discovers all 23 tools over stdio JSON-RPC.
 
 ### Recommended workflow
 
@@ -97,10 +107,10 @@ VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot in
 
 ```bash
 dotnet run --project src/Total.Recall -- scan ^
-  --assembly "path/to/Server.dll" ^
+  --assembly "path/to/YourProject.dll" ^
   --coverage "path/to/coverage.cobertura.xml" ^
-  --tests "path/to/UnitTest/" ^
-  --source-root "path/to/Server/src" ^
+  --tests "path/to/YourProject.Tests/" ^
+  --source-root "path/to/your-repo/src" ^
   --namespace myproject ^
   --enrich
 ```
@@ -115,6 +125,7 @@ dotnet run --project src/Total.Recall -- scan ^
 | `--output` | Override data output directory entirely |
 | `--enrich` | Cross-reference coverage with type registry + test inventory |
 | `--analyze` | Run static analysis: dependency graph, coupling metrics, cluster detection |
+| `--watch` | Watch mode: auto re-scan on file changes (Ctrl+C to stop) |
 | `--test-framework` | Test framework: `xunit` (default), `nunit`, `mstest` |
 | `--mock-library` | Mock library: `moq` (default), `nsubstitute`, `fakeiteasy` |
 | `--test-namespace-pattern` | Pattern for test namespace derivation (default: `{Namespace}.Tests`) |
@@ -127,8 +138,29 @@ dotnet run --project src/Total.Recall -- scan ^
 | New coverage run | `--coverage path/to/xml --namespace ns --enrich` |
 | Changed test files | `--tests path/to/tests --namespace ns` |
 | Just re-enrich | `--namespace ns --enrich` |
+| **Continuous (recommended)** | **Add `--watch` to any of the above** |
 
 You do **not** need to rescan for gotchas (appended live), mock recipes (manual edits), assessments (appended live), or sessions (appended live).
+
+### Watch mode
+
+Add `--watch` to keep the scanner running and automatically re-scan when files change:
+
+```bash
+dotnet run --project src/Total.Recall -- scan ^
+  --assembly "path/to/YourProject.dll" ^
+  --coverage "path/to/coverage.cobertura.xml" ^
+  --tests "path/to/YourProject.Tests/" ^
+  --namespace myproject ^
+  --enrich --analyze --watch
+```
+
+The watcher monitors:
+- **Assembly .dll** — re-scans type registry when you rebuild
+- **Coverage .xml** — re-parses when test runner produces new results (auto-finds newest in TestResults/)
+- **Test .cs files** — re-scans test inventory when you add/modify tests
+
+Changes are debounced (1.5s) to coalesce rapid build events. After each re-scan, `--enrich` and `--analyze` run automatically if enabled. Press **Ctrl+C** to stop.
 
 ### VS Code MCP configuration
 
@@ -170,7 +202,7 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
 | Document | Purpose |
 |----------|---------|
 | [QUICKSTART.md](docs/QUICKSTART.md) | Step-by-step setup guide |
-| [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 20 tools |
+| [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 23 tools |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Observability guide + common problem fixes |
 | [INTEGRATION.md](docs/INTEGRATION.md) | How to wire Total.Recall into a target repo |
 | [copilot-instructions-template.md](docs/copilot-instructions-template.md) | Drop-in template for `.github/copilot-instructions.md` |

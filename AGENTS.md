@@ -21,7 +21,7 @@
 
 When an AI agent writes tests for a large .NET codebase, it burns 60–70% of its context re-discovering the same information every session: type constructors, mock patterns, coverage gaps, known pitfalls, and what's already tested. Over 30 sessions to reach a coverage target, this wastes ~450K tokens and ~22 hours of wall-clock time.
 
-Total.Recall eliminates this waste by converting ephemeral agent knowledge into durable, queryable data. Scanners extract type metadata, coverage gaps, and test inventories into JSONL files. An MCP server exposes 17 tools that let agents query this data instantly — one tool call replaces 10–15 file reads. Agents also write data back (gotchas, assessments, session logs), creating a feedback loop that makes each session smarter than the last.
+Total.Recall eliminates this waste by converting ephemeral agent knowledge into durable, queryable data. Scanners extract type metadata, coverage gaps, and test inventories into JSONL files. An MCP server exposes 23 tools that let agents query this data instantly — one tool call replaces 10–15 file reads. Agents also write data back (gotchas, assessments, session logs), creating a feedback loop that makes each session smarter than the last.
 
 ## Design Principles
 
@@ -52,17 +52,25 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj
 
 # Run scanner CLI (with --output)
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan \
-  --assembly "C:\Users\lyndonswan\Repos\Linter\src\LanguageServer\Server\bin\Debug\net8.0\win-x64\Server.dll" \
-  --coverage "C:\Users\lyndonswan\Repos\Linter\TestResults\<guid>\coverage.cobertura.xml" \
-  --tests "C:\Users\lyndonswan\Repos\Linter\src\LanguageServer\UnitTest" \
-  --output "C:\Users\lyndonswan\Repos\Total.Recall\data\linter"
+  --assembly "C:\path\to\YourProject.dll" \
+  --coverage "C:\path\to\coverage.cobertura.xml" \
+  --tests "C:\path\to\YourProject.Tests" \
+  --output "C:\path\to\Total.Recall\data\myproject"
 
 # Run scanner CLI (with --namespace)
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan \
-  --assembly "...\Server.dll" \
+  --assembly "...\YourProject.dll" \
   --coverage "...\coverage.cobertura.xml" \
-  --tests "...\UnitTest" \
-  --namespace linter
+  --tests "...\YourProject.Tests" \
+  --namespace myproject
+
+# Watch mode: auto-rescan on file changes (Ctrl+C to stop)
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan \
+  --assembly "...\YourProject.dll" \
+  --coverage "...\coverage.cobertura.xml" \
+  --tests "...\YourProject.Tests" \
+  --namespace myproject \
+  --enrich --analyze --watch
 
 # Run tests (when test project exists)
 dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
@@ -107,7 +115,7 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 ## MCP Tools
 
-17 tools. All accept an optional `ns` (namespace) parameter to target a specific dataset.
+23 tools. All accept an optional `ns` (namespace) parameter to target a specific dataset.
 
 ### v2 Tools (Decision Engine)
 
@@ -136,19 +144,36 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 | `get_assessments` | className?, verdict?, ns? | Assessment[] JSON | Previous testability assessments. Last verdict per class wins. |
 | `get_metrics` | (none) | Telemetry JSON | Tool call counts, cache hit rates, type index stats, uptime. |
 
+### Static Analysis Tools
+
+| Tool Name | Input | Output | Purpose |
+|-----------|-------|--------|---------||
+| `get_class_metrics` | className, ns? | Markdown report | Coupling (Ca/Ce), instability, archetype, cluster, dependency lists for a class. |
+| `get_dependency_graph` | className, depth?, ns? | Markdown + Mermaid | Local subgraph: deps, consumers, Mermaid diagram. Max depth 3, max 30 nodes. |
+| `get_analysis_summary` | ns? | Markdown report | Architectural overview: hot interfaces, most coupled classes, clusters, archetype distribution. Requires `--enrich`. |
+
+### Observability & Learning Tools
+
+| Tool Name | Input | Output | Purpose |
+|-----------|-------|--------|---------||
+| `learn_test_patterns` | maxFiles?, ns? | TestPatterns JSON | Analyze existing test files for naming, assertion, mock, and helper conventions. Results inform `generate_test_scaffold`. |
+| `get_gotcha_insights` | minClusterSize?, generateFootguns?, ns? | Insights JSON + Footguns markdown | Cluster gotchas by pattern (10 well-known patterns), identify systemic issues, generate AGENTS.md Footguns section. |
+| `refresh_coverage` | coveragePath?, ns? | Before/after comparison JSON | Re-parse Cobertura XML mid-session. Auto-discovers newest XML in TestResults/ if configured path is stale. |
+
 ## Scanners
 
 | Scanner | Input | Output | Key Library |
 |---------|-------|--------|-------------|
-| AssemblyScanner | Server.dll path | type-registry.jsonl | MetadataLoadContext |
+| AssemblyScanner | .dll path | type-registry.jsonl | MetadataLoadContext |
 | CoberturaParser | coverage.cobertura.xml | coverage-gaps.jsonl | System.Xml.Linq |
-| TestProjectScanner | UnitTest/ directory | test-inventory.jsonl | Regex on .cs files |
+| TestProjectScanner | test project directory | test-inventory.jsonl | Regex on .cs files |
+| ScannerWatcher | `--watch` flag | Re-runs scanners on file changes | FileSystemWatcher |
 
 ## Architecture Decisions
 
 1. **JSONL over SQLite**: JSONL is grep-friendly, git-friendly, append-friendly. The data volumes (~1,176 types, ~539 classes, ~70 gotchas) are trivially small — full load into memory is <2MB.
 
-2. **MetadataLoadContext over Assembly.LoadFrom**: Server.dll has a heavy dependency graph (Microsoft.Docs.Build.ContentParser, Markdig, LibGit2Sharp, etc.). MetadataLoadContext does reflection-only — no DLL loading, no dependency resolution failures.
+2. **MetadataLoadContext over Assembly.LoadFrom**: Target assemblies may have heavy dependency graphs. MetadataLoadContext does reflection-only — no DLL loading, no dependency resolution failures.
 
 3. **Dual-mode entry point**: Single executable serves as both MCP server (default) and CLI scanner (`scan` subcommand). Avoids maintaining two projects.
 
@@ -222,7 +247,9 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 38. **Incremental scaffold mode**: `generate_test_scaffold` accepts an optional `methodNames` parameter (CSV). When provided, generates only `[Fact]` method stubs instead of a full test class skeleton. Matches requested methods against coverage data for line range annotations. Synthetic entries are created for methods not found in coverage. Gotcha warnings are included as comments. Returns JSON with `mode: "incremental"`, stub count, and distinction between coverage-matched and synthetic stubs. **Use when extending an existing test file rather than creating a new one.**
 
-39. **Stub class discovery**: `get_stub_classes` identifies zero-or-near-zero coverage classes that are trivially testable: POCOs, stubs, static helpers, and simple logic classes with no mocking complexity. Cross-references type registry for constructor complexity, test inventory for existing tests, and assessments for skip/coupled exclusion. Each class is categorized (`poco`, `static-helpers`, `simple-logic`, `logic-heavy`, `unclassified`) and scored by: log-scaled uncoveredLines base, constructor simplicity bonus (parameterless=1.0x, mockable params=0.8x^n, concrete=0.6x^n), hasTestFile 1.5x, real method count bonus (3+=1.3x), and class size sweet spot (<=50 lines=1.2x). Filters: `maxCoveragePercent` (default 5.0), `maxCtorParams` (default 2), `includeWithTests` (default false). These targets were consistently the highest ROI in late-stage coverage sessions — discovered in session 9 where stub classes at 0% yielded 146 lines with zero mocking complexity.
+39. **Watch mode (--watch)**: `ScannerWatcher` uses `FileSystemWatcher` to monitor assembly (.dll), coverage (.xml in TestResults hierarchy), and test (.cs) files. On change, debounces 1.5 seconds to coalesce rapid events (build output), then re-runs only the affected scanners plus optional `--enrich` and `--analyze`. Coverage watcher auto-discovers the newest `coverage.cobertura.xml` in the TestResults/{guid}/ hierarchy. Ignores changes in obj/bin subdirectories for test watchers. Enrichment and analysis functions are passed as delegates from Program.cs since the scanner entry point uses top-level statements (local functions can't be accessed from external classes). Runs until Ctrl+C with clean `CancellationToken`-based shutdown.
+
+40. **Stub class discovery**: `get_stub_classes` identifies zero-or-near-zero coverage classes that are trivially testable: POCOs, stubs, static helpers, and simple logic classes with no mocking complexity. Cross-references type registry for constructor complexity, test inventory for existing tests, and assessments for skip/coupled exclusion. Each class is categorized (`poco`, `static-helpers`, `simple-logic`, `logic-heavy`, `unclassified`) and scored by: log-scaled uncoveredLines base, constructor simplicity bonus (parameterless=1.0x, mockable params=0.8x^n, concrete=0.6x^n), hasTestFile 1.5x, real method count bonus (3+=1.3x), and class size sweet spot (<=50 lines=1.2x). Filters: `maxCoveragePercent` (default 5.0), `maxCtorParams` (default 2), `includeWithTests` (default false). These targets were consistently the highest ROI in late-stage coverage sessions — discovered in session 9 where stub classes at 0% yielded 146 lines with zero mocking complexity.
 
 ## Footguns
 

@@ -23,13 +23,14 @@ public static class CoverageGapsTool
         [Description("Max results (default: 20)")] int top = 20,
         [Description("Filter out untestable classes (default: true)")] bool skipUntestable = true,
         [Description("Sort by: 'roi' (default), 'uncovered', 'coverage'")] string sortBy = "roi",
+        [Description("Return condensed summary (class, uncoveredLines, ROI) without method details (default: false)")] bool summaryOnly = false,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetCoverageGaps);
-        Log.Debug($"[GetCoverageGaps] top={top} skipUntestable={skipUntestable} sortBy='{sortBy}' ns='{ns ?? "(default)"}'");
+        Log.Debug($"[GetCoverageGaps] top={top} skipUntestable={skipUntestable} sortBy='{sortBy}' summaryOnly={summaryOnly} ns='{ns ?? "(default)"}'");
         try
         {
-            return GetCoverageGapsCore(top, skipUntestable, sortBy, ns);
+            return GetCoverageGapsCore(top, skipUntestable, sortBy, summaryOnly, ns);
         }
         catch (Exception ex)
         {
@@ -38,7 +39,7 @@ public static class CoverageGapsTool
         }
     }
 
-    private static string GetCoverageGapsCore(int top, bool skipUntestable, string sortBy, string? ns)
+    private static string GetCoverageGapsCore(int top, bool skipUntestable, string sortBy, bool summaryOnly, string? ns)
     {
         var stores = StoreRegistry.ForNamespace(ns);
 
@@ -68,7 +69,23 @@ public static class CoverageGapsTool
             _ => scored.OrderByDescending(x => x.roiScore)
         };
 
-        var results = ordered.Take(top).Select(x => new
+        var results = ordered.Take(top).ToList();
+
+        if (summaryOnly)
+        {
+            var summaryResults = results.Select(x => new
+            {
+                x.gap.Class,
+                x.gap.Namespace,
+                x.gap.UncoveredLines,
+                x.gap.CoveragePercent,
+                x.gap.ExistingTestCount,
+                RoiScore = Math.Round(x.roiScore, 1)
+            }).ToList();
+            return JsonSerializer.Serialize(summaryResults, SharedJsonOptions.CamelCaseIndented);
+        }
+
+        var detailedResults = results.Select(x => new
         {
             x.gap.Class,
             x.gap.Namespace,
@@ -83,7 +100,7 @@ public static class CoverageGapsTool
             RoiScore = Math.Round(x.roiScore, 1)
         }).ToList();
 
-        return JsonSerializer.Serialize(results, SharedJsonOptions.CamelCaseIndented);
+        return JsonSerializer.Serialize(detailedResults, SharedJsonOptions.CamelCaseIndented);
     }
 
 

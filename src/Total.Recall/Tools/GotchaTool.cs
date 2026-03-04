@@ -78,7 +78,26 @@ public static class GotchaTool
             stores.Gotchas.Append(record);
             Log.Debug($"[AddGotcha] appended gotcha for '{typeName}'");
 
-            return $"Added gotcha for '{typeName}' [{category}]: {gotcha}";
+            // ── Assessment downgrade hint ──
+            // When a type accumulates >3 gotchas while assessed as "testable",
+            // the mounting gotchas suggest the class is harder to test than originally thought.
+            string? downgradeHint = null;
+            var totalGotchas = stores.Gotchas.Query(g =>
+                g.Type.Equals(typeName, StringComparison.OrdinalIgnoreCase)).Count;
+
+            if (totalGotchas > 3 && stores.Assessments.HasData())
+            {
+                var assessments = stores.Assessments.LoadAll();
+                var latestAssessment = assessments
+                    .LastOrDefault(a => a.Class.Equals(typeName, StringComparison.OrdinalIgnoreCase));
+                if (latestAssessment is not null && latestAssessment.Verdict is "testable")
+                {
+                    downgradeHint = $"\n⚠ DOWNGRADE HINT: '{typeName}' now has {totalGotchas} gotchas but is assessed as 'testable'. " +
+                                    $"Consider: AddAssessment('{typeName}', 'coupled', '{totalGotchas} gotchas accumulated — likely harder than initially assessed')";
+                }
+            }
+
+            return $"Added gotcha for '{typeName}' [{category}]: {gotcha}{downgradeHint ?? ""}";
         }
         catch (Exception ex)
         {

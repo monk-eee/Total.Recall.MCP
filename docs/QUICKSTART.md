@@ -10,7 +10,7 @@
 ## 1. Build Total.Recall
 
 ```bash
-cd C:\Users\lyndonswan\Repos\Total.Recall
+cd C:\path\to\Total.Recall
 dotnet build src/Total.Recall/Total.Recall.csproj
 ```
 
@@ -20,10 +20,10 @@ dotnet build src/Total.Recall/Total.Recall.csproj
 
 ```bash
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
-  --assembly "C:\path\to\Server.dll" ^
+  --assembly "C:\path\to\YourProject.dll" ^
   --coverage "C:\path\to\coverage.cobertura.xml" ^
-  --tests "C:\path\to\UnitTest" ^
-  --source-root "C:\path\to\Server\src" ^
+  --tests "C:\path\to\YourProject.Tests" ^
+  --source-root "C:\path\to\your-repo\src" ^
   --namespace myproject ^
   --enrich
 ```
@@ -39,6 +39,8 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
 | `--namespace` | no | Namespace subdirectory under `TOTAL_RECALL_DATA` (default: env var) |
 | `--output` | no | Override data output directory entirely |
 | `--enrich` | no | Cross-reference coverage with type registry + test inventory |
+| `--analyze` | no | Run static analysis: dependency graph, coupling metrics, clusters |
+| `--watch` | no | Watch mode: auto re-scan on file changes (Ctrl+C to stop) |
 | `--help` | — | Print usage |
 
 \* At least one of `--assembly`, `--coverage`, `--tests`, or `--enrich` is required.
@@ -70,6 +72,39 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
   --namespace myproject --enrich
 ```
 
+### Watch mode (recommended for active development)
+
+Instead of running manual re-scans, use `--watch` to keep the scanner running and auto-rescan on file changes:
+
+```bash
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
+  --assembly "C:\path\to\YourProject.dll" ^
+  --coverage "C:\path\to\coverage.cobertura.xml" ^
+  --tests "C:\path\to\YourProject.Tests" ^
+  --namespace myproject ^
+  --enrich --analyze --watch
+```
+
+This watches:
+- **Assembly .dll** — re-scans type registry when you rebuild
+- **Coverage .xml** — re-parses when `dotnet test` produces new results (auto-finds newest in TestResults/)
+- **Test .cs files** — re-scans test inventory when tests are added or modified
+
+Changes are debounced (1.5s) to handle rapid build events. Press **Ctrl+C** to stop.
+
+**Example output:**
+```
+  👁 Watching 3 path(s) for changes (Ctrl+C to stop):
+    • Assembly: C:\path\to\YourProject.dll
+    • Coverage: C:\path\to\TestResults\*.xml
+    • Tests:    C:\path\to\YourProject.Tests\**\*.cs
+
+  [14:32:05] Changes detected — re-scanning...
+    Parsing coverage... ✓ 539 classes
+    Enriching... ✓ 412 classes
+    Done. [coverage:539, enriched:412]
+```
+
 ## 3. Wire Up VS Code
 
 Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for):
@@ -83,12 +118,12 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
       "args": [
         "run",
         "--project",
-        "C:\\Users\\lyndonswan\\Repos\\Total.Recall\\src\\Total.Recall\\Total.Recall.csproj"
+        "C:\\path\\to\\Total.Recall\\src\\Total.Recall\\Total.Recall.csproj"
       ],
       "env": {
-        "TOTAL_RECALL_DATA": "C:\\Users\\lyndonswan\\Repos\\Total.Recall\\data",
+        "TOTAL_RECALL_DATA": "C:\\path\\to\\Total.Recall\\data",
         "TOTAL_RECALL_NAMESPACE": "myproject",
-        "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\Server\\src",
+        "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\your-repo\\src",
         "TOTAL_RECALL_LOG_LEVEL": "info"
       }
     }
@@ -117,7 +152,7 @@ On first launch the server pre-loads all JSONL data and builds O(1) lookup index
 
 ## 4. Use the Tools
 
-Total.Recall exposes **15 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
+Total.Recall exposes **23 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
 
 ### Step 1 — Pick targets
 
@@ -127,13 +162,13 @@ Uses `get_testable_targets` — cross-joins 6 data sources, pre-filters by DI co
 
 ### Step 2 — Understand the code
 
-> "Show me the source of ContentBlock.BuildBlocks"
+> "Show me the source of OrderService.ProcessOrder"
 
 Uses `get_source_snippet` — serves actual C# source from the target repo. **No more `read_file` calls to the target repo.**
 
 ### Step 3 — Generate scaffold
 
-> "Generate a test scaffold for ContentBlock"
+> "Generate a test scaffold for OrderService"
 
 Uses `generate_test_scaffold` — produces a complete `.cs` test file with correct `using` statements, mock wiring, constructor setup, and `[Fact]` stubs for every uncovered method.
 
@@ -152,11 +187,19 @@ Fill in the scaffold stubs. Use the other tools as needed:
 | `get_coverage_gaps` | ROI-ranked list of uncovered classes |
 | `add_assessment` / `get_assessments` | Testability verdicts for classes |
 | `get_source_snippet` | Read specific method implementations from target repo |
+| `get_uncovered_methods` | Method-level ROI targets when class-level is exhausted |
+| `get_stub_classes` | Trivially-testable zero-coverage classes |
+| `get_class_metrics` | Static analysis: coupling, instability, archetype |
+| `get_dependency_graph` | Visualize class dependency neighborhood (Mermaid) |
+| `get_analysis_summary` | Architectural overview: hot interfaces, clusters |
+| `learn_test_patterns` | Learn naming, assertion, mock conventions from existing tests |
+| `get_gotcha_insights` | Cluster gotchas into patterns, generate Footguns docs |
+| `refresh_coverage` | Re-parse Cobertura XML mid-session without full rescan |
 | `get_metrics` | Server telemetry (cache hits, tool calls) |
 
 ### Step 5 — Log the session
 
-> "Log this session: claude-sonnet-4-20250514, 850K prompt tokens, 320K completion tokens, attempted ContentBlock+DocSet+ArtifactSchema, all succeeded, 45 tests, coverage 25.66 to 38.2"
+> "Log this session: claude-sonnet-4-20250514, 850K prompt tokens, 320K completion tokens, attempted OrderService+UserController+PaymentGateway, all succeeded, 45 tests, coverage 25.66 to 38.2"
 
 Uses `log_session` — persists outcomes for cross-session analytics. Call `get_sessions` in future sessions to see what worked.
 

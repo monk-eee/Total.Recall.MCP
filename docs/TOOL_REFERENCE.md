@@ -1,6 +1,6 @@
 # Total.Recall — Tool Reference
 
-Complete reference for all 15 MCP tools exposed by the server.
+Complete reference for all 23 MCP tools exposed by the server.
 
 All tools accept an optional `ns` parameter to target a specific namespace dataset.
 
@@ -23,12 +23,19 @@ All tools accept an optional `ns` parameter to target a specific namespace datas
 
 **Scoring formula**:
 ```
-score = uncoveredLines
-      × testabilityMultiplier (1.0 high, 0.7 medium, 0.3 low)
-      × ctorSimplicity (1.0 for 0-2, 0.7 for 3-4, 0.3 for 5+)
-      × mockCoverage (1.0 all mocked, 0.7 partial, 0.5 none)
-      / (1 + existingTestCount)
+base       = 10 * log₂(1 + uncoveredLines)     // log-scaled to prevent raw line count dominance
+
+score = base
+      × ctorMockability                         // all-interface=1.0×; per concrete param 0.3×
+      × mockCoverage                             // 1.0 all mocked, 0.7 partial, 0.5 none
+      × sizeSweetSpot                             // <50=0.7×, 50–99=0.9×, 100–400=1.3×, 400–800=1.0×, >800=0.8×
+      × methodCountBoost                          // log₂(realMethods) mild bonus for logic-rich classes
+      × hasTestFile ? 1.5 : 1.0                   // extending existing test file is cheaper
+      / (1 + existingTestCount)                    // diminishing returns (cliff at 15: +0.3×)
       / (1 + gotchaCount × 0.1)
+      × penaltyChain                              // gotcha→interface 0.7×, unmockable-interface 0.2×,
+                                                   // base-type coupling 0.15×, external-dep 0.5×,
+                                                   // namespace-cluster 0.85×, self-assessment 0.1×
 ```
 
 **Returns**: Array of `TestableTarget` objects with class, score, reason, uncoveredMethods, ctorParams, and all cross-joined metadata.
@@ -138,29 +145,29 @@ score = uncoveredLines
 
 **Returns**: Up to 5 matching `TypeRecord` objects as JSON.
 
-**Example input**: `"ContentBlock"`
+**Example input**: `"OrderService"`
 
 **Example output** (abbreviated):
 ```json
 [
   {
-    "name": "ContentBlock",
-    "namespace": "Server.Parsing.Models.Parsers.Output.Container.File.Content",
-    "fullUsing": "using Server.Parsing.Models.Parsers.Output.Container.File.Content;",
+    "name": "OrderService",
+    "namespace": "MyApp.Services.Orders",
+    "fullUsing": "using MyApp.Services.Orders;",
     "constructors": [
       { "params": [] },
-      { "params": ["int index", "CodeContentBlock code", "ContentParameters parms", "string tag", "string lang"] }
+      { "params": ["IOrderRepository repo", "ILogger<OrderService> logger", "IEventBus bus"] }
     ],
-    "baseType": "ContentBlockBase",
-    "interfaces": ["IContentBlock"],
+    "baseType": "ServiceBase",
+    "interfaces": ["IOrderService"],
     "isAbstract": false,
     "isStatic": false,
     "isInternal": false,
     "isInterface": false,
     "isEnum": false,
     "properties": [
-      { "name": "CodeLines", "clrType": "List<ContentLine>", "hasSet": true, "hasInit": false },
-      { "name": "ArtifactType", "clrType": "ArtifactEnum", "hasSet": true, "hasInit": false }
+      { "name": "TotalProcessed", "clrType": "int", "hasSet": true, "hasInit": false },
+      { "name": "LastOrderDate", "clrType": "DateTime?", "hasSet": true, "hasInit": false }
     ],
     "enumValues": null
   }
@@ -181,25 +188,25 @@ score = uncoveredLines
 
 **Returns**: `MockRecipe` objects with C# code, required usings, and known gotchas.
 
-**Example input**: `"IJobOutputInstance"`
+**Example input**: `"IOrderRepository"`
 
 **Example output** (abbreviated):
 ```json
 [
   {
-    "interface": "IJobOutputInstance",
-    "namespace": "Server.Parsing.Models.Parsers.Output.Container.Interfaces",
+    "interface": "IOrderRepository",
+    "namespace": "MyApp.Data.Interfaces",
     "requiredUsings": [
-      "using Server.Parsing.Models.Parsers.Output.Container.Interfaces;",
-      "using Server.Parsing.Models.Parsers.Output.Container.File.Content.Interfaces;",
+      "using MyApp.Data.Interfaces;",
+      "using MyApp.Models;",
       "using Moq;"
     ],
-    "recipe": "var mockJobOutput = new Mock<IJobOutputInstance>();\nvar mockFromFile = new Mock<IContentBase>();\n...",
+    "recipe": "var mockRepo = new Mock<IOrderRepository>();\nmockRepo.Setup(r => r.GetByIdAsync(It.IsAny<int>())).ReturnsAsync(new Order());\n...",
     "gotchas": [
-      "FromFile returns IContentBase (interface), NOT FileToken",
-      "Must set up Repository on BOTH mockJobOutput AND mockFromFile"
+      "GetByIdAsync returns Task<Order?> — null check needed in assertions",
+      "SaveAsync throws on duplicate OrderNumber — setup accordingly"
     ],
-    "usedByClasses": ["AuditEntry", "ExportOutput", "ContentDataContainer"]
+    "usedByClasses": ["OrderService", "OrderController", "OrderImporter"]
   }
 ]
 ```
@@ -228,15 +235,15 @@ score = uncoveredLines
 ```json
 [
   {
-    "class": "LinterExtension",
-    "namespace": "Server.LanguageServerExtension",
-    "file": "LanguageServerExtension/LinterExtension.cs",
+    "class": "PaymentGateway",
+    "namespace": "MyApp.Services.Payments",
+    "file": "Services/Payments/PaymentGateway.cs",
     "totalLines": 2588,
     "coveredLines": 0,
     "uncoveredLines": 2588,
     "coveragePercent": 0.0,
     "uncoveredMethods": [
-      { "name": "OnInitialize", "startLine": 45, "endLine": 120, "uncoveredLines": 75 }
+      { "name": "ProcessPayment", "startLine": 45, "endLine": 120, "uncoveredLines": 75 }
     ],
     "existingTestCount": 0,
     "testability": "unknown",
@@ -267,7 +274,7 @@ score = uncoveredLines
   {
     "type": "ContentRange",
     "category": "constructor",
-    "gotcha": "Parameterless ctor leaves StartLine/EndLine null - copy ctor NREs. Initialize with new ContentLinePosition(0,0)",
+    "gotcha": "Parameterless ctor leaves StartLine/EndLine null — copy ctor NREs. Initialize with explicit values.",
     "discoveredInGen": 12,
     "date": "2026-02-28"
   },
@@ -299,7 +306,7 @@ score = uncoveredLines
 
 **Returns**: Confirmation message.
 
-**Example input**: `typeName="ExportOutput", category="constructor", gotcha="4-string ctor with empty filename throws ArgumentException from GetFileType"`
+**Example input**: `typeName="PaymentGateway", category="constructor", gotcha="4-string ctor with empty filename throws ArgumentException from GetFileType"`
 
 **When to use**: After discovering a new trap during test generation. Persists across sessions.
 
@@ -315,23 +322,23 @@ score = uncoveredLines
 
 **Returns**: `TestInventoryEntry` with test files, method names, counts, and inferred coverage.
 
-**Example input**: `"AuditEntry"`
+**Example input**: `"OrderService"`
 
 **Example output** (abbreviated):
 ```json
 [
   {
-    "class": "AuditEntry",
-    "testFiles": ["AuditEntryTests.cs"],
+    "class": "OrderService",
+    "testFiles": ["OrderServiceTests.cs"],
     "testMethods": [
-      "RuleId_NoGroupPath_ReturnsRuleIdOnly",
-      "DoNotLint_SuppressionDoNotLint_ReturnsTrue",
-      "Groups_ExistingKey_ReturnsValue",
-      "SetPropertyValues_CopiesSharedProperties"
+      "ProcessOrder_ValidInput_ReturnsSuccess",
+      "ProcessOrder_NullOrder_ThrowsArgumentException",
+      "GetPending_ReturnsOnlyPendingOrders",
+      "Cancel_AlreadyShipped_ThrowsInvalidOperation"
     ],
     "testCount": 55,
     "inferredCoveredMethods": [
-      "RuleId", "DoNotLint", "Groups", "SetPropertyValues", "FormatTitle"
+      "ProcessOrder", "GetPending", "Cancel"
     ]
   }
 ]
@@ -362,7 +369,7 @@ score = uncoveredLines
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `className` | string | yes | Class being assessed |
-| `verdict` | string | yes | One of: `testable`, `skip`, `coupled`, `complex`, `trivial` |
+| `verdict` | string | yes | One of: `testable`, `skip`, `coupled`, `deferred` |
 | `reasoning` | string | yes | Why this verdict was given |
 | `deps` | string | no | Comma-separated key dependencies |
 | `cluster` | string | no | Related class cluster name |
@@ -399,3 +406,141 @@ score = uncoveredLines
 **Returns**: JSON object with all counter values.
 
 **When to use**: Debugging server performance or verifying tool usage.
+
+---
+
+## v2 Extended Tools (Late-Stage Targeting)
+
+### get_uncovered_methods
+
+**Purpose**: Method-level ROI targets. Flattens class-level coverage gaps into individual method targets. Use when class-level targeting is exhausted or when extending existing test files for maximum ROI.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `top` | int | no | 20 | Max results to return |
+| `minUncoveredLines` | int | no | 3 | Minimum uncovered lines per method (filters trivial one-liners) |
+| `onlyWithExistingTests` | bool | no | false | Only show methods in classes that already have test files. Set `true` for "extend existing" strategy. |
+| `excludeBoilerplate` | bool | no | true | Exclude `.ctor`, `.cctor`, `get_*`, `set_*` methods |
+
+**Scoring**: `10 × log₂(1 + uncoveredLines) × (hasTestFile ? 2.0 : 0.5) × 1/(1 + existingTestCount × 0.05)`. Methods in classes with existing test files score 2× higher — extending is cheaper than creating.
+
+**Returns**: JSON with `count`, `filters`, `stats` (methodsWithTestFile, methodsWithoutTestFile, avgUncoveredLines, distinctClasses), and `methods` array. Each entry: class, method, uncoveredLines, startLine, endLine, hasTestFile, testFiles, score, reason.
+
+**When to use**: After `get_testable_targets` stops returning high-scoring classes. Pair with `generate_test_scaffold(className, methodNames: "...")` to generate stubs for specific methods.
+
+---
+
+### get_stub_classes
+
+**Purpose**: Find zero-or-near-zero coverage classes that are trivially testable — POCOs, stubs, static helpers, and simple logic with no mocking complexity. These are the highest-ROI targets when all complex classes are exhausted.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `top` | int | no | 20 | Max results to return |
+| `maxCoveragePercent` | double | no | 5.0 | Max coverage % to include (0 = only completely uncovered) |
+| `maxCtorParams` | int | no | 2 | Max constructor params (stubs should have trivial constructors) |
+| `includeWithTests` | bool | no | false | Include classes with existing tests |
+
+**Categories**: `poco` (all boilerplate), `static-helpers` (static class), `simple-logic` (1–5 real methods), `logic-heavy` (6+ real methods), `unclassified`.
+
+**Scoring**: Log-scaled base × ctor simplicity (parameterless=1.0×, mockable=0.8×ⁿ, concrete=0.6×ⁿ) × hasTestFile 1.5× × realMethods≥3 1.3× × size sweet spot (≤50=1.2×) × diminishing returns `1/(1+existingTestCount)`.
+
+**Returns**: JSON with `count`, `filters`, `stats`, and `classes` array. Each entry includes `category`, `realMethodCount`, `boilerplateMethodCount`, `minCtorParams`, `allParamsMockable`, `score`, `reason`.
+
+**When to use**: When `get_testable_targets` scores are all <5. Stub classes were the highest-ROI targets in late-stage coverage sessions.
+
+---
+
+## Static Analysis Tools
+
+### get_class_metrics
+
+**Purpose**: Static analysis metrics for a class — coupling (afferent/efferent), instability, archetype, dependency lists, and cluster membership. Understand a class's position in the dependency graph before writing tests.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | yes | Class name to look up |
+
+**Returns**: Markdown-formatted report with namespace, archetype, cluster membership, coupling metrics table (Ca, Ce, instability, ctor params, properties, interfaces, inheritance depth, total lines), and dependency lists (depends on / depended on by). Fuzzy-matches class name if exact match not found.
+
+**When to use**: Before writing tests for a class you're unfamiliar with — understand its coupling before investing time.
+
+---
+
+### get_dependency_graph
+
+**Purpose**: Dependency graph neighborhood for a class — direct dependencies, direct dependents, and a Mermaid diagram of the local subgraph.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `className` | string | yes | — | Class name to center the graph on |
+| `depth` | int | no | 1 | Graph depth: 1 = direct deps, 2 = include transitive (max: 3) |
+
+**Returns**: Markdown with dependency list (outgoing), consumer list (incoming), and a Mermaid `flowchart LR` diagram. Edge types are styled: `ctor-interface` (dashed, inject), `ctor-concrete` (solid), `base-type` (thick, inherits), `implements` (dashed). Center node highlighted. Max 30 nodes.
+
+**When to use**: Visualize coupling before deciding whether to test a class. High fan-in classes may be coupled; high fan-out classes need many mocks.
+
+---
+
+### get_analysis_summary
+
+**Purpose**: Architectural overview of the entire scanned assembly — hot interfaces, most coupled classes, dependency clusters, and isolated classes.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| (none) | — | — | — |
+
+**Returns**: Markdown summary with metrics table (total types, edges, clusters, isolated classes), hot interfaces table (interface name + consumer count), most coupled classes, cluster breakdown, and archetype distribution.
+
+**Requires**: `--enrich` flag during scan.
+
+**When to use**: Start of a session for architectural awareness — identify clusters of coupled classes to avoid, and isolated classes that are easy wins.
+
+---
+
+## Observability & Learning Tools
+
+### learn_test_patterns
+
+**Purpose**: Analyze existing test files to learn project-level conventions — naming patterns, assertion styles, mock strategies, helper methods, common usings. Results inform `generate_test_scaffold` output.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `maxFiles` | int | no | 20 | Maximum test files to analyze |
+
+**Returns**: JSON with `patterns` (assertionStyle, namingPattern, usesConstructorSetup, usesDisposable, mockPattern, avgTestsPerClass, commonUsings, helperMethods) and `summary` (filesAnalyzed, totalTestMethods, namingBreakdown).
+
+**Detected patterns**: Assertion styles (xUnit.Assert, FluentAssertions, NUnit.Assert, MSTest.Assert). Naming (MethodName_Scenario_Expected, ShouldVerb_WhenCondition, GivenX_WhenY_ThenZ). Mock patterns (field-level `Mock<T>` vs local). Helper methods reported when found in 2+ files.
+
+**When to use**: Once per namespace, before generating scaffolds. Ensures generated test code matches existing project conventions.
+
+---
+
+### get_gotcha_insights
+
+**Purpose**: Analyze gotchas across all types to find recurring patterns and clusters. Generates paste-ready AGENTS.md "Footguns" documentation sections.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `minClusterSize` | int | no | 2 | Minimum gotchas per cluster to report |
+| `generateFootguns` | bool | no | true | Generate AGENTS.md Footguns markdown section |
+
+**Returns**: JSON with `totalGotchas`, `clusters` (each with title, count, affectedTypes, canonicalFix, instances), `categoryDistribution`, `hotTypes` (types with 2+ gotchas), `unclusteredGotchas`, and `footgunsMarkdown`.
+
+**Cluster patterns**: Moq expression tree limitations, enum gotchas, constructor traps, mock setup complexity, namespace resolution, record semantics, property accessor quirks, dead code, ICU/culture issues, static state.
+
+**When to use**: After accumulating 10+ gotchas — identify systemic issues worth documenting in AGENTS.md.
+
+---
+
+### refresh_coverage
+
+**Purpose**: Re-parse a Cobertura XML coverage report and update coverage-gaps.jsonl mid-session — much faster than a full scanner run. Also auto-discovers the newest Cobertura XML in TestResults/ if the configured path is stale.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `coveragePath` | string | no | from config.json | Path to new Cobertura XML file |
+
+**Returns**: JSON with before/after comparison: `lineRateChange`, `newLinesHit`, `newlyCovered` (classes that went from <1% to ≥1%), `topImprovements` (top 5 classes by coverage delta).
+
+**When to use**: After running `dotnet test --collect:"XPlat Code Coverage"` mid-session — refresh coverage data without restarting the server or running the full scanner. If using `--watch` mode, coverage data updates automatically when new XML files appear.

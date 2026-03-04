@@ -15,7 +15,7 @@ and coverage uplift. Configured in `.vscode/mcp.json`. All tools accept an optio
 
 Total.Recall eliminates the 60–70% of agent context burned on re-discovering type metadata,
 mock patterns, coverage gaps, and gotchas each session. Scanners extract data from your
-assembly, coverage reports, and test project into JSONL files. 15 MCP tools expose this data
+assembly, coverage reports, and test project into JSONL files. 23 MCP tools expose this data
 instantly — one tool call replaces 10–15 file reads.
 
 ### Tool Reference
@@ -26,9 +26,11 @@ instantly — one tool call replaces 10–15 file reads.
 |------|---------|------------|
 | `GetTestableTargets` | Pre-scored target list. **First call of every session.** | `top`, `maxCtorParams`, `maxTotalLines`, `excludeAssessed`, `requireZeroTests` |
 | `GetSourceSnippet` | Actual C# source from target repo | `className`, `methodName`, `maxLines` |
-| `GenerateTestScaffold` | Complete test class: usings, mocks, ctor, [Fact] stubs, gotcha comments | `className` |
-| `LogSession` | Write session outcomes. **Last call of every session.** | `model`, `promptTokens`, `completionTokens`, `classesAttempted`, `classesSucceeded`, `classesFailed`, `testsGenerated`, `coverageBefore`, `coverageAfter`, `gotchasDiscovered`, `assessmentsRecorded`, `notes` |
-| `GetSessions` | Session history + aggregate analytics | `last` |
+| `GenerateTestScaffold` | Complete test class: usings, mocks, ctor, [Fact] stubs, gotcha comments | `className`, `methodNames` |
+| `LogSession` | Write session outcomes. **Last call of every session.** | `model`, `promptTokens`, `completionTokens`, `classesAttempted`, `classesSucceeded`, `classesFailed`, `testsGenerated`, `coverageBefore`, `coverageAfter`, `coveredLines`, `gotchasDiscovered`, `assessmentsRecorded`, `notes` |
+| `GetSessions` | Session history + aggregate analytics + plateau detection | `last` |
+| `GetUncoveredMethods` | Method-level ROI targets when class-level is exhausted | `top`, `minUncoveredLines`, `onlyWithExistingTests`, `excludeBoilerplate` |
+| `GetStubClasses` | Zero-coverage trivially-testable classes (POCOs, stubs, helpers) | `top`, `maxCoveragePercent`, `maxCtorParams`, `includeWithTests` |
 
 #### v1 — Lookup Index
 
@@ -44,6 +46,22 @@ instantly — one tool call replaces 10–15 file reads.
 | `AddAssessment` | Record testability verdict | `className`, `verdict`, `reasoning`, `deps`, `cluster` |
 | `GetAssessments` | Previous verdicts (deduplicated — last wins) | `className`, `verdict` |
 | `GetMetrics` | Server telemetry: tool calls, cache hits, uptime | (none) |
+
+#### Static Analysis
+
+| Tool | Purpose | Key Params |
+|------|---------|------------|
+| `GetClassMetrics` | Coupling (Ca/Ce), instability, archetype, dependency lists | `className` |
+| `GetDependencyGraph` | Local subgraph: deps, consumers, Mermaid diagram | `className`, `depth` |
+| `GetAnalysisSummary` | Architectural overview: hot interfaces, clusters, coupling | (none) |
+
+#### Observability & Learning
+
+| Tool | Purpose | Key Params |
+|------|---------|------------|
+| `LearnTestPatterns` | Analyze existing tests for naming, assertion, mock conventions | `maxFiles` |
+| `GetGotchaInsights` | Cluster gotchas into patterns, generate Footguns docs | `minClusterSize`, `generateFootguns` |
+| `RefreshCoverage` | Re-parse Cobertura XML mid-session without full rescan | `coveragePath` |
 
 ### Coverage Uplift Workflow
 
@@ -66,14 +84,22 @@ instantly — one tool call replaces 10–15 file reads.
 ```bash
 # Full scan (first time)
 dotnet run --project C:\path\to\Total.Recall\src\Total.Recall\Total.Recall.csproj -- scan ^
-  --assembly "C:\path\to\Server.dll" ^
+  --assembly "C:\path\to\YourProject.dll" ^
   --coverage "C:\path\to\coverage.cobertura.xml" ^
-  --tests "C:\path\to\UnitTest" ^
-  --source-root "C:\path\to\Server\src" ^
+  --tests "C:\path\to\YourProject.Tests" ^
+  --source-root "C:\path\to\your-repo\src" ^
   --namespace your-namespace ^
   --enrich
 
-# Re-scan coverage after a test run (most common)
+# Watch mode: auto-rescan on file changes (recommended for active development)
+dotnet run --project C:\path\to\Total.Recall\src\Total.Recall\Total.Recall.csproj -- scan ^
+  --assembly "C:\path\to\YourProject.dll" ^
+  --coverage "C:\path\to\coverage.cobertura.xml" ^
+  --tests "C:\path\to\YourProject.Tests" ^
+  --namespace your-namespace ^
+  --enrich --analyze --watch
+
+# Re-scan coverage after a test run (if not using --watch)
 dotnet run --project C:\path\to\Total.Recall\src\Total.Recall\Total.Recall.csproj -- scan ^
   --coverage "TestResults\<guid>\coverage.cobertura.xml" ^
   --namespace your-namespace --enrich

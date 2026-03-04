@@ -79,13 +79,14 @@ public static class GotchaInsightsTool
     public static string GetGotchaInsights(
         [Description("Minimum gotchas in a cluster to report (default: 2)")] int minClusterSize = 2,
         [Description("Generate AGENTS.md Footguns section (default: true)")] bool generateFootguns = true,
+        [Description("Max instances per cluster in detail view (default: 10). Keeps response size manageable.")] int maxInstancesPerCluster = 10,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetGotchaInsights);
-        Log.Debug($"[GetGotchaInsights] minClusterSize={minClusterSize} generateFootguns={generateFootguns} ns='{ns ?? "(default)"}'");
+        Log.Debug($"[GetGotchaInsights] minClusterSize={minClusterSize} generateFootguns={generateFootguns} maxInstancesPerCluster={maxInstancesPerCluster} ns='{ns ?? "(default)"}'");
         try
         {
-            return GetGotchaInsightsCore(minClusterSize, generateFootguns, ns);
+            return GetGotchaInsightsCore(minClusterSize, generateFootguns, maxInstancesPerCluster, ns);
         }
         catch (Exception ex)
         {
@@ -94,7 +95,7 @@ public static class GotchaInsightsTool
         }
     }
 
-    private static string GetGotchaInsightsCore(int minClusterSize, bool generateFootguns, string? ns)
+    private static string GetGotchaInsightsCore(int minClusterSize, bool generateFootguns, int maxInstancesPerCluster, string? ns)
     {
         var stores = StoreRegistry.ForNamespace(ns);
 
@@ -133,19 +134,25 @@ public static class GotchaInsightsTool
 
                 var affectedTypes = matches.Select(m => m.Gotcha.Type).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
+                var allInstances = matches.Select(m => new
+                {
+                    type = m.Gotcha.Type,
+                    category = m.Gotcha.Category,
+                    gotcha = m.Gotcha.Description,
+                    date = m.Gotcha.Date
+                }).ToList();
+
+                var truncated = allInstances.Count > maxInstancesPerCluster;
+
                 clusterResults.Add(new
                 {
                     cluster = cluster.Title,
                     count = matches.Count,
                     affectedTypes,
                     canonicalFix = cluster.CanonicalFix,
-                    instances = matches.Select(m => new
-                    {
-                        type = m.Gotcha.Type,
-                        category = m.Gotcha.Category,
-                        gotcha = m.Gotcha.Description,
-                        date = m.Gotcha.Date
-                    }).ToList()
+                    instances = truncated ? allInstances.Take(maxInstancesPerCluster).ToList() : allInstances,
+                    hasMore = truncated,
+                    totalInstances = matches.Count
                 });
             }
         }

@@ -374,10 +374,33 @@ public static class TestableTargetsTool
         if (results.Count == 0)
             return "No testable targets found matching the criteria. Try relaxing filters (increase maxCtorParams or maxTotalLines, set excludeAssessed=false).";
 
+        // ── ROI threshold warning ──
+        // When the best available target scores below 3.0, the remaining targets are
+        // likely coupled, heavily-tested, or otherwise low-ROI. Signal the agent to
+        // shift strategy rather than grinding through diminishing returns.
+        string? roiWarning = null;
+        var topScore = results[0].Score;
+        if (topScore < 3.0)
+        {
+            var strategies = new List<string>();
+            if (topScore < 1.0)
+                strategies.Add("Class-level targets are effectively exhausted.");
+            else
+                strategies.Add($"Top score is only {topScore:F1} — remaining targets have low ROI.");
+
+            strategies.Add("Recommended next steps:");
+            strategies.Add("  1. Switch to method-level targeting: get_uncovered_methods(onlyWithExistingTests=true)");
+            strategies.Add("  2. Try stub/simple classes: get_stub_classes()");
+            strategies.Add("  3. Extend existing test files for partially-covered classes");
+            strategies.Add("  4. Consider integration tests for tightly-coupled code");
+            roiWarning = string.Join("\n", strategies);
+        }
+
         var summary = new
         {
             count = results.Count,
             filters = new { top, maxCtorParams, maxTotalLines, excludeAbstract, excludeAssessed, requireZeroTests },
+            warning = roiWarning,
             targets = results
         };
 

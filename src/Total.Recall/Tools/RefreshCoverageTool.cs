@@ -20,16 +20,18 @@ public static class RefreshCoverageTool
         "Use this after running tests with coverage to refresh ROI rankings mid-session. " +
         "Much faster than a full 'scan' — only regenerates coverage-gaps.jsonl. " +
         "If coveragePath is omitted, uses the path from config.json (set during last full scan). " +
+        "Set reEnrich=true to also update test counts and testability scores after refreshing. " +
         "Returns a summary of before vs after coverage stats.")]
     public static string RefreshCoverage(
         [Description("Path to new Cobertura XML file. If omitted, uses the path from last scan.")] string? coveragePath = null,
+        [Description("Re-enrich coverage gaps (update test counts + testability) after refresh (default: true)")] bool reEnrich = true,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolRefreshCoverage);
-        Log.Debug($"[RefreshCoverage] coveragePath='{coveragePath ?? "(from config)"}' ns='{ns ?? "(default)"}'");
+        Log.Debug($"[RefreshCoverage] coveragePath='{coveragePath ?? "(from config)"}' reEnrich={reEnrich} ns='{ns ?? "(default)"}'");
         try
         {
-            return RefreshCoverageCore(coveragePath, ns);
+            return RefreshCoverageCore(coveragePath, reEnrich, ns);
         }
         catch (Exception ex)
         {
@@ -38,7 +40,7 @@ public static class RefreshCoverageTool
         }
     }
 
-    private static string RefreshCoverageCore(string? coveragePath, string? ns)
+    private static string RefreshCoverageCore(string? coveragePath, bool reEnrich, string? ns)
     {
         var stores = StoreRegistry.ForNamespace(ns);
         var config = stores.Config;
@@ -91,6 +93,21 @@ public static class RefreshCoverageTool
         // Re-parse coverage
         var classCount = CoberturaParser.Parse(resolvedPath, dataDir);
 
+        // Optional: re-enrich coverage gaps with test counts and testability
+        int enrichedCount = 0;
+        if (reEnrich)
+        {
+            try
+            {
+                enrichedCount = EnrichAfterRefresh(stores);
+                Log.Debug($"[RefreshCoverage] re-enriched {enrichedCount} classes");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"[RefreshCoverage] enrichment failed (non-fatal): {ex.Message}");
+            }
+        }
+
         // Force cache invalidation by reloading
         var afterGaps = stores.CoverageGaps.LoadAll();
         var afterTotalLines = afterGaps.Sum(g => g.TotalLines);
@@ -135,11 +152,71 @@ public static class RefreshCoverageTool
             before = new { lineRate = beforeRate, coveredLines = beforeCoveredLines, totalLines = beforeTotalLines, classCount = beforeClassCount },
             after = new { lineRate = afterRate, coveredLines = afterCoveredLines, totalLines = afterTotalLines, classCount },
             delta = new { lineRateChange = delta, newLinesHit = afterCoveredLines - beforeCoveredLines },
+            enriched = reEnrich ? enrichedCount : (int?)null,
             newlyCovered,
             topImprovements = improvements
         };
 
         Log.Info($"[RefreshCoverage] done: {beforeRate}% → {afterRate}% ({delta:+0.##}%)");
         return JsonSerializer.Serialize(result, SharedJsonOptions.CamelCaseIndented);
+    }
+
+    /// <summary>
+    /// Lightweight enrichment: cross-reference fresh coverage gaps with type registry
+    /// and test inventory to update test counts and testability scores.
+    /// Runs in-process (no CLI) using the NamespaceStores already loaded.
+    /// </summary>
+    private static int EnrichAfterRefresh(NamespaceStores stores)
+    {
+        if (!stores.CoverageGaps.HasData())
+            return 0;
+
+        var gaps = stores.CoverageGaps.LoadAll();
+
+        // Build type map for testability classification
+        var typeMap = stores.TypeRegistry.HasData()
+            ? stores.TypeRegistry.LoadAll()
+                .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, TypeRecord>(StringComparer.OrdinalIgnoreCase);
+
+        // Build test inventory map
+        var testMap = stores.TestInventory.HasData()
+            ? stores.TestInventory.LoadAll()
+                .GroupBy(t => t.Class, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, TestInventoryEntry>(StringComparer.OrdinalIgnoreCase);
+
+        var enrichedCount = 0;
+        foreach (var gap in gaps)
+        {
+            if (testMap.TryGetValue(gap.Class, out var testEntry))
+            {
+                gap.ExistingTestCount = testEntry.TestCount;
+                enrichedCount++;
+            }
+
+            if (typeMap.TryGetValue(gap.Class, out var typeRecord))
+            {
+                gap.Testability = ClassifyTestability(typeRecord);
+            }
+        }
+
+        stores.CoverageGaps.WriteAll(gaps);
+        return enrichedCount;
+    }
+
+    private static string ClassifyTestability(TypeRecord type)
+    {
+        if (type.IsAbstract || type.IsInterface)
+            return "low";
+        if (type.IsStatic)
+            return "medium";
+        var maxCtorParams = type.Constructors.Count > 0
+            ? type.Constructors.Max(c => c.Params.Count)
+            : 0;
+        if (maxCtorParams <= 3) return "high";
+        if (maxCtorParams <= 6) return "medium";
+        return "low";
     }
 }
