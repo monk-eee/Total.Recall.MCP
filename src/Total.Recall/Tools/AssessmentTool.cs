@@ -66,10 +66,13 @@ public static class AssessmentTool
         "Get testability assessments from previous sessions. " +
         "Returns the latest verdict for each class. " +
         "Filter by class name (partial match) or verdict (testable/coupled/skip/deferred). " +
-        "Omit both parameters to get all assessments.")]
+        "Paginate with top/skip to control response size. " +
+        "Omit both parameters to get all assessments (up to top limit).")]
     public static string GetAssessments(
         [Description("Optional: class name to look up (partial match)")] string? className = null,
         [Description("Optional: filter by verdict (testable|coupled|skip|deferred)")] string? verdict = null,
+        [Description("Max results to return (default: 20). Use 0 for no limit.")] int top = 20,
+        [Description("Number of results to skip for pagination (default: 0)")] int skip = 0,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetAssessments);
@@ -111,7 +114,26 @@ public static class AssessmentTool
                 return $"No assessments found matching '{filter}'.";
             }
 
-            return JsonSerializer.Serialize(list, SharedJsonOptions.CamelCaseIndented);
+            // Apply pagination
+            var totalCount = list.Count;
+            var paged = list.AsEnumerable();
+            if (skip > 0)
+                paged = paged.Skip(skip);
+            if (top > 0)
+                paged = paged.Take(top);
+            var pagedList = paged.ToList();
+
+            var result = new
+            {
+                totalCount,
+                returned = pagedList.Count,
+                skip,
+                top = top > 0 ? top : totalCount,
+                hasMore = skip + pagedList.Count < totalCount,
+                assessments = pagedList
+            };
+
+            return JsonSerializer.Serialize(result, SharedJsonOptions.CamelCaseIndented);
         }
         catch (Exception ex)
         {

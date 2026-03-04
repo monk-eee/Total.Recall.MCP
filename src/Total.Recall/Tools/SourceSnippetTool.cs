@@ -20,13 +20,14 @@ public static class SourceSnippetTool
     internal static void ResetSourceRootCache() => _sourceRootCache.Clear();
 
     [McpServerTool, Description(
-        "Get actual source code for a class or specific method from the target repo. " +
+        "Get actual source code for a class or specific method(s) from the target repo. " +
         "Uses coverage data file paths + configured source root to locate files. " +
         "Returns the source code so you don't need to call read_file separately. " +
+        "Supports comma-separated method names to fetch multiple methods at once. " +
         "Requires TOTAL_RECALL_SOURCE_ROOT env var or scanner --source-root to be set.")]
     public static string GetSourceSnippet(
         [Description("Class name to get source for")] string className,
-        [Description("Optional: specific method name to extract (returns just that method's lines)")] string? methodName = null,
+        [Description("Optional: method name(s) to extract. Comma-separated for multiple (e.g. 'Validate,Process,Execute')")] string? methodName = null,
         [Description("Max lines to return (default: 200)")] int maxLines = 200,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
@@ -126,8 +127,55 @@ public static class SourceSnippetTool
 
         if (methodName is not null)
         {
-            // Find the specific method's line range from coverage data
-            return ExtractMethod(allLines, fullPath, gap, methodName, maxLines, className, ambiguityNote);
+            // Support comma-separated method names for multi-method extraction
+            var methodNames = methodName.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (methodNames.Length > 1)
+            {
+                // Multi-method mode: extract each method and combine results
+                var perMethodMax = Math.Max(50, maxLines / methodNames.Length);
+                var results = new List<object>();
+                var notFound = new List<string>();
+
+                foreach (var mName in methodNames)
+                {
+                    var methodJson = ExtractMethod(allLines, fullPath, gap, mName, perMethodMax, className, null);
+                    if (methodJson.StartsWith("Method '"))
+                    {
+                        // Method not found — collect for combined error
+                        notFound.Add(mName);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            var parsed = JsonSerializer.Deserialize<JsonElement>(methodJson);
+                            results.Add(parsed);
+                        }
+                        catch
+                        {
+                            notFound.Add(mName);
+                        }
+                    }
+                }
+
+                var multiResult = new
+                {
+                    className,
+                    filePath = fullPath,
+                    relativePath = gap.File,
+                    requestedMethods = methodNames.Length,
+                    returnedMethods = results.Count,
+                    ambiguityNote,
+                    notFound = notFound.Count > 0 ? notFound : null,
+                    methods = results
+                };
+
+                return JsonSerializer.Serialize(multiResult, SharedJsonOptions.CamelCaseIndented);
+            }
+
+            // Single method — existing behavior
+            return ExtractMethod(allLines, fullPath, gap, methodNames[0], maxLines, className, ambiguityNote);
         }
 
         // Return the whole class (up to maxLines)

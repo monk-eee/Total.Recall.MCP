@@ -121,8 +121,10 @@ public sealed class AssessmentToolTests : ToolTestBase
 
         var result = AssessmentTool.GetAssessments(verdict: "testable");
         var doc = JsonDocument.Parse(result);
-        var arr = doc.RootElement.EnumerateArray().ToList();
+        var root = doc.RootElement;
+        var arr = root.GetProperty("assessments").EnumerateArray().ToList();
 
+        Assert.Equal(2, root.GetProperty("totalCount").GetInt32());
         Assert.Equal(2, arr.Count);
         Assert.All(arr, e => Assert.Equal("testable", e.GetProperty("verdict").GetString()));
     }
@@ -137,9 +139,11 @@ public sealed class AssessmentToolTests : ToolTestBase
 
         var result = AssessmentTool.GetAssessments(className: "X");
         var doc = JsonDocument.Parse(result);
-        var arr = doc.RootElement.EnumerateArray().ToList();
+        var root = doc.RootElement;
+        var arr = root.GetProperty("assessments").EnumerateArray().ToList();
 
         Assert.Single(arr);
+        Assert.Equal(1, root.GetProperty("totalCount").GetInt32());
         Assert.Equal("testable", arr[0].GetProperty("verdict").GetString());
         Assert.Equal("Retry OK", arr[0].GetProperty("reasoning").GetString());
     }
@@ -204,5 +208,81 @@ public sealed class AssessmentToolTests : ToolTestBase
         var result = AssessmentTool.GetAssessments(ns: "\0");
 
         Assert.StartsWith("ERROR in GetAssessments", result);
+    }
+
+    // ── Item #3: Pagination ──
+
+    [Fact]
+    public void GetAssessments_Pagination_DefaultTop20()
+    {
+        // Seed 25 unique assessments
+        var assessments = Enumerable.Range(1, 25)
+            .Select(i => new Assessment { Class = $"Class{i}", Verdict = "testable", Reasoning = "OK", Date = "2025-01-01" })
+            .ToArray();
+        SeedAssessments(assessments);
+
+        var result = AssessmentTool.GetAssessments();
+        var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        Assert.Equal(25, root.GetProperty("totalCount").GetInt32());
+        Assert.Equal(20, root.GetProperty("returned").GetInt32());
+        Assert.True(root.GetProperty("hasMore").GetBoolean());
+        Assert.Equal(20, root.GetProperty("assessments").GetArrayLength());
+    }
+
+    [Fact]
+    public void GetAssessments_Pagination_SkipAndTop()
+    {
+        var assessments = Enumerable.Range(1, 10)
+            .Select(i => new Assessment { Class = $"Class{i}", Verdict = "testable", Reasoning = "OK", Date = "2025-01-01" })
+            .ToArray();
+        SeedAssessments(assessments);
+
+        var result = AssessmentTool.GetAssessments(top: 3, skip: 5);
+        var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        Assert.Equal(10, root.GetProperty("totalCount").GetInt32());
+        Assert.Equal(3, root.GetProperty("returned").GetInt32());
+        Assert.Equal(5, root.GetProperty("skip").GetInt32());
+        Assert.True(root.GetProperty("hasMore").GetBoolean()); // 5+3=8 < 10
+    }
+
+    [Fact]
+    public void GetAssessments_Pagination_TopZeroReturnsAll()
+    {
+        var assessments = Enumerable.Range(1, 30)
+            .Select(i => new Assessment { Class = $"Class{i}", Verdict = "testable", Reasoning = "OK", Date = "2025-01-01" })
+            .ToArray();
+        SeedAssessments(assessments);
+
+        var result = AssessmentTool.GetAssessments(top: 0);
+        var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        Assert.Equal(30, root.GetProperty("totalCount").GetInt32());
+        Assert.Equal(30, root.GetProperty("returned").GetInt32());
+        Assert.False(root.GetProperty("hasMore").GetBoolean());
+    }
+
+    [Fact]
+    public void GetAssessments_Pagination_EnvelopeHasCorrectShape()
+    {
+        SeedAssessments(
+            new Assessment { Class = "Widget", Verdict = "coupled", Reasoning = "Heavy deps", Date = "2025-01-01" }
+        );
+
+        var result = AssessmentTool.GetAssessments();
+        var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        // Envelope fields
+        Assert.True(root.TryGetProperty("totalCount", out _));
+        Assert.True(root.TryGetProperty("returned", out _));
+        Assert.True(root.TryGetProperty("skip", out _));
+        Assert.True(root.TryGetProperty("top", out _));
+        Assert.True(root.TryGetProperty("hasMore", out _));
+        Assert.True(root.TryGetProperty("assessments", out _));
     }
 }

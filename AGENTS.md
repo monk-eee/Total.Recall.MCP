@@ -5,7 +5,7 @@
 | Key | Value |
 |-----|-------|
 | Solution | `Total.Recall.sln` |
-| Version | 2.1.0 |
+| Version | 2.2.0 |
 | SDK | 8.0.400 (`rollForward: latestFeature`, actual: 8.0.418) |
 | dotnet | `C:\Program Files\dotnet\dotnet.exe` |
 | sourceRoot | `src/Total.Recall/` |
@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 772 passing |
+| tests | 992 passing |
 
 ## Purpose
 
@@ -96,7 +96,7 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 
 | Assembly | TFM | csproj Path | Status |
 |----------|-----|-------------|--------|
-| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 772 tests |
+| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 992 tests |
 
 ## Data Files
 
@@ -250,6 +250,20 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 39. **Watch mode (--watch)**: `ScannerWatcher` uses `FileSystemWatcher` to monitor assembly (.dll), coverage (.xml in TestResults hierarchy), and test (.cs) files. On change, debounces 1.5 seconds to coalesce rapid events (build output), then re-runs only the affected scanners plus optional `--enrich` and `--analyze`. Coverage watcher auto-discovers the newest `coverage.cobertura.xml` in the TestResults/{guid}/ hierarchy. Ignores changes in obj/bin subdirectories for test watchers. Enrichment and analysis functions are passed as delegates from Program.cs since the scanner entry point uses top-level statements (local functions can't be accessed from external classes). Runs until Ctrl+C with clean `CancellationToken`-based shutdown.
 
 40. **Stub class discovery**: `get_stub_classes` identifies zero-or-near-zero coverage classes that are trivially testable: POCOs, stubs, static helpers, and simple logic classes with no mocking complexity. Cross-references type registry for constructor complexity, test inventory for existing tests, and assessments for skip/coupled exclusion. Each class is categorized (`poco`, `static-helpers`, `simple-logic`, `logic-heavy`, `unclassified`) and scored by: log-scaled uncoveredLines base, constructor simplicity bonus (parameterless=1.0x, mockable params=0.8x^n, concrete=0.6x^n), hasTestFile 1.5x, real method count bonus (3+=1.3x), and class size sweet spot (<=50 lines=1.2x). Filters: `maxCoveragePercent` (default 5.0), `maxCtorParams` (default 2), `includeWithTests` (default false). These targets were consistently the highest ROI in late-stage coverage sessions — discovered in session 9 where stub classes at 0% yielded 146 lines with zero mocking complexity.
+
+41. **Overload disambiguation in scaffold**: `generate_test_scaffold` detects overloaded methods (same sanitized name, different signatures) and disambiguates test method names using Cobertura `signature` attribute. `UncoveredMethod.Signature` stores the CLR signature (e.g., `"(System.Object)System.Boolean"`). `BuildDisambiguatedNames` groups by sanitized name, extracts short param types via `ExtractParamSuffix` (e.g., `"Object"`, `"String_Int32"`), and falls back to numeric suffixes when param types still collide. Single methods keep simple names; overloads get `MethodName_ParamType` format.
+
+42. **Configurable ROI threshold + session trend**: `get_testable_targets` accepts `roiThreshold` parameter (default 5.0) replacing the hardcoded 3.0 threshold. When top score is below threshold, a detailed ROI warning with strategy suggestions is emitted. Also adds `sessionROITrend` field cross-referencing session data: computes `currentTopScore`, last session's coverage delta and lines/test, and a trend indicator (`stable`, `declining`, `steep decline`, `insufficient data`) by comparing recent vs older session averages.
+
+43. **Paginated assessment queries**: `get_assessments` supports `top` (default 20) and `skip` (default 0) parameters. Returns an envelope `{totalCount, returned, skip, top, hasMore, assessments}` instead of a flat array. `top=0` means unlimited. Pagination applies after filtering and deduplication (last-wins).
+
+44. **Auto-computed coverage deltas**: `log_session` detects when both `coverageBefore` and `coverageAfter` are 0 (common when agents forget to pass values). Auto-computes `coverageAfter` from the current coverage-gaps store via `ComputeOverallCoverage` (sum of coveredLines / totalLines × 100), and `coverageBefore` from the previous session's `coverageAfter`. Summary output includes "(auto-computed from coverage data)" flag.
+
+45. **Negative feedback loop**: After `log_session` persists a session record, `ApplyNegativeFeedback` processes each failed class: (1) appends a gotcha with category `session-failure` documenting the failure reason, (2) if the class's latest assessment is `testable`, downgrades it to `deferred` by appending a new assessment. This prevents future sessions from repeatedly attempting problematic classes. Actions are shown in the session summary under "🔄 FEEDBACK LOOP:".
+
+46. **Mock recipe usage examples enrichment**: Scanner `--enrich` flag triggers `EnrichMockRecipeUsageExamples` after auto-generating mock recipes. Scans test files for `Mock<InterfaceName>` patterns and extracts 1–2 real usage snippets (creation + nearby Setup/Verify lines) per interface. `MockRecipe.UsageExamples` (List<string>) stores these snippets. Rewrites the mock-recipes.jsonl file with enriched data to avoid growing the file with duplicates.
+
+47. **Multi-method source snippets**: `get_source_snippet` accepts comma-separated method names (e.g., `"Validate,Process,Execute"`). When multiple methods are requested, returns an envelope `{className, requestedMethods, returnedMethods, notFound, methods[]}` with each method's source extracted independently. Per-method `maxLines` is auto-scaled (`maxLines / methodCount`, min 50). Single-method requests preserve the original response format for backward compatibility.
 
 ## Footguns
 

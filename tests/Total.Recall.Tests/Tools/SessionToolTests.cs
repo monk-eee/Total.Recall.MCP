@@ -1441,4 +1441,190 @@ public sealed class SessionToolTests : ToolTestBase
         var count = SessionTool.CountRecordsSince(records, g => g.Date, cutoff);
         Assert.Equal(1, count); // Only B parses and is after cutoff
     }
+
+    // ── Item #4: Auto-compute coverage deltas ──
+
+    [Fact]
+    public void ComputeOverallCoverage_BasicData_ComputesCorrectly()
+    {
+        SeedCoverageGaps(
+            new CoverageGap { Class = "A", TotalLines = 100, CoveredLines = 80 },
+            new CoverageGap { Class = "B", TotalLines = 200, CoveredLines = 100 }
+        );
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var result = SessionTool.ComputeOverallCoverage(stores);
+
+        // (80 + 100) / (100 + 200) * 100 = 60.0
+        Assert.Equal(60.0, result);
+    }
+
+    [Fact]
+    public void ComputeOverallCoverage_NoData_ReturnsZero()
+    {
+        var stores = StoreRegistry.ForNamespace(null);
+        var result = SessionTool.ComputeOverallCoverage(stores);
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void ComputeOverallCoverage_ZeroTotalLines_ReturnsZero()
+    {
+        SeedCoverageGaps(
+            new CoverageGap { Class = "Empty", TotalLines = 0, CoveredLines = 0 }
+        );
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var result = SessionTool.ComputeOverallCoverage(stores);
+        Assert.Equal(0, result);
+    }
+
+    [Fact]
+    public void LogSession_AutoCoverage_WhenBothZero_ComputesFromStore()
+    {
+        // Seed coverage data so auto-computation can work
+        SeedCoverageGaps(
+            new CoverageGap { Class = "MyClass", TotalLines = 200, CoveredLines = 130 }
+        );
+        // Seed a previous session with coverageAfter so coverageBefore can be derived
+        SeedSessions(new SessionRecord
+        {
+            SessionId = "prev", Model = "m",
+            CoverageAfter = 60.0,
+            StartedUtc = "2025-01-01T00:00:00Z", EndedUtc = "2025-01-01T01:00:00Z",
+            ClassesAttempted = [], ClassesSucceeded = [], ClassesFailed = []
+        });
+
+        // Pass 0/0 for coverageBefore/After — should auto-compute
+        var result = SessionTool.LogSession(
+            model: "test-model",
+            coverageBefore: 0, coverageAfter: 0
+        );
+
+        Assert.Contains("auto-computed from coverage data", result);
+        // 130/200 = 65% → coverageAfter=65, coverageBefore=60 (from prev session)
+        Assert.Contains("65%", result);
+        Assert.Contains("60%", result);
+    }
+
+    [Fact]
+    public void LogSession_AutoCoverage_DoesNotTrigger_WhenValuesProvided()
+    {
+        SeedCoverageGaps(
+            new CoverageGap { Class = "X", TotalLines = 100, CoveredLines = 50 }
+        );
+
+        var result = SessionTool.LogSession(
+            model: "m",
+            coverageBefore: 20.0, coverageAfter: 25.0
+        );
+
+        Assert.DoesNotContain("auto-computed", result);
+        Assert.Contains("25%", result);
+    }
+
+    // ── Item #5: Negative feedback loop ──
+
+    [Fact]
+    public void ApplyNegativeFeedback_NoFailures_ReturnsEmpty()
+    {
+        var record = new SessionRecord
+        {
+            SessionId = "s1", ClassesFailed = [],
+            ClassesAttempted = [], ClassesSucceeded = []
+        };
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var actions = SessionTool.ApplyNegativeFeedback(record, stores, "s1");
+
+        Assert.Empty(actions);
+    }
+
+    [Fact]
+    public void ApplyNegativeFeedback_FailedClass_AddsGotcha()
+    {
+        var record = new SessionRecord
+        {
+            SessionId = "s1",
+            ClassesFailed = [new SessionFailure { Class = "BrokenClass", Reason = "compile error" }],
+            ClassesAttempted = ["BrokenClass"], ClassesSucceeded = []
+        };
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var actions = SessionTool.ApplyNegativeFeedback(record, stores, "s1");
+
+        Assert.Contains(actions, a => a.Contains("BrokenClass") && a.Contains("gotcha"));
+
+        // Verify gotcha was actually persisted
+        var gotchas = stores.Gotchas.LoadAll();
+        Assert.Contains(gotchas, g => g.Type == "BrokenClass" && g.Category == "session-failure");
+    }
+
+    [Fact]
+    public void ApplyNegativeFeedback_FailedTestableClass_DowngradesToDeferred()
+    {
+        // Seed a "testable" assessment for the class that will fail
+        SeedAssessments(
+            new Assessment { Class = "FlakyClass", Verdict = "testable", Reasoning = "Looked good", Date = "2025-01-01" }
+        );
+
+        var record = new SessionRecord
+        {
+            SessionId = "s2",
+            ClassesFailed = [new SessionFailure { Class = "FlakyClass", Reason = "runtime error" }],
+            ClassesAttempted = ["FlakyClass"], ClassesSucceeded = []
+        };
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var actions = SessionTool.ApplyNegativeFeedback(record, stores, "s2");
+
+        // Should have both gotcha and downgrade actions
+        Assert.Contains(actions, a => a.Contains("gotcha"));
+        Assert.Contains(actions, a => a.Contains("testable → deferred"));
+
+        // Verify assessment was downgraded (latest wins)
+        var assessments = stores.Assessments.LoadAll();
+        var latest = assessments.LastOrDefault(a => a.Class == "FlakyClass");
+        Assert.NotNull(latest);
+        Assert.Equal("deferred", latest!.Verdict);
+    }
+
+    [Fact]
+    public void ApplyNegativeFeedback_FailedCoupledClass_DoesNotDowngrade()
+    {
+        // Already coupled — should NOT downgrade further
+        SeedAssessments(
+            new Assessment { Class = "CoupledClass", Verdict = "coupled", Reasoning = "Known issue", Date = "2025-01-01" }
+        );
+
+        var record = new SessionRecord
+        {
+            SessionId = "s3",
+            ClassesFailed = [new SessionFailure { Class = "CoupledClass", Reason = "mock failed" }],
+            ClassesAttempted = ["CoupledClass"], ClassesSucceeded = []
+        };
+
+        var stores = StoreRegistry.ForNamespace(null);
+        var actions = SessionTool.ApplyNegativeFeedback(record, stores, "s3");
+
+        // Should have gotcha but no downgrade (it's already coupled, not testable)
+        Assert.Contains(actions, a => a.Contains("gotcha"));
+        Assert.DoesNotContain(actions, a => a.Contains("Downgraded"));
+    }
+
+    [Fact]
+    public void LogSession_WithFailedClasses_ShowsFeedbackLoopInSummary()
+    {
+        SeedAssessments(
+            new Assessment { Class = "FailMe", Verdict = "testable", Reasoning = "OK", Date = "2025-01-01" }
+        );
+
+        var result = SessionTool.LogSession(
+            model: "m",
+            classesFailed: "FailMe:compile error"
+        );
+
+        Assert.Contains("FEEDBACK LOOP", result);
+        Assert.Contains("FailMe", result);
+    }
 }

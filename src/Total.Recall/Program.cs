@@ -312,6 +312,25 @@ static async Task RunScannerAsync(string[] args)
             Console.WriteLine($"✗ Mock recipe generation FAILED: {ex.GetType().Name}: {ex.Message}");
             Log.Error($"Mock recipe auto-generation failed: {ex}");
         }
+
+        // Enrich mock recipes with usage examples from test files
+        if (!string.IsNullOrEmpty(options.TestsPath))
+        {
+            try
+            {
+                Console.Write("  Enriching mock recipes with usage examples... ");
+                var enrichedCount = EnrichMockRecipeUsageExamples(dataDir, options.TestsPath);
+                if (enrichedCount > 0)
+                    Console.WriteLine($"✓ {enrichedCount} recipe(s) enriched with real usage examples");
+                else
+                    Console.WriteLine("✓ no usage examples found");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"✗ Mock recipe usage enrichment FAILED: {ex.GetType().Name}: {ex.Message}");
+                Log.Error($"Mock recipe usage enrichment failed: {ex}");
+            }
+        }
     }
 
     // Static analysis: dependency graph, coupling metrics, cluster detection
@@ -501,6 +520,115 @@ static int AutoGenerateMockRecipes(string dataDir)
     }
 
     return newRecipes.Count;
+}
+
+static int EnrichMockRecipeUsageExamples(string dataDir, string testsPath)
+{
+    var recipeStore = new JsonLineStore<Total.Recall.Models.MockRecipe>(RepoConfig.MockRecipesPath(dataDir));
+    if (!recipeStore.HasData())
+        return 0;
+
+    var recipes = recipeStore.LoadAll();
+    if (recipes.Count == 0)
+        return 0;
+
+    // Build lookup: interface name → recipe index
+    var recipeByInterface = new Dictionary<string, Total.Recall.Models.MockRecipe>(StringComparer.OrdinalIgnoreCase);
+    foreach (var recipe in recipes)
+    {
+        recipeByInterface.TryAdd(recipe.Interface, recipe);
+    }
+
+    // Scan test files for Mock<IFoo> patterns
+    if (!Directory.Exists(testsPath))
+        return 0;
+
+    var testFiles = Directory.GetFiles(testsPath, "*.cs", SearchOption.AllDirectories)
+        .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                  && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+        .ToList();
+
+    // Regex to find Mock<InterfaceName> usage with surrounding context
+    var mockPattern = new System.Text.RegularExpressions.Regex(
+        @"(?:new\s+Mock<(\w+)>|Mock<(\w+)>)",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    var setupPattern = new System.Text.RegularExpressions.Regex(
+        @"(\w+)\.(Setup|SetupGet|SetupSet|SetupSequence)\s*\(",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Track which interfaces got examples (max 2 per interface)
+    var examplesByInterface = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var testFile in testFiles)
+    {
+        string[] lines;
+        try { lines = File.ReadAllLines(testFile); }
+        catch { continue; }
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var mockMatch = mockPattern.Match(line);
+            if (!mockMatch.Success) continue;
+
+            var ifaceName = mockMatch.Groups[1].Success ? mockMatch.Groups[1].Value : mockMatch.Groups[2].Value;
+            if (!recipeByInterface.ContainsKey(ifaceName)) continue;
+
+            if (!examplesByInterface.ContainsKey(ifaceName))
+                examplesByInterface[ifaceName] = [];
+
+            if (examplesByInterface[ifaceName].Count >= 2)
+                continue; // Already have enough examples
+
+            // Extract a small snippet: the mock creation line + up to 3 following Setup lines
+            var snippet = line.Trim();
+            for (int j = i + 1; j < Math.Min(i + 6, lines.Length); j++)
+            {
+                var nextLine = lines[j].Trim();
+                if (string.IsNullOrWhiteSpace(nextLine)) continue;
+                if (setupPattern.IsMatch(nextLine) || nextLine.Contains(".Object") || nextLine.Contains(".Verify"))
+                {
+                    snippet += "\n" + nextLine;
+                }
+                else if (!nextLine.StartsWith("//") && !nextLine.StartsWith("{"))
+                {
+                    break; // Stop at non-mock-related line
+                }
+            }
+
+            examplesByInterface[ifaceName].Add(snippet);
+            Log.Debug($"[MockUsageEnrich] found usage of {ifaceName} in {Path.GetFileName(testFile)}:{i + 1}");
+        }
+    }
+
+    if (examplesByInterface.Count == 0)
+        return 0;
+
+    // Re-write recipes with usage examples populated
+    int enrichedCount = 0;
+    var updatedRecipes = new List<Total.Recall.Models.MockRecipe>();
+    foreach (var recipe in recipes)
+    {
+        if (examplesByInterface.TryGetValue(recipe.Interface, out var examples) && examples.Count > 0)
+        {
+            recipe.UsageExamples = examples;
+            enrichedCount++;
+        }
+        updatedRecipes.Add(recipe);
+    }
+
+    if (enrichedCount > 0)
+    {
+        // Rewrite the entire file with updated recipes
+        var path = RepoConfig.MockRecipesPath(dataDir);
+        var jsonLines = updatedRecipes
+            .Select(r => System.Text.Json.JsonSerializer.Serialize(r, SharedJsonOptions.CamelCase))
+            .ToList();
+        File.WriteAllText(path, string.Join(Environment.NewLine, jsonLines) + Environment.NewLine);
+    }
+
+    return enrichedCount;
 }
 
 static string ClassifyTestability(Total.Recall.Models.TypeRecord type)

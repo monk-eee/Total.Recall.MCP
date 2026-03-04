@@ -671,4 +671,86 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var result = SourceSnippetTool.ResolveSourceRoot(TempDir);
         Assert.Null(result);
     }
+
+    // ── Item #7: Multi-method source snippets ──
+
+    [Fact]
+    public void GetSourceSnippet_CommaSeparatedMethods_ReturnsMultiple()
+    {
+        SetSourceRootEnv(_sourceDir);
+        StoreRegistry.Reset();
+
+        var source = @"public class Worker
+{
+    public void Start() { Console.WriteLine(""starting""); }
+    public void Stop() { Console.WriteLine(""stopping""); }
+    public void Pause() { Console.WriteLine(""pausing""); }
+}";
+        var filePath = CreateSourceFile("src/Worker.cs", source);
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "Worker", File = filePath,
+            TotalLines = 6, CoveredLines = 0, UncoveredLines = 6,
+            UncoveredMethods =
+            [
+                new UncoveredMethod { Name = "Start", StartLine = 3, EndLine = 3, UncoveredLines = 1 },
+                new UncoveredMethod { Name = "Stop", StartLine = 4, EndLine = 4, UncoveredLines = 1 },
+                new UncoveredMethod { Name = "Pause", StartLine = 5, EndLine = 5, UncoveredLines = 1 }
+            ]
+        });
+
+        var result = SourceSnippetTool.GetSourceSnippet("Worker", methodName: "Start,Stop");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.Equal(2, doc.RootElement.GetProperty("requestedMethods").GetInt32());
+        Assert.Equal(2, doc.RootElement.GetProperty("returnedMethods").GetInt32());
+        Assert.Equal(2, doc.RootElement.GetProperty("methods").GetArrayLength());
+    }
+
+    [Fact]
+    public void GetSourceSnippet_CommaSeparatedMethods_NotFoundTracked()
+    {
+        SetSourceRootEnv(_sourceDir);
+        StoreRegistry.Reset();
+
+        var source = "public class Calc { public int Add(int a, int b) => a + b; }";
+        var filePath = CreateSourceFile("src/Calc.cs", source);
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "Calc", File = filePath,
+            TotalLines = 1, CoveredLines = 0, UncoveredLines = 1,
+            UncoveredMethods = [new UncoveredMethod { Name = "Add", StartLine = 1, EndLine = 1, UncoveredLines = 1 }]
+        });
+
+        var result = SourceSnippetTool.GetSourceSnippet("Calc", methodName: "Add,NonExistent");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.Equal(2, doc.RootElement.GetProperty("requestedMethods").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("returnedMethods").GetInt32());
+        var notFound = doc.RootElement.GetProperty("notFound").EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Contains("NonExistent", notFound);
+    }
+
+    [Fact]
+    public void GetSourceSnippet_SingleMethodName_ReturnsSingleObject()
+    {
+        SetSourceRootEnv(_sourceDir);
+        StoreRegistry.Reset();
+
+        var source = "public class Svc { public void Run() { } }";
+        var filePath = CreateSourceFile("src/Svc.cs", source);
+        SeedCoverageGaps(new CoverageGap
+        {
+            Class = "Svc", File = filePath,
+            TotalLines = 1, CoveredLines = 0, UncoveredLines = 1,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 1, UncoveredLines = 1 }]
+        });
+
+        var result = SourceSnippetTool.GetSourceSnippet("Svc", methodName: "Run");
+        var doc = JsonDocument.Parse(result);
+
+        // Single method mode — returns method result directly, NOT an envelope with "methods" array
+        Assert.True(doc.RootElement.TryGetProperty("methodName", out _));
+        Assert.False(doc.RootElement.TryGetProperty("methods", out _));
+    }
 }

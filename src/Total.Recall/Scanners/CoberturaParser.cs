@@ -128,9 +128,12 @@ public static class CoberturaParser
                 .Select(l => int.Parse(l.Attribute("number")?.Value ?? "0"))
                 .ToList();
 
+            var signature = method.Attribute("signature")?.Value ?? "";
+
             result.Add(new UncoveredMethod
             {
                 Name = methodName,
+                Signature = signature,
                 StartLine = allLineNums.Min(),
                 EndLine = allLineNums.Max(),
                 UncoveredLines = uncoveredLineNums.Count

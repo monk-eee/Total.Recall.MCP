@@ -27,13 +27,14 @@ public static class TestableTargetsTool
         [Description("Exclude abstract classes (default: true)")] bool excludeAbstract = true,
         [Description("Exclude classes with 'skip' or 'coupled' assessments (default: true)")] bool excludeAssessed = true,
         [Description("Only show classes with zero existing tests (default: false)")] bool requireZeroTests = false,
+        [Description("ROI score threshold below which a warning is emitted (default: 5.0). Lower threshold = more aggressive targeting.")] double roiThreshold = 5.0,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         Metrics.Increment(Metrics.ToolGetTestableTargets);
-        Log.Debug($"[GetTestableTargets] top={top} maxCtor={maxCtorParams} maxLines={maxTotalLines} ns='{ns ?? "(default)"}'");
+        Log.Debug($"[GetTestableTargets] top={top} maxCtor={maxCtorParams} maxLines={maxTotalLines} roiThreshold={roiThreshold} ns='{ns ?? "(default)"}'");
         try
         {
-            return GetTestableTargetsCore(top, maxCtorParams, maxTotalLines, excludeAbstract, excludeAssessed, requireZeroTests, ns);
+            return GetTestableTargetsCore(top, maxCtorParams, maxTotalLines, excludeAbstract, excludeAssessed, requireZeroTests, roiThreshold, ns);
         }
         catch (Exception ex)
         {
@@ -44,7 +45,7 @@ public static class TestableTargetsTool
 
     private static string GetTestableTargetsCore(
         int top, int maxCtorParams, int maxTotalLines,
-        bool excludeAbstract, bool excludeAssessed, bool requireZeroTests, string? ns)
+        bool excludeAbstract, bool excludeAssessed, bool requireZeroTests, double roiThreshold, string? ns)
     {
         var stores = StoreRegistry.ForNamespace(ns);
 
@@ -375,18 +376,18 @@ public static class TestableTargetsTool
             return "No testable targets found matching the criteria. Try relaxing filters (increase maxCtorParams or maxTotalLines, set excludeAssessed=false).";
 
         // ── ROI threshold warning ──
-        // When the best available target scores below 3.0, the remaining targets are
+        // When the best available target scores below the threshold, the remaining targets are
         // likely coupled, heavily-tested, or otherwise low-ROI. Signal the agent to
         // shift strategy rather than grinding through diminishing returns.
         string? roiWarning = null;
         var topScore = results[0].Score;
-        if (topScore < 3.0)
+        if (topScore < roiThreshold)
         {
             var strategies = new List<string>();
             if (topScore < 1.0)
                 strategies.Add("Class-level targets are effectively exhausted.");
             else
-                strategies.Add($"Top score is only {topScore:F1} — remaining targets have low ROI.");
+                strategies.Add($"Top score is only {topScore:F1} (below threshold {roiThreshold:F1}) — remaining targets have low ROI.");
 
             strategies.Add("Recommended next steps:");
             strategies.Add("  1. Switch to method-level targeting: get_uncovered_methods(onlyWithExistingTests=true)");
@@ -396,15 +397,84 @@ public static class TestableTargetsTool
             roiWarning = string.Join("\n", strategies);
         }
 
+        // ── Session ROI trend ──
+        // Compare current top score against context from the last logged session.
+        // Helps agents understand whether targeting is improving or declining.
+        object? sessionROITrend = null;
+        if (stores.Sessions.HasData())
+        {
+            sessionROITrend = BuildSessionROITrend(stores.Sessions.LoadAll(), topScore);
+        }
+
         var summary = new
         {
             count = results.Count,
-            filters = new { top, maxCtorParams, maxTotalLines, excludeAbstract, excludeAssessed, requireZeroTests },
+            filters = new { top, maxCtorParams, maxTotalLines, excludeAbstract, excludeAssessed, requireZeroTests, roiThreshold },
             warning = roiWarning,
+            sessionROITrend,
             targets = results
         };
 
         return JsonSerializer.Serialize(summary, SharedJsonOptions.CamelCaseIndented);
+    }
+
+    /// <summary>
+    /// Build a session ROI trend object comparing the current top score against recent session history.
+    /// Returns null if insufficient session data.
+    /// </summary>
+    internal static object? BuildSessionROITrend(List<SessionRecord> sessions, double currentTopScore)
+    {
+        if (sessions.Count == 0)
+            return null;
+
+        var lastSession = sessions[^1];
+        var sessionsWithCoverage = sessions
+            .Where(s => s.CoveredLines > 0 && s.TestsGenerated > 0)
+            .ToList();
+
+        // Compute trend fields
+        var lastCoverageDelta = lastSession.CoverageDelta;
+        var lastTestsGenerated = lastSession.TestsGenerated;
+        var lastLinesPerTest = lastSession.TestsGenerated > 0
+            ? Math.Round((double)lastSession.CoveredLines / lastSession.TestsGenerated, 2)
+            : 0.0;
+
+        string trend;
+        if (sessionsWithCoverage.Count < 2)
+        {
+            trend = "insufficient data";
+        }
+        else
+        {
+            var recentAvgLpt = sessionsWithCoverage.TakeLast(3)
+                .Average(s => (double)s.CoveredLines / s.TestsGenerated);
+            var olderAvgLpt = sessionsWithCoverage.Count > 3
+                ? sessionsWithCoverage.SkipLast(3).TakeLast(3)
+                    .Average(s => (double)s.CoveredLines / s.TestsGenerated)
+                : sessionsWithCoverage.First().CoveredLines > 0
+                    ? (double)sessionsWithCoverage.First().CoveredLines / sessionsWithCoverage.First().TestsGenerated
+                    : recentAvgLpt;
+
+            if (recentAvgLpt >= olderAvgLpt * 0.9)
+                trend = "stable";
+            else if (recentAvgLpt >= olderAvgLpt * 0.5)
+                trend = "declining";
+            else
+                trend = "steep decline — consider strategy shift";
+        }
+
+        return new
+        {
+            currentTopScore = Math.Round(currentTopScore, 1),
+            lastSession = new
+            {
+                coverageDelta = lastCoverageDelta,
+                testsGenerated = lastTestsGenerated,
+                linesPerTest = lastLinesPerTest
+            },
+            trend,
+            sessionCount = sessions.Count
+        };
     }
 
     /// <summary>
