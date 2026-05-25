@@ -105,7 +105,43 @@ Changes are debounced (1.5s) to handle rapid build events. Press **Ctrl+C** to s
     Done. [coverage:539, enriched:412]
 ```
 
-## 3. Wire Up VS Code
+## 3. Inspect Telemetry from the Command Line (Optional)
+
+Once agents have used the server for a few sessions, you can read the recorded telemetry without spinning up VS Code. The `report` sub-command dispatches to the same tool methods the MCP server exposes and prints JSON to stdout:
+
+```bash
+# Per-tool call counts + p50/p95 latency + average response bytes
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject
+
+# Recent behaviour cycles (re-query loops, context loss, oscillation)
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report cycles --pattern re-query --last 50 --ns myproject
+
+# Cross-model scorecard from sessions + tasks + evals
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report scorecard --ns myproject
+
+# Session history (last N sessions)
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report sessions --last 10 --ns myproject
+
+# Sessions × cycles × tasks efficiency summary
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report efficiency --ns myproject
+
+# Eval pass/fail rates by model
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report leaderboard --ns myproject
+```
+
+Sub-commands: `tool-stats | efficiency | scorecard | cycles | sessions | leaderboard`.
+Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`.
+
+All output is JSON — pipe through `ConvertFrom-Json` (PowerShell) or `jq` for tables:
+
+```powershell
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject `
+  | ConvertFrom-Json | Select-Object -ExpandProperty tools | Format-Table -AutoSize
+```
+
+While a report runs, telemetry recording is forced off so the report itself doesn't pollute `tool-calls.jsonl`.
+
+## 4. Wire Up VS Code
 
 Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for):
 
@@ -151,7 +187,7 @@ On first launch the server pre-loads all JSONL data and builds O(1) lookup index
   ⚡ type index: 1176 entries (O(1) lookups ready)
 ```
 
-## 4. Use the Tools
+## 5. Use the Tools
 
 Total.Recall exposes **34 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
 
@@ -209,7 +245,7 @@ Fill in the scaffold stubs. Use the other tools as needed:
 
 Uses `log_session` — persists outcomes for cross-session analytics. Call `get_sessions` in future sessions to see what worked.
 
-## 5. Verify It's Working
+## 6. Verify It's Working
 
 In Copilot chat, try: `get testable targets with top 3`
 
@@ -221,7 +257,7 @@ You should see a scored list of classes. If it doesn't appear:
 4. `TOTAL_RECALL_DATA` env var points to a directory with `.jsonl` files
 5. The namespace directory exists and contains data
 
-## 6. Data File Locations
+## 7. Data File Locations
 
 | File | Updated By | Description |
 |------|-----------|-------------|
@@ -241,7 +277,7 @@ You should see a scored list of classes. If it doesn't appear:
 
 All files live under `$TOTAL_RECALL_DATA/{namespace}/`.
 
-## 7. Integrate with Your Agent Workflow
+## 8. Integrate with Your Agent Workflow
 
 Total.Recall is **standalone** — it doesn't depend on any specific skill or workflow. But it works best when the agent knows it exists.
 
