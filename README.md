@@ -43,7 +43,7 @@ And nobody can tell whether the agent is actually getting better, worse, or just
 Total.Recall ships as a [.NET global tool on NuGet](https://www.nuget.org/packages/TotalRecall.Mcp):
 
 ```bash
-dotnet tool install -g TotalRecall.Mcp --version 2.4.0-preview.1
+dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
 ```
 
 This exposes a single command, `total-recall`, on your `PATH`. The same
@@ -93,7 +93,7 @@ $ total-recall scan \
     --tests    tests/Total.Recall.Tests \
     --namespace self --enrich
 
-Total.Recall Scanner v2.4.0-preview.1 — output: ...\data\self
+Total.Recall Scanner v2.5.0-preview.1 — output: ...\data\self
   Scanning assembly... ✓ type-registry.jsonl — 101 types
   Scanning tests...    ✓ test-inventory.jsonl — 48 test files
   Enriching coverage data... ✓ 0 classes enriched with test counts + testability

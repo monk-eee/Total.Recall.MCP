@@ -5,7 +5,7 @@
 | Key | Value |
 |-----|-------|
 | Solution | `Total.Recall.sln` |
-| Version | 2.4.0-preview.1 |
+| Version | 2.5.0-preview.1 |
 | SDK | 8.0.400 (`rollForward: latestFeature`, actual: 8.0.418) |
 | dotnet | `C:\Program Files\dotnet\dotnet.exe` |
 | sourceRoot | `src/Total.Recall/` |

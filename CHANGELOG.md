@@ -12,6 +12,42 @@ Dates reflect the commit date in the local repo.
 
 _No unreleased changes yet._
 
+## [2.5.0-preview.1] — 2026-05-25
+
+Quality-of-life release focused on first-run UX and a scanner robustness fix.
+
+### Added
+- **`total-recall init <repo-path>`** — auto-discovers your target repo's
+  production csproj, newest output DLL, newest `coverage.cobertura.xml`,
+  test project, and source root. Writes (or merges with) `config.json` in
+  the namespace data dir, then prints a ready-to-paste `.vscode/mcp.json`
+  block and the matching `total-recall scan` command. Exit codes 0/1/2.
+- **`total-recall doctor`** — prints env vars, data root status, per-namespace
+  data file presence + record counts + last write times, and validates each
+  `config.json`'s `sourceRoot` / `assemblyPath` / `coveragePath` / `testsPath`
+  still resolve on disk. Missing core files (`type-registry.jsonl`,
+  `coverage-gaps.jsonl`, `test-inventory.jsonl`) surface as warnings.
+  Exit codes 0/1/2.
+- **TTY guard on bare invocation** — `total-recall` with no args from an
+  interactive terminal now prints help and exits 0 instead of silently
+  entering MCP stdio server mode and appearing to hang. VS Code still pipes
+  stdin so server mode triggers normally there.
+- `--help` / `-h` / `help` print the same root help; `--version` / `-v` print
+  just the version.
+- **First 5 Minutes** quick-start section in `docs/QUICKSTART.md`.
+- README polish: Recallmon mascot logo (`assets/recallmon.png`) and CI / NuGet
+  version / NuGet downloads / MIT / .NET 8 badges below the H1.
+
+### Fixed
+- **Scanner crash on publish-style targets** — `AssemblyScanner` no longer
+  throws `FileLoadException: Assembly with same name is already loaded` when
+  the `--assembly` target directory ships its own copy of `mscorlib.dll` /
+  `System.Private.CoreLib.dll` / `netstandard.dll` alongside the host runtime
+  dir's copy. `PathAssemblyResolver` candidates are now deduplicated by
+  `AssemblyName.Name`, target-dir copies winning over runtime-dir copies.
+  Pinned by regression test
+  `BuildResolverPaths_DuplicateIdentityAcrossDirs_DedupesByAssemblyName`.
+
 ## [2.4.0-preview.1] — 2026-05-25
 
 First public release. Published to NuGet as
