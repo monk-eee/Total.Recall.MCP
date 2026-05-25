@@ -372,11 +372,11 @@ docs/                           ← ADRs, integration guide, tool reference, dem
 data/                           ← gitignored — scanner output lands here per-namespace
 ```
 
-Start with [`AGENTS.md`](AGENTS.md) for the working rules and architecture decisions, then [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the end-to-end flow.
+Start with [`AGENTS.md`](AGENTS.md) for the working rules, [`docs/DECISIONS.md`](docs/DECISIONS.md) for the architectural reasoning, then [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the end-to-end flow.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, please read `AGENTS.md` — in particular the Architecture Decisions numbered list, which documents every design choice and the reasoning behind it.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, please skim [`docs/DECISIONS.md`](docs/DECISIONS.md) — the numbered Architecture Decisions list documents every load-bearing design choice and is the most common source of regressions when contradicted.
 
 The default branch is `main`. CI runs on every push and PR.
 
