@@ -48,8 +48,7 @@ _(none currently tracked)_
 _Non-urgent improvements that don't block shipping. Move to `## In progress`
 when picked up._
 
-- Roslyn analyzer to fail the build on duplicate `internal static` signatures
-  across `Tools/` and `Scanners/` (per AGENTS.md "Mechanical enforcement").
+_(no outstanding backlog items)_
 
 ---
 
@@ -110,6 +109,16 @@ commit for the diff.
   the table; pass non-JSON output (empty-state messages) through
   unchanged. Tests: `TableRendererTests` (9) + `ReportRunnerTests`
   format-flag coverage (4 new).
+- [x] **TR0001 duplicate-helper analyzer.** `src/Total.Recall.Analyzers/`
+  ships a `netstandard2.0` `DiagnosticAnalyzer` that flags duplicate
+  `internal static` signatures across files under `Tools/` and `Scanners/`.
+  Wired into `Total.Recall.csproj` as an analyzer-only project reference
+  so every build now enforces AGENTS.md "Mechanical enforcement". Six
+  xUnit tests cover positive (same signature in Tools+Scanners,
+  same signature in two Tools files) and negative (unique helpers,
+  public statics, code outside Tools/Scanners, in-file overloads).
+  Fix when TR0001 fires is always extraction to `Infrastructure/` —
+  never `#pragma warning disable`.
 
 ---
 

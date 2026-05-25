@@ -23,4 +23,10 @@
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="8.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Total.Recall.Analyzers\Total.Recall.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>
