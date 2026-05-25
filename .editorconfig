@@ -1,0 +1,51 @@
+; EditorConfig — https://editorconfig.org
+; Top-most config in the repo.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{yml,yaml,json,jsonl}]
+indent_size = 2
+
+[*.{csproj,props,targets,xml}]
+indent_size = 2
+
+# C# language rules — kept light. The point is to pin formatting,
+# not to legislate style. Existing code is the source of truth.
+[*.cs]
+indent_size = 4
+
+# Naming
+dotnet_naming_rule.private_static_fields_should_be_s_prefixed.severity = suggestion
+dotnet_naming_rule.private_static_fields_should_be_s_prefixed.symbols  = private_static_fields
+dotnet_naming_rule.private_static_fields_should_be_s_prefixed.style    = s_prefix_camel_case
+
+dotnet_naming_symbols.private_static_fields.applicable_kinds           = field
+dotnet_naming_symbols.private_static_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_static_fields.required_modifiers         = static
+
+dotnet_naming_style.s_prefix_camel_case.required_prefix = s_
+dotnet_naming_style.s_prefix_camel_case.capitalization  = camel_case
+
+# Usings
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Prefer var when type is apparent (codebase already follows this).
+csharp_style_var_when_type_is_apparent = true:suggestion
+
+# Expression-bodied members allowed but not required.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+
+# File-scoped namespaces preferred (matches the codebase).
+csharp_style_namespace_declarations = file_scoped:suggestion

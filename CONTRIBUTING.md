@@ -4,7 +4,7 @@ Thanks for the interest. This project has a small, opinionated set of working ru
 
 ## Before you start
 
-**Read [AGENTS.md](AGENTS.md) end-to-end.** In particular, the "Architecture Decisions" numbered list (#1–#59) is the soul of the project — every entry documents a specific design choice and the reasoning behind it. Most regressions come from changes that quietly contradict one of those entries. If your PR conflicts with one of them, either (a) make the conflict explicit in the PR description and propose a new numbered entry that supersedes the old one, or (b) reconsider the change.
+**Read [AGENTS.md](AGENTS.md) end-to-end.** In particular, the "Architecture Decisions" numbered list is the soul of the project — every entry documents a specific design choice and the reasoning behind it. Most regressions come from changes that quietly contradict one of those entries. If your PR conflicts with one of them, either (a) make the conflict explicit in the PR description and propose a new numbered entry that supersedes the old one, or (b) reconsider the change.
 
 Also worth reading:
 
@@ -18,7 +18,7 @@ These are lifted directly from `AGENTS.md`. They apply to humans and AI agents e
 
 ### 1. Tests must pass
 
-- Run `dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj` after every change. All 1070+ tests must pass before commit.
+- Run `dotnet test Total.Recall.sln` after every change. All tests must pass before commit. CI runs the same command on Ubuntu and Windows.
 - Never skip, `[Fact(Skip=...)]`, or comment out a test to make CI pass. Fix the code, not the test.
 - Bug fixes require a regression test. The test must FAIL against un-fixed code and PASS against the fix. Verify both directions.
 
