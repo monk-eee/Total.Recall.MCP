@@ -1,0 +1,74 @@
+name: Bug report
+description: Something is broken or wrong. Reproducible from a clean clone is ideal.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. Please read `SECURITY.md` first if this has any
+        security flavour — those go through private vulnerability reporting,
+        not public issues.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: One paragraph. What did you do, what did Total.Recall do?
+      placeholder: I ran `dotnet run -- scan --assembly ...` and it threw `FileNotFoundException`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      placeholder: Scanner should resolve the assembly and write `type-registry.jsonl`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimum steps from a clean clone. Include commands, env vars, and any input file shapes.
+      render: bash
+      placeholder: |
+        1. git clone https://github.com/<you>/Total.Recall
+        2. cd Total.Recall
+        3. dotnet run --project src/Total.Recall -- scan --assembly ./missing.dll
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (stderr)
+      description: Run with `TOTAL_RECALL_LOG_LEVEL=debug` and paste relevant lines. Redact paths/names that contain secrets.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Total.Recall commit / version
+      placeholder: e.g. 594ee5e or v2.4.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true
+
+  - type: input
+    id: dotnet
+    attributes:
+      label: dotnet --version
+      placeholder: e.g. 8.0.418
+    validations:
+      required: true

@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a new tool, scanner, scoring tweak, or workflow change.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening: skim `AGENTS.md` "Architecture Decisions" — if your
+        proposal contradicts an existing entry, please name it and explain
+        why the entry should be revised.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What pain are you trying to remove? Be concrete — sessions, tokens, repeated lookups, missing data, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: Sketch the tool / scanner / scoring change. Input, output, where it lives.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing tools or workflows that almost solve it, and why they don't.
+
+  - type: textarea
+    id: design-conflict
+    attributes:
+      label: Does this conflict with any Architecture Decision?
+      description: Reference by number, e.g. "Conflicts with #6 (Performance by default) because ...".

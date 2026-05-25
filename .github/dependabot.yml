@@ -1,0 +1,34 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, nuget]
+    commit-message:
+      prefix: "chore(total-recall)"
+      include: scope
+    groups:
+      microsoft-codeanalysis:
+        patterns:
+          - "Microsoft.CodeAnalysis*"
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      test-stack:
+        patterns:
+          - "xunit*"
+          - "Moq*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies, github-actions]
+    commit-message:
+      prefix: "chore(total-recall)"
+      include: scope

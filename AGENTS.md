@@ -21,7 +21,7 @@
 
 When an AI agent writes tests for a large .NET codebase, it burns 60–70% of its context re-discovering the same information every session: type constructors, mock patterns, coverage gaps, known pitfalls, and what's already tested. Over 30 sessions to reach a coverage target, this wastes ~450K tokens and ~22 hours of wall-clock time.
 
-Total.Recall eliminates this waste by converting ephemeral agent knowledge into durable, queryable data. Scanners extract type metadata, coverage gaps, and test inventories into JSONL files. An MCP server exposes 23 tools that let agents query this data instantly — one tool call replaces 10–15 file reads. Agents also write data back (gotchas, assessments, session logs), creating a feedback loop that makes each session smarter than the last.
+Total.Recall eliminates this waste by converting ephemeral agent knowledge into durable, queryable data. Scanners extract type metadata, coverage gaps, and test inventories into JSONL files. An MCP server exposes 34 tools that let agents query this data instantly — one tool call replaces 10–15 file reads. Agents also write data back (gotchas, assessments, session logs), creating a feedback loop that makes each session smarter than the last.
 
 ## Design Principles
 
@@ -94,12 +94,12 @@ Duplicate non-public `static` helpers (both `internal static` and `private stati
 
 ### Test-driven workflow (NON-NEGOTIABLE)
 - **Tests are the only way we ship.** Every tool, scanner, store, and infrastructure helper needs xUnit tests under `tests/Total.Recall.Tests/` mirroring the source folder.
-- **Run `dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj` after every change.** All 1070+ tests must pass before commit.
+- **Run `dotnet test Total.Recall.sln` after every change.** All tests must pass before commit. CI runs the same command on Ubuntu and Windows.
 - **Never skip, `[Fact(Skip=...)]`, or comment out a test to make CI pass.** Fix the code, not the test.
 - **Bug fixes require a regression test. No exceptions.**
   - Every fixed bug gets a `[Fact]` (or `[Theory]`) in `<Module>RegressionTests.cs` alongside the existing tests for that module, with an XML doc comment describing: what went wrong, what the impact was, what the fix is.
   - The test must FAIL against the un-fixed code and PASS against the fix. Confirm both directions before committing (revert the fix locally, watch it fail, restore the fix). **Do not use `git stash` for this** — temporarily edit the fix back out, verify, then restore.
-  - Do not delete regression tests during refactors. They pin subtle behaviour (see AGENTS.md "Architecture Decisions" #13–#51 — most of those numbered behaviours are regression-tested).
+  - Do not delete regression tests during refactors. They pin subtle behaviour (the Architecture Decisions list at the end of this file documents the behaviours — most are regression-tested).
 - **Always report bugs and failures, even ones you do not fix in this run.** If you notice a bug, a flaky test, suspicious behaviour, or a latent footgun while doing other work, add an entry to a `## Known bugs` section of a `docs/TODO.md` (create it if absent) before you finish the turn. We never silently drop bugs. Each entry: (1) what you observed, (2) where (file + symbol or test name), (3) impact, (4) whether fixed in this run or left for later.
 
 ### Build & test discipline
@@ -177,7 +177,7 @@ The workflow, in order. Do not skip steps.
 
 5. **One public type per file, named for what it does.** After the split, every new file's name should be a noun that describes its single responsibility (`TestScaffoldPlanner`, `AssertionRules`, `CtorParamPlan`). If you can't name a file that way, the split is wrong — you've sliced arbitrarily, not by responsibility.
 
-6. **Validate after each extraction.** Run `dotnet test` after every move, not just at the end. If 1070 tests still pass without modification, the refactor is behaviour-preserving (which it must be — no behaviour change in a refactor commit). If a test breaks, the split sliced through a hidden contract; back out and re-plan.
+6. **Validate after each extraction.** Run `dotnet test` after every move, not just at the end. If all tests still pass without modification, the refactor is behaviour-preserving (which it must be — no behaviour change in a refactor commit). If a test breaks, the split sliced through a hidden contract; back out and re-plan.
 
 7. **Refuse `partial class` as a sizing tool.** `partial class` is for source generators and for legitimately disjoint concerns (designer-vs-code, generated-vs-hand-written). It is not for "this file is too long, let me cut it in half." Splitting a 1000-line class into two 500-line partials produces ONE 1000-line class spread across two files — the cognitive load is the same. Do the real work.
 
