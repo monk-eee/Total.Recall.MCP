@@ -1,0 +1,91 @@
+name: Publish to NuGet
+
+# Publishes the TotalRecall.Mcp package to nuget.org when a `v*` tag is pushed.
+# Tag must match the csproj <Version> (e.g. tag `v2.4.0-preview.1` for csproj
+# version `2.4.0-preview.1`). The workflow verifies the match before publishing.
+#
+# Setup (one-time):
+#   1. Create an API key at https://www.nuget.org/account/apikeys with Push
+#      scope limited to package id `TotalRecall.Mcp`.
+#   2. Add it as repository secret `NUGET_API_KEY` under Settings → Secrets
+#      and variables → Actions.
+#
+# Trigger:
+#   git tag -a v2.4.0-preview.1 -m "..."
+#   git push origin v2.4.0-preview.1
+#
+# Manual trigger (testing) is also enabled via workflow_dispatch.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: pack-test-publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET (pinned by global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore Total.Recall.sln
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build Total.Recall.sln --configuration Release --no-restore -warnaserror
+
+      - name: Test
+        run: dotnet test Total.Recall.sln --configuration Release --no-build --verbosity normal
+
+      - name: Verify tag matches csproj <Version>
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(grep -oPm1 '(?<=<Version>)[^<]+' src/Total.Recall/Total.Recall.csproj)
+          echo "tag=$tag csproj=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag v$tag does not match csproj <Version>$version"
+            exit 1
+          fi
+
+      - name: Pack
+        run: dotnet pack src/Total.Recall/Total.Recall.csproj --configuration Release --no-build
+
+      - name: List artifacts
+        run: ls -la nupkg
+
+      - name: Upload nupkg as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: |
+            nupkg/*.nupkg
+            nupkg/*.snupkg
+          if-no-files-found: error
+
+      - name: Push to nuget.org
+        if: github.event_name == 'push'
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "${NUGET_API_KEY:-}" ]; then
+            echo "::error::Repository secret NUGET_API_KEY is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          dotnet nuget push nupkg/*.nupkg \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
