@@ -138,8 +138,8 @@ internal static class ReportRunner
         stdout.WriteLine("(PowerShell) or 'jq'. Use --format table for a built-in text table.");
         stdout.WriteLine();
         stdout.WriteLine("Examples:");
-        stdout.WriteLine("  dotnet run -- report tool-stats --ns myproject");
-        stdout.WriteLine("  dotnet run -- report cycles --pattern re-query --last 50");
-        stdout.WriteLine("  dotnet run -- report scorecard --format table");
+        stdout.WriteLine("  total-recall report tool-stats --ns myproject");
+        stdout.WriteLine("  total-recall report cycles --pattern re-query --last 50");
+        stdout.WriteLine("  total-recall report scorecard --format table");
     }
 }
