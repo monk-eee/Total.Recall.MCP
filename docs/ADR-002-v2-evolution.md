@@ -12,11 +12,11 @@ After using Total.Recall v1 for one full coverage-uplift session (97 tests, 21 t
 
 ### What v1 did well
 - **`GetCoverageGaps(sortBy: "roi")`** — gave method-level uncovered data ranked by ROI instantly, without parsing Cobertura XML manually. Genuinely useful for target selection.
-- **`GetContext()`** — gave type metadata (constructors, interfaces, dependencies) that let us quickly reject complex classes (AuditEntryBuilder → SchemaTestHarnessBase, ConfigurationUpdates → LinterExtension, DocumentLock → LinterExtension) without reading each source file.
+- **`GetContext()`** — gave type metadata (constructors, interfaces, dependencies) that let us quickly reject complex classes (e.g. `EntryBuilder` → `TestHarnessBase`, `ConfigUpdater` → `OrchestratorService`, `DocumentLock` → `OrchestratorService`) without reading each source file.
 - **`AddGotcha()`** — persists discoveries for future sessions. Cumulative value.
 
 ### Where v1 added zero value
-- **Test writing (90% of the work)**: MCP gives signatures, not implementations. We read every source file anyway — all 8 ArtifactSchema files, all 6 Cluster B files, plus 6+ dependency files. The actual test authoring was pure file-reading + code generation.
+- **Test writing (90% of the work)**: MCP gives signatures, not implementations. We read every source file anyway — all 8 files in cluster A, all 6 in cluster B, plus 6+ dependency files. The actual test authoring was pure file-reading + code generation.
 - **`GetMockRecipe()` and `GetTestInventory()`** — never used this session.
 - **Target filtering**: We needed a runSubagent search to find testable untested classes because MCP's coverage data didn't filter by DI complexity or testability.
 - **No feedback loop**: Token usage, which classes worked, which failed, how many tests per class, coverage delta — all vanished when the session ended.
@@ -45,7 +45,7 @@ Evolve Total.Recall from a read-only lookup index into a **bidirectional decisio
 
 ### 1. `get_testable_targets` — because manual target filtering burned 15 minutes
 
-**Evidence**: During the session, we called `GetContext()` on 8+ classes just to reject them for having complex DI (AuditEntryBuilder, ConfigurationUpdates, DocumentLock, etc.). We also needed a `runSubagent` search to find candidates matching "0 tests, <350 lines, low DI complexity" because no single MCP tool could cross-join coverage + type registry + test inventory + assessments.
+**Evidence**: During the session, we called `GetContext()` on 8+ classes just to reject them for having complex DI. We also needed a `runSubagent` search to find candidates matching "0 tests, <350 lines, low DI complexity" because no single MCP tool could cross-join coverage + type registry + test inventory + assessments.
 
 **Insight**: The data to make this decision already exists in 4 separate JSONL files. v1 forces the agent to query each one, load results into context, then manually correlate. That's ~4 tool calls + reasoning tokens when one tool could return a ranked list with DI complexity pre-computed.
 
@@ -68,12 +68,12 @@ score = uncoveredLines
 
 ### 2. `get_source_snippet` — because we read every source file anyway
 
-**Evidence**: For every type we decided to test, we called `read_file` on the full `.cs` file. The type survey phase (8 ArtifactSchema files + 6 Cluster B files + 6 dependency files) was ALL done via `read_file`, not MCP. MCP gives signatures, not implementations.
+**Evidence**: For every type we decided to test, we called `read_file` on the full `.cs` file. The type survey phase (~20 files across two clusters plus dependencies) was ALL done via `read_file`, not MCP. MCP gives signatures, not implementations.
 
-**Insight**: CoverageGap records already contain relative file paths (e.g., `Parsing\Models\DocSet\DocSet.cs`) and uncovered method line ranges (e.g., `GetUrlsFromFile: L658-L790`). If we know the target repo's source root, we can serve the actual method body directly. The agent asks "show me the uncovered methods of DocSet" and gets implementation code — no `read_file` needed.
+**Insight**: CoverageGap records already contain relative file paths (e.g., `Parsing\Models\OrderSet\OrderSet.cs`) and uncovered method line ranges (e.g., `GetUrlsFromFile: L658-L790`). If we know the target repo's source root, we can serve the actual method body directly. The agent asks "show me the uncovered methods of OrderSet" and gets implementation code — no `read_file` needed.
 
 **Design choices**:
-- New env var: `TOTAL_RECALL_SOURCE_ROOT` — points to the target repo's source root (e.g., `C:\Users\lyndonswan\Repos\Linter\src\LanguageServer\Server`)
+- New env var: `TOTAL_RECALL_SOURCE_ROOT` — points to the target repo's source root (e.g., `C:\Repos\MyProject\src\LanguageServer\Server`)
 - Returns up to 200 lines of source (configurable) centered on uncovered methods
 - Falls back gracefully: if source root not set or file not found, returns clear error suggesting `read_file` instead
 - Security: only serves files under the declared source root (no path traversal)
@@ -143,8 +143,8 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
 │  Agent ──── MCP stdio ────────────────────────────────────┐     │
 │    │                                                       │     │
 │    │  "Give me the next 5 testable targets"                │     │
-│    │  "Show me the source of DocSet.GetUrlsFromFile"       │     │
-│    │  "Generate a test scaffold for ContentBlock"          │     │
+│    │  "Show me the source of OrderSet.GetUrlsFromFile"      │     │
+│    │  "Generate a test scaffold for OrderProcessor"        │     │
 │    │  "Log this session: 97 tests, 25%→54% coverage"      │     │
 │    │                                                       │     │
 └────┼───────────────────────────────────────────────────────┼─────┘
@@ -211,7 +211,7 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
 │         ▼                                                        │
 │  ┌─────────────────────────────────────────┐                     │
 │  │ Target Repo Source Root                  │                     │
-│  │ (e.g. Linter/src/LanguageServer/Server/) │                     │
+│  │ (e.g. MyProject/src/LanguageServer/Server/) │                  │
 │  │                                          │                     │
 │  │ Resolved via: TOTAL_RECALL_SOURCE_ROOT   │                     │
 │  │            or config.json.sourceRoot      │                     │
@@ -234,10 +234,10 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
   "promptTokens": 850000,
   "completionTokens": 320000,
   "totalTokens": 1170000,
-  "classesAttempted": ["ContentBlock", "ArtifactSchema", "DocSet", "ConfigurationUpdates"],
-  "classesSucceeded": ["ContentBlock", "ArtifactSchema", "DocSet"],
+  "classesAttempted": ["OrderProcessor", "InvoiceSchema", "DocumentSet", "ConfigUpdater"],
+  "classesSucceeded": ["OrderProcessor", "InvoiceSchema", "DocumentSet"],
   "classesFailed": [
-    { "class": "ConfigurationUpdates", "reason": "Heavy DI: LinterExtension ctor requires 8 services" }
+    { "class": "ConfigUpdater", "reason": "Heavy DI: OrchestratorService ctor requires 8 services" }
   ],
   "testsGenerated": 97,
   "coverageBefore": 25.66,
@@ -245,7 +245,7 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
   "coverageDelta": 28.44,
   "gotchasDiscovered": 4,
   "assessmentsRecorded": 12,
-  "notes": "ArtifactSchema cluster was high-yield. Cluster B (ConfigurationUpdates, DocumentLock) rejected for DI complexity."
+  "notes": "Schema cluster was high-yield. Cluster B (ConfigUpdater, DocumentLock) rejected for DI complexity."
 }
 ```
 
@@ -253,20 +253,20 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
 
 ```json
 {
-  "class": "ContentBlock",
-  "namespace": "Server.Parsing.Models.Parsers.Output.Container.File.Content",
-  "file": "Parsing/Models/Parsers/.../ContentBlock.cs",
+  "class": "OrderProcessor",
+  "namespace": "MyApp.Orders.Processing",
+  "file": "Orders/Processing/OrderProcessor.cs",
   "totalLines": 412,
   "uncoveredLines": 256,
   "coveragePercent": 37.86,
   "uncoveredMethodCount": 5,
-  "uncoveredMethods": ["SetContentParameters", "BuildBlocks", "ParseInline", "GetRange", "Clone"],
+  "uncoveredMethods": ["SetParameters", "Build", "Parse", "GetRange", "Clone"],
   "existingTestCount": 18,
   "ctorParamCount": 2,
-  "ctorParams": ["int index", "CodeContentBlock code"],
+  "ctorParams": ["int index", "OrderContext context"],
   "mockableParamCount": 0,
   "recipeCoveredParams": 0,
-  "baseType": "ContentBlockBase",
+  "baseType": "OrderProcessorBase",
   "isAbstract": false,
   "isStatic": false,
   "previousVerdict": null,
@@ -280,7 +280,7 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
 
 ```json
 {
-  "sourceRoot": "C:\\Users\\lyndonswan\\Repos\\Linter\\src\\LanguageServer\\Server",
+  "sourceRoot": "C:\\Repos\\MyProject\\src\\LanguageServer\\Server",
   "scannedUtc": "2026-02-27T10:00:00Z",
   "assemblyPath": "...\\Server.dll",
   "coveragePath": "...\\coverage.cobertura.xml",
@@ -406,7 +406,7 @@ Post-scan:
 - New tools follow the exact same patterns as v1 tools (static class, `[McpServerTool]`, StoreRegistry, SharedJsonOptions). Maintenance cost is linear, not exponential.
 - Source snippet tool degrades gracefully — returns a clear "configure source root" message, not a crash.
 - Session data accuracy improves over time as we compare logged expectations vs actual coverage report deltas.
-- Scaffold tool generates idiomatic xUnit + Moq patterns that match the Linter project's existing test style.
+- Scaffold tool generates idiomatic xUnit + Moq patterns that match the target project's existing test style.
 
 ---
 

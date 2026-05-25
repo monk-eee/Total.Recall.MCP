@@ -25,6 +25,8 @@ public static partial class TestPatternsTool
         [Description("Maximum number of test files to analyze (default: 20)")] int maxFiles = 20,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("learn_test_patterns", ns, new { maxFiles, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolLearnTestPatterns);
         Log.Debug($"[LearnTestPatterns] maxFiles={maxFiles} ns='{ns ?? "(default)"}'");
         try
@@ -36,6 +38,7 @@ public static partial class TestPatternsTool
             Log.Error($"[LearnTestPatterns] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in LearnTestPatterns: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string LearnTestPatternsCore(int maxFiles, string? ns)

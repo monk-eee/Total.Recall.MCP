@@ -861,7 +861,7 @@ static void PrintScanHelp()
             --coverage "path/to/coverage.cobertura.xml" \
             --tests "path/to/UnitTest" \
             --source-root "path/to/Server/src" \
-            --namespace linter \
+            --namespace myproject \
             --enrich --analyze
 
           # Full scan for an NUnit + NSubstitute project
@@ -874,18 +874,18 @@ static void PrintScanHelp()
             --enrich
 
           # Just re-parse coverage after a new test run
-          dotnet run -- scan --coverage "path/to/coverage.cobertura.xml" --namespace linter --enrich
+          dotnet run -- scan --coverage "path/to/coverage.cobertura.xml" --namespace myproject --enrich
 
           # Watch mode: auto-rescan on file changes
           dotnet run -- scan \
             --assembly "path/to/Server.dll" \
             --coverage "path/to/coverage.cobertura.xml" \
             --tests "path/to/UnitTest" \
-            --namespace linter \
+            --namespace myproject \
             --enrich --analyze --watch
 
           # Enrich existing data without re-scanning
-          dotnet run -- scan --namespace linter --enrich
+          dotnet run -- scan --namespace myproject --enrich
 
         Environment:
           TOTAL_RECALL_DATA       Root data directory (default: "data")

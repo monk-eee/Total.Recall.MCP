@@ -1,6 +1,6 @@
 # Total.Recall — Tool Reference
 
-Complete reference for all 23 MCP tools exposed by the server.
+Complete reference for all 34 MCP tools exposed by the server.
 
 All tools accept an optional `ns` parameter to target a specific namespace dataset.
 
@@ -544,3 +544,159 @@ score = base
 **Returns**: JSON with before/after comparison: `lineRateChange`, `newLinesHit`, `newlyCovered` (classes that went from <1% to ≥1%), `topImprovements` (top 5 classes by coverage delta).
 
 **When to use**: After running `dotnet test --collect:"XPlat Code Coverage"` mid-session — refresh coverage data without restarting the server or running the full scanner. If using `--watch` mode, coverage data updates automatically when new XML files appear.
+
+---
+
+## Telemetry & Eval Tools (Cuts 1–6)
+
+Every public MCP tool is wrapped in `Telemetry.Track`, which appends a `ToolCallRecord` to `tool-calls.jsonl` (toolName, ns, sessionId, taskId, params summary, latency, response bytes) whenever `TOTAL_RECALL_MODE != "off"`. The detector also runs `CycleDetector.Observe` after each call to spot behaviour anti-patterns.
+
+**Modes** (`TOTAL_RECALL_MODE` env var):
+- `off` — zero-overhead pass-through, no recording
+- `passive` (default) — record every tool call + cycles
+- `active-eval` — passive + agent can request challenges
+
+### start_task
+
+**Purpose**: Begin a bracketed task. Sets `Telemetry.ActiveTaskId` so subsequent tool calls are attributed to this task. Calling `start_task` again before `end_task` auto-abandons the prior task (writes outcome `abandon` with note `"superseded by new start_task"`).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `intent` | string | yes | Narrative description of what the agent is about to do |
+
+**Returns**: `{ taskId, startedAt }` JSON.
+
+**When to use**: At the beginning of any non-trivial multi-step operation. Pair with `end_task` to get duration + outcome attribution in `tasks.jsonl`.
+
+---
+
+### end_task
+
+**Purpose**: End the active task. Persists `(taskId, intent, outcome, startedAt, endedAt, durationMs, notes)` to `tasks.jsonl`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `outcome` | string | yes | `success` or `abandon` |
+| `notes` | string | no | Free-text notes describing what happened |
+
+**Returns**: Confirmation + duration.
+
+---
+
+### log_task
+
+**Purpose**: One-shot convenience: start + immediately end a task. Use when the operation is atomic and you don't need bracketing.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `intent` | string | yes | What was attempted |
+| `outcome` | string | yes | `success` or `abandon` |
+| `notes` | string | no | Free-text notes |
+
+---
+
+### get_cycles
+
+**Purpose**: Return recent detected behaviour cycles from `cycles.jsonl` for self-diagnosis.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `last` | int | no | 20 | Most recent N cycles to return |
+| `pattern` | string | no | (all) | Filter by pattern: `re-query`, `context-loss`, `oscillation` |
+
+**Returns**: Cycle[] JSON. Each cycle: pattern, sessionId, dedupeKey, detectedAt, evidence (tool calls involved).
+
+**Detected patterns**:
+- **re-query** — ≥3 identical `(toolName, paramHash)` calls within session
+- **context-loss** — ≥2 lookup calls (`resolve_type`/`get_context`/`get_source_snippet`) with no intervening write
+- **oscillation** — ≥3 distinct `get_source_snippet` targets in a 5-call window with no `add_assessment` between
+
+Each cycle fires once per session (deduplicated via `s_fired` HashSet).
+
+**When to use**: When you suspect you're thrashing — call to confirm and adjust strategy.
+
+---
+
+### get_tool_call_stats
+
+**Purpose**: Per-tool call counts, p50/p95 latency, and average response bytes computed from `tool-calls.jsonl`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `last` | int | no | 500 | Most recent N tool calls to aggregate |
+
+**Returns**: Per-tool histogram JSON.
+
+---
+
+### get_efficiency_report
+
+**Purpose**: Sessions × cycles × tasks summary: tokens-per-task, redundant-call rate, plateau warnings.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `last` | int | no | 10 | Most recent N sessions to aggregate |
+
+**Returns**: JSON with totals and ratios across sessions, tasks, and cycles.
+
+---
+
+### get_model_scorecard
+
+**Purpose**: Per-model aggregated metrics from sessions + tasks + evals — cross-model comparison.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| (none) | — | — | — |
+
+**Returns**: Per-model rows: sessions, tasks, successRate, avgLinesPerTest, evalsPassed, evalsFailed, avgEvalScore.
+
+---
+
+### get_next_challenge
+
+**Purpose**: Pull a graded eval challenge problem from `challenges.jsonl` for the agent to attempt. Available only when `TOTAL_RECALL_MODE=active-eval`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `difficulty` | string | no | (any) | Filter by difficulty: `easy`, `medium`, `hard` |
+
+**Returns**: Challenge JSON: `challengeId`, `prompt`, `requiredTools`, `toolBudget`, `expectedKeyPhrases`.
+
+---
+
+### submit_challenge
+
+**Purpose**: Submit a challenge attempt. Graded deterministically by `ChallengeGrader` and persisted to `evals.jsonl`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `challengeId` | string | yes | The challenge being answered |
+| `response` | string | yes | The agent's final answer |
+| `toolsUsed` | string | yes | Comma-separated list of tool names called during the attempt |
+
+**Returns**: `EvalResult` JSON: `passed` (score ≥ 0.7), `score`, `breakdown` (`requiredToolsCalled`, `stayedUnderBudget`, `outputCorrectness`), `feedback`.
+
+**Rubric**: 0.4 × fraction of required tools called + 0.2 × stayed under budget + 0.4 × output correctness (key-phrase substring match). Pure deterministic — no model calls, reproducible.
+
+---
+
+### get_eval_leaderboard
+
+**Purpose**: Aggregated eval pass/fail rates across models from `evals.jsonl`.
+
+**Returns**: Model rankings JSON.
+
+---
+
+### report_context_reset
+
+**Purpose**: Agent self-reports a compaction or context-window reset. Records a marker entry to `sessions.jsonl`, rotates `Telemetry.SessionId` (so post-reset behaviour is attributed correctly for cycle detection and scorecards), and clears `Telemetry.ActiveTaskId`. No-op when `TOTAL_RECALL_MODE=off`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `reason` | string | no | Free-text reason for the reset (e.g. `"context window exceeded"`, `"manual compaction"`) |
+
+**Returns**: Confirmation.
+
+**When to use**: Immediately after a context window reset / summary so subsequent cycle detection doesn't compare against the pre-reset session.

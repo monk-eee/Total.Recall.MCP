@@ -1,18 +1,43 @@
 # Total.Recall
 
-**Persistent MCP memory server for AI agents doing .NET code coverage work.**
+**An MCP server that gives AI coding agents persistent memory — and measures their behaviour.**
 
-## The Problem
+Total.Recall is two things in one process:
 
-When an AI agent writes tests for a large .NET codebase, it burns 60–70% of its context re-discovering the same information every session: type constructors, mock patterns, coverage gaps, known pitfalls, and what's already tested. Over 30 sessions to reach a coverage target, this wastes ~450K tokens and ~22 hours of wall-clock time in re-discovery and build-fail-fix cycles.
+1. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
+2. **A behaviour observatory + eval harness** — every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss, oscillation) are auto-detected, agent work is bracketed into named tasks, and a deterministic grader runs reproducible challenges to score models against each other without an LLM-as-judge.
 
-## The Solution
+The included scanners target .NET (Cobertura coverage, MetadataLoadContext reflection), so out of the box this is the strongest tool available for AI-assisted code coverage uplift on a large C# codebase. But the memory + telemetry + eval substrate is language-agnostic — the .NET scanners are just the first concrete consumer.
 
-Total.Recall converts ephemeral agent knowledge into durable, queryable data:
+## Why it exists
 
-- **Scanners** extract type metadata, coverage gaps, and test inventories into JSONL files
-- **23 MCP tools** let agents query this data instantly — one tool call replaces 10–15 file reads
+When an AI agent writes tests for a large codebase, it burns 60–70% of its context re-discovering the same things every session: type constructors, mock patterns, coverage gaps, known pitfalls, and what's already tested. Over 30 sessions to reach a coverage target, that's ~450K tokens and ~22 hours of wall-clock time wasted in re-discovery and build-fail-fix cycles.
+
+And nobody can tell whether the agent is actually getting better, worse, or just thrashing — because there's no record of what it tried, what it learned, or which model handled it best.
+
+## What it does
+
+- **Scanners** extract type metadata, coverage gaps, and test inventories into append-only JSONL files
+- **34 MCP tools** let agents query this data instantly — one tool call replaces 10–15 file reads
 - **Agents write back** gotchas, assessments, and session logs, creating a feedback loop that makes each session smarter than the last
+- **Telemetry + eval harness** (v2.4) records every tool call, detects behaviour anti-patterns (re-query, context-loss, oscillation), brackets work into tasks, and runs deterministic grader challenges for cross-model scoring
+
+## Quickstart
+
+```bash
+# 1. Scan your target repo
+dotnet run --project src/Total.Recall -- scan \
+  --assembly path/to/YourProject.dll \
+  --coverage path/to/coverage.cobertura.xml \
+  --tests    path/to/YourProject.Tests \
+  --namespace myproject --enrich
+
+# 2. Add Total.Recall to your target workspace's .vscode/mcp.json (see below)
+
+# 3. In Copilot chat: "get testable targets, top 5"
+```
+
+See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough and [docs/DEMO.md](docs/DEMO.md) for a 90-second end-to-end story.
 
 ## Design Principles
 
@@ -67,11 +92,26 @@ Total.Recall converts ephemeral agent knowledge into durable, queryable data:
 | `get_gotcha_insights` | Cluster gotchas into patterns, generate Footguns documentation |
 | `refresh_coverage` | Re-parse Cobertura XML mid-session without a full rescan |
 
+### Telemetry & Eval (Cuts 1–6, v2.4)
+
+Every tool call is intercepted and recorded to `tool-calls.jsonl` (controlled by `TOTAL_RECALL_MODE`). These tools let agents observe their own behaviour and run reproducible evals.
+
+| Tool | Purpose |
+|------|--------|
+| `start_task` / `end_task` / `log_task` | Bracket agent work into named tasks. Auto-abandons stale tasks on re-start. |
+| `get_cycles` | Recent detected behaviour cycles (re-query / context-loss / oscillation) for self-diagnosis |
+| `get_tool_call_stats` | Per-tool call counts, p50/p95 latency, average response bytes |
+| `get_efficiency_report` | Sessions × cycles × tasks: tokens/task, redundant-call rate, plateau warnings |
+| `get_model_scorecard` | Cross-model aggregate metrics from sessions + tasks + evals |
+| `get_next_challenge` / `submit_challenge` | Pull and submit deterministic eval problems (graded 40% required-tools + 20% budget + 40% correctness, pass ≥ 0.7) |
+| `get_eval_leaderboard` | Aggregated eval pass/fail rates by model |
+| `report_context_reset` | Agent self-reports a compaction; rotates session id so post-reset behaviour is attributed correctly |
+
 See [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) for complete parameter documentation.
 
 ## How It Works
 
-VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot initializes. The server stays alive for the session, and Copilot auto-discovers all 23 tools over stdio JSON-RPC.
+VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot initializes. The server stays alive for the session, and Copilot auto-discovers all 34 tools over stdio JSON-RPC.
 
 ### Recommended workflow
 
@@ -196,13 +236,14 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
 | `TOTAL_RECALL_NAMESPACE` | `"default"` | Default namespace subdirectory under data root |
 | `TOTAL_RECALL_LOG_LEVEL` | `"info"` | Log verbosity: `debug`, `info`, `warn`, `error`, `quiet` |
 | `TOTAL_RECALL_SOURCE_ROOT` | (none) | Override source root for `get_source_snippet` |
+| `TOTAL_RECALL_MODE` | `"passive"` | Telemetry mode: `off` (no recording), `passive` (record tool calls + cycles), `active-eval` (passive + serve challenges via `get_next_challenge`) |
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
 | [QUICKSTART.md](docs/QUICKSTART.md) | Step-by-step setup guide |
-| [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 23 tools |
+| [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 34 tools |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Observability guide + common problem fixes |
 | [INTEGRATION.md](docs/INTEGRATION.md) | How to wire Total.Recall into a target repo |
 | [copilot-instructions-template.md](docs/copilot-instructions-template.md) | Drop-in template for `.github/copilot-instructions.md` |
@@ -264,3 +305,13 @@ Get-ChildItem "data/your-namespace/*.jsonl" | ForEach-Object {
 On **server start**: logs to stderr, pre-warms all JSONL into memory, builds type index, starts metrics at zero. During **operation**: every tool call increments metrics; writes (gotchas, assessments, sessions) append to JSONL on disk. On **server stop**: metrics and logs are lost; sessions, gotchas, and assessments survive on disk.
 
 See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for the full observability guide, detailed metrics interpretation, session analytics, data file forensics, and corrupt JSONL detection.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, please read `AGENTS.md` — in particular the Architecture Decisions numbered list, which documents every design choice and the reasoning behind it.
+
+## License
+
+[MIT](LICENSE) © 2026 Lyndon Swan

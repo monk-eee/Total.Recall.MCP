@@ -124,7 +124,8 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
         "TOTAL_RECALL_DATA": "C:\\path\\to\\Total.Recall\\data",
         "TOTAL_RECALL_NAMESPACE": "myproject",
         "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\your-repo\\src",
-        "TOTAL_RECALL_LOG_LEVEL": "info"
+        "TOTAL_RECALL_LOG_LEVEL": "info",
+        "TOTAL_RECALL_MODE": "passive"
       }
     }
   }
@@ -152,7 +153,7 @@ On first launch the server pre-loads all JSONL data and builds O(1) lookup index
 
 ## 4. Use the Tools
 
-Total.Recall exposes **23 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
+Total.Recall exposes **34 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
 
 ### Step 1 — Pick targets
 
@@ -196,6 +197,11 @@ Fill in the scaffold stubs. Use the other tools as needed:
 | `get_gotcha_insights` | Cluster gotchas into patterns, generate Footguns docs |
 | `refresh_coverage` | Re-parse Cobertura XML mid-session without full rescan |
 | `get_metrics` | Server telemetry (cache hits, tool calls) |
+| `start_task` / `end_task` / `log_task` | Bracket work into named tasks for telemetry attribution |
+| `get_cycles` | Recent detected behaviour cycles (re-query / context-loss / oscillation) |
+| `get_tool_call_stats` / `get_efficiency_report` / `get_model_scorecard` | Cross-session telemetry views |
+| `get_next_challenge` / `submit_challenge` / `get_eval_leaderboard` | Deterministic eval harness for cross-model scoring |
+| `report_context_reset` | Self-report a compaction so post-reset behaviour is attributed correctly |
 
 ### Step 5 — Log the session
 
@@ -226,6 +232,11 @@ You should see a scored list of classes. If it doesn't appear:
 | `mock-recipes.jsonl` | Manual curation | Pre-built Moq setup code per interface |
 | `assessments.jsonl` | `add_assessment` tool | Testability verdicts from agent analysis |
 | `sessions.jsonl` | `log_session` tool | Session outcomes for cross-session learning |
+| `tool-calls.jsonl` | Auto (every tool call) | Every MCP tool call: name, ns, sessionId, taskId, params summary, latency, response bytes |
+| `tasks.jsonl` | `start_task` / `end_task` | Agent task bracketing — start/end, success/abandon, intent |
+| `cycles.jsonl` | Auto (CycleDetector) | Detected behaviour cycles: re-query, context-loss, oscillation |
+| `challenges.jsonl` | `get_next_challenge` / `submit_challenge` | Eval challenge problems offered to agents |
+| `evals.jsonl` | `submit_challenge` (graded) | Eval scoring outcomes: pass/fail, score, breakdown |
 | `config.json` | Scanner `--source-root` | Persisted scan config (source root, paths, timestamp) |
 
 All files live under `$TOTAL_RECALL_DATA/{namespace}/`.

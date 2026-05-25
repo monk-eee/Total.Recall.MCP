@@ -47,7 +47,7 @@ This is exactly the extension point pattern. AGENTS.md is documented as "Claude'
 
 ### 4. No version coupling
 
-If Total.Recall changes its tool signatures (adds parameters, renames tools, adds new tools), only the Linter repo's AGENTS.md and copilot-instructions.md need updating. The skill continues working everywhere else without a version bump.
+If Total.Recall changes its tool signatures (adds parameters, renames tools, adds new tools), only the consuming repo's AGENTS.md and copilot-instructions.md need updating. The skill continues working everywhere else without a version bump.
 
 ### 5. Graceful degradation
 
@@ -95,7 +95,7 @@ If Total.Recall's MCP server isn't running, the agent sees no MCP tools. It read
              │                                │
              │    ┌─────────────────────┐     │
              └────│  Target Repo        │─────┘
-                  │  (e.g. Linter)      │
+                  │  (e.g. MyProject)   │
                   │                     │
                   │  AGENTS.md          │ ← MCP section added here
                   │  .github/copilot-   │ ← auto-injected by VS Code

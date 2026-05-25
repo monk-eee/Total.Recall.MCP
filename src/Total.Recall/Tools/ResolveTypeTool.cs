@@ -18,6 +18,8 @@ public static class ResolveTypeTool
         [Description("Optional: filter by source file path substring (e.g. 'Parsing/Output')")] string? filePath = null,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("resolve_type", ns, new { typeName, namespacePart, filePath, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolResolveType);
         Log.Debug($"[ResolveType] typeName='{typeName}' namespacePart='{namespacePart ?? "(none)"}' filePath='{filePath ?? "(none)"}' ns='{ns ?? "(default)"}'");
         try
@@ -29,6 +31,7 @@ public static class ResolveTypeTool
             Log.Error($"[ResolveType] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in ResolveType: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string ResolveTypeCore(string typeName, string? namespacePart, string? filePath, string? ns)

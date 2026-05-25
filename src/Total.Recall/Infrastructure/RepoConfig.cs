@@ -2,7 +2,7 @@ namespace Total.Recall.Infrastructure;
 
 /// <summary>
 /// Resolves the data root + namespace to produce per-namespace data directories.
-/// Layout: {root}/{namespace}/ — e.g. data/linter/, data/docs-build/
+/// Layout: {root}/{namespace}/ — e.g. data/myproject/, data/docs-build/
 ///
 /// Environment variables:
 ///   TOTAL_RECALL_DATA      — root data directory (default: "data")
@@ -155,6 +155,13 @@ public static class RepoConfig
     public static string AssessmentsPath(string dataDir) => Path.Combine(dataDir, "assessments.jsonl");
     public static string SessionsPath(string dataDir) => Path.Combine(dataDir, "sessions.jsonl");
     public static string ConfigJsonPath(string dataDir) => Path.Combine(dataDir, "config.json");
+
+    // ── Eval harness stores (Cuts 1–6) ──
+    public static string ToolCallsPath(string dataDir) => Path.Combine(dataDir, "tool-calls.jsonl");
+    public static string TasksPath(string dataDir) => Path.Combine(dataDir, "tasks.jsonl");
+    public static string CyclesPath(string dataDir) => Path.Combine(dataDir, "cycles.jsonl");
+    public static string ChallengesPath(string dataDir) => Path.Combine(dataDir, "challenges.jsonl");
+    public static string EvalsPath(string dataDir) => Path.Combine(dataDir, "evals.jsonl");
 
     /// <summary>
     /// Clear all cached paths. Use in tests to ensure fresh env var resolution,

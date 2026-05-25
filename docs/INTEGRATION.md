@@ -4,7 +4,7 @@ How to make AI agents in your target workspace aware of Total.Recall. This is **
 
 ## The Problem
 
-Total.Recall is an MCP server that runs alongside your editor. It exposes 23 tools for type lookup, coverage analysis, source serving, test scaffolding, static analysis, and session tracking. Copilot agents don't know these tools exist unless you tell them.
+Total.Recall is an MCP server that runs alongside your editor. It exposes 34 tools for type lookup, coverage analysis, source serving, test scaffolding, static analysis, session tracking, and a telemetry/eval harness. Copilot agents don't know these tools exist unless you tell them.
 
 Two injection points make agents aware:
 
@@ -48,7 +48,7 @@ Create `.vscode/mcp.json` in your target workspace root:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `TOTAL_RECALL_DATA` | yes | Root data directory containing namespace folders |
-| `TOTAL_RECALL_NAMESPACE` | recommended | Namespace subdirectory name (e.g., `linter`, `myproject`) |
+| `TOTAL_RECALL_NAMESPACE` | recommended | Namespace subdirectory name (e.g., `myproject`, `myapp`) |
 | `TOTAL_RECALL_SOURCE_ROOT` | optional | Target repo source root — enables `get_source_snippet`. Can also be set via scanner `--source-root` flag, which persists it to `config.json`. |
 
 ### Gitignore considerations
@@ -74,7 +74,7 @@ copy C:\path\to\Total.Recall\docs\copilot-instructions-template.md .github\copil
 Or append it to an existing file. The full template is at **[copilot-instructions-template.md](copilot-instructions-template.md)** — it includes:
 
 - The 5-step recommended workflow (targets → source → scaffold → test → log)
-- All 23 tool names with usage examples and parameter hints
+- All 34 tool names with usage examples and parameter hints
 - Fallback guidance for when `read_file` is still appropriate
 - Performance notes (sub-millisecond responses, O(1) lookups)
 
@@ -101,7 +101,7 @@ copy C:\path\to\Total.Recall\docs\agents-md-template.md AGENTS-mcp-section.md
 
 The full template is at **[agents-md-template.md](agents-md-template.md)** — it includes:
 
-- All 23 tools organized into v2 Decision Engine, v1 Lookup Index, Static Analysis, and Observability tables
+- All 34 tools organized into v2 Decision Engine, v1 Lookup Index, Static Analysis, Observability, and Telemetry & Eval tables
 - Complete parameter reference for each tool
 - The 3-step coverage uplift workflow (targets → test → log)
 - Full-scan and incremental re-scan command examples
@@ -113,7 +113,7 @@ The full template is at **[agents-md-template.md](agents-md-template.md)** — i
 The template has `<!-- CUSTOMIZE -->` markers at key locations:
 
 - **Paths**: Replace `C:\path\to\...` with your actual Total.Recall clone location
-- **Namespace**: Replace `your-namespace` with your project's namespace (e.g., `linter`)
+- **Namespace**: Replace `your-namespace` with your project's namespace (e.g., `myproject`)
 - **Re-scan commands**: Update assembly/coverage/tests paths for your project
 - **Additional context**: Add project-specific notes — which classes are untestable and why, preferred test patterns, team conventions
 

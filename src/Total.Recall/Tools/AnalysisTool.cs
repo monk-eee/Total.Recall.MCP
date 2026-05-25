@@ -24,6 +24,8 @@ public static class AnalysisTool
         [Description("Class name to look up")] string className,
         [Description("Optional: namespace/session to query")] string? ns = null)
     {
+        return Telemetry.Track("get_class_metrics", ns, new { className, ns }, () =>
+        {
         Metrics.Increment("tool.getClassMetrics");
         Log.Debug($"[GetClassMetrics] className='{className}' ns='{ns ?? "(default)"}'");
         try
@@ -35,6 +37,7 @@ public static class AnalysisTool
             Log.Error($"[GetClassMetrics] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetClassMetrics: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     [McpServerTool, Description(
@@ -46,6 +49,8 @@ public static class AnalysisTool
         [Description("Graph depth: 1 = direct deps, 2 = include transitive (default: 1)")] int depth = 1,
         [Description("Optional: namespace/session to query")] string? ns = null)
     {
+        return Telemetry.Track("get_dependency_graph", ns, new { className, depth, ns }, () =>
+        {
         Metrics.Increment("tool.getDependencyGraph");
         Log.Debug($"[GetDependencyGraph] className='{className}' depth={depth} ns='{ns ?? "(default)"}'");
         try
@@ -57,6 +62,7 @@ public static class AnalysisTool
             Log.Error($"[GetDependencyGraph] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetDependencyGraph: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     [McpServerTool, Description(
@@ -66,6 +72,8 @@ public static class AnalysisTool
     public static string GetAnalysisSummary(
         [Description("Optional: namespace/session to query")] string? ns = null)
     {
+        return Telemetry.Track("get_analysis_summary", ns, new { ns }, () =>
+        {
         Metrics.Increment("tool.getAnalysisSummary");
         Log.Debug($"[GetAnalysisSummary] ns='{ns ?? "(default)"}'");
         try
@@ -77,6 +85,7 @@ public static class AnalysisTool
             Log.Error($"[GetAnalysisSummary] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetAnalysisSummary: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     // ── Core implementations ──

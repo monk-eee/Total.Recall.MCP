@@ -20,6 +20,8 @@ public static class TestInventoryTool
         [Description("Class name to look up existing tests for")] string className,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_test_inventory", ns, new { className, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetTestInventory);
         Log.Debug($"[GetTestInventory] className='{className}' ns='{ns ?? "(default)"}'");
         try
@@ -47,5 +49,6 @@ public static class TestInventoryTool
             Log.Error($"[GetTestInventory] failed for '{className}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetTestInventory: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 }

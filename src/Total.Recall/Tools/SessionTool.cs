@@ -35,6 +35,8 @@ public static class SessionTool
         [Description("Free-form session notes / learnings")] string? notes = null,
         [Description("Optional: namespace/session to write to (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("log_session", ns, new { model, promptTokens, completionTokens, testsGenerated, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolLogSession);
         Log.Debug($"[LogSession] model='{model}' classes={classesAttempted} ns='{ns ?? "(default)"}'");
         try
@@ -49,6 +51,7 @@ public static class SessionTool
             Log.Error($"[LogSession] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in LogSession: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string LogSessionCore(
@@ -270,6 +273,8 @@ public static class SessionTool
         [Description("Number of recent sessions to return (default: 5)")] int last = 5,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_sessions", ns, new { last, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetSessions);
         try
         {
@@ -280,6 +285,7 @@ public static class SessionTool
             Log.Error($"[GetSessions] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetSessions: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string GetSessionsCore(int last, string? ns)

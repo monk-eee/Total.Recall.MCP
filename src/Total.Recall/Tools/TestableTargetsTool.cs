@@ -30,6 +30,8 @@ public static class TestableTargetsTool
         [Description("ROI score threshold below which a warning is emitted (default: 5.0). Lower threshold = more aggressive targeting.")] double roiThreshold = 5.0,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_testable_targets", ns, new { top, maxCtorParams, maxTotalLines, excludeAssessed, requireZeroTests, roiThreshold, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetTestableTargets);
         Log.Debug($"[GetTestableTargets] top={top} maxCtor={maxCtorParams} maxLines={maxTotalLines} roiThreshold={roiThreshold} ns='{ns ?? "(default)"}'");
         try
@@ -41,6 +43,7 @@ public static class TestableTargetsTool
             Log.Error($"[GetTestableTargets] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetTestableTargets: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string GetTestableTargetsCore(
@@ -551,7 +554,7 @@ public static class TestableTargetsTool
                 score *= Math.Pow(0.3, concreteParamCount);
 
             // Coupled/skip-listed concrete params: near-fatal penalty (P0-A)
-            // These are known-untestable deps (e.g. LinterExtension — 2588 lines, no interface)
+            // These are known-untestable deps (e.g. a giant concrete orchestrator with no interface)
             if (coupledParamCount > 0)
                 score *= Math.Pow(0.15, coupledParamCount);
         }

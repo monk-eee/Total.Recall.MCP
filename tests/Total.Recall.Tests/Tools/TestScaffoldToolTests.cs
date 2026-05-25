@@ -625,7 +625,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("Validate", false)]
     public void IsAsyncMethod_DetectsAsyncByName(string methodName, bool expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.IsAsyncMethod(methodName, null));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.MethodNaming.IsAsync(methodName, null));
     }
 
     // ── Expanded GetDefaultValue ──
@@ -645,7 +645,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("ulong", "0UL")]
     public void GetDefaultValue_ExpandedTypes_ReturnsCorrectDefaults(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     [Theory]
@@ -656,14 +656,14 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("Nullable<int>", "null")]
     public void GetDefaultValue_NullableTypes_ReturnsNull(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     [Fact]
     public void GetDefaultValue_NullableString_ReturnsTestValue()
     {
         // string? should still return "test-value" since string can already be null
-        Assert.Equal("\"test-value\"", TestScaffoldTool.GetDefaultValue("string?"));
+        Assert.Equal("\"test-value\"", Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral("string?"));
     }
 
     [Theory]
@@ -671,7 +671,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("int[]", "Array.Empty<int>()")]
     public void GetDefaultValue_Arrays_ReturnsArrayEmpty(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     [Theory]
@@ -682,7 +682,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("IDictionary<string,int>", "new Dictionary<string,int>()")]
     public void GetDefaultValue_CollectionInterfaces_ReturnsCorrectDefaults(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     // ── Null-guard constructor tests ──
@@ -784,7 +784,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("UnknownMethod", "TODO: verify behavior")]
     public void GetAssertionHint_ReturnsPatternSpecificHint(string methodName, string expectedContains)
     {
-        var hint = TestScaffoldTool.GetAssertionHint(methodName);
+        var hint = Total.Recall.Tools.Scaffold.AssertionRules.GetAssertionHint(methodName);
 
         Assert.Contains(expectedContains, hint);
     }
@@ -905,7 +905,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     public void AppendEdgeCaseStubs_AsyncMethod_GeneratesAsyncEdgeCases()
     {
         var sb = new System.Text.StringBuilder();
-        TestScaffoldTool.AppendEdgeCaseStubs(sb, "ParseNameAsync", "ParseName", isAsync: true, null);
+        Total.Recall.Tools.Scaffold.AssertionRules.AppendEdgeCaseStubs(sb, "ParseNameAsync", "ParseName", isAsync: true, null);
 
         var output = sb.ToString();
         Assert.Contains("public async Task ParseName_NullInput_ShouldThrowOrHandle", output);
@@ -1058,7 +1058,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
             ("_count", "int", "0")
         };
 
-        var warnings = TestScaffoldTool.GetAntiPatternWarnings(typeRecord, mockFields, concreteFields);
+        var warnings = Total.Recall.Tools.Scaffold.ArchetypeClassifier.GetAntiPatternWarnings(typeRecord, mockFields, concreteFields);
 
         Assert.DoesNotContain(warnings, w => w.Contains("CONCRETE DEPENDENCIES"));
     }
@@ -1082,7 +1082,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("Func<string>", "null!")]
     public void GetDefaultValue_RareTypes_ReturnsCorrectDefaults(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     [Theory]
@@ -1090,7 +1090,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("Action<string>", "() => {{ }}")]
     public void GetDefaultValue_ActionTypes_ReturnsLambda(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     [Theory]
@@ -1098,13 +1098,13 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [InlineData("ContentType", "default(ContentType)")]
     public void GetDefaultValue_SuffixTypes_ReturnsDefault(string typeName, string expected)
     {
-        Assert.Equal(expected, TestScaffoldTool.GetDefaultValue(typeName));
+        Assert.Equal(expected, Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral(typeName));
     }
 
     [Fact]
     public void GetDefaultValue_UnknownType_ReturnsDefaultBang()
     {
-        Assert.Equal("default(MyCustomClass)!", TestScaffoldTool.GetDefaultValue("MyCustomClass"));
+        Assert.Equal("default(MyCustomClass)!", Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral("MyCustomClass"));
     }
 
     // ── IsAsyncMethod: IAsync interface + property accessor path (covers L473, L483, L485-487) ──
@@ -1113,7 +1113,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     public void IsAsyncMethod_WellKnownName_ReturnsTrue()
     {
         // "MoveNextAsync" is a well-known async method name (covers s_asyncMethodNames.Contains)
-        Assert.True(TestScaffoldTool.IsAsyncMethod("MoveNextAsync", null));
+        Assert.True(Total.Recall.Tools.Scaffold.MethodNaming.IsAsync("MoveNextAsync", null));
     }
 
     [Fact]
@@ -1127,7 +1127,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         };
 
         // get_*Async* with IAsync interface -> true (covers property accessor + IAsync branch)
-        Assert.True(TestScaffoldTool.IsAsyncMethod("get_AsyncValue", type));
+        Assert.True(Total.Recall.Tools.Scaffold.MethodNaming.IsAsync("get_AsyncValue", type));
     }
 
     [Fact]
@@ -1140,7 +1140,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
             Interfaces = ["IDisposable"]
         };
 
-        Assert.False(TestScaffoldTool.IsAsyncMethod("get_Value", type));
+        Assert.False(Total.Recall.Tools.Scaffold.MethodNaming.IsAsync("get_Value", type));
     }
 
     // ── GetAntiPatternWarnings: event-like properties (covers L701) ──
@@ -1161,7 +1161,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         var mockFields = new List<(string, string, string, MockRecipe?)>();
         var concreteFields = new List<(string, string, string)>();
 
-        var warnings = TestScaffoldTool.GetAntiPatternWarnings(typeRecord, mockFields, concreteFields);
+        var warnings = Total.Recall.Tools.Scaffold.ArchetypeClassifier.GetAntiPatternWarnings(typeRecord, mockFields, concreteFields);
 
         Assert.Contains(warnings, w => w.Contains("HAS EVENTS"));
     }
@@ -1172,7 +1172,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     public void GetDefaultValue_MalformedGenericType_FallsBackToObject()
     {
         // "IEnumerable<string" (missing closing >) — ExtractGenericArg can't find > at end → returns "object"
-        Assert.Equal("Array.Empty<object>()", TestScaffoldTool.GetDefaultValue("IEnumerable<string"));
+        Assert.Equal("Array.Empty<object>()", Total.Recall.Tools.Scaffold.TypeDefaults.DefaultLiteral("IEnumerable<string"));
     }
 
     // ── IsAsyncMethod: IAsync interface + non-Async baseName → fall-through (covers L487) ──
@@ -1189,7 +1189,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
 
         // "get_Current" → baseName = "Current", which does NOT contain "Async"
         // So the inner if is false → falls through the IAsync block (L487) → returns false
-        Assert.False(TestScaffoldTool.IsAsyncMethod("get_Current", type));
+        Assert.False(Total.Recall.Tools.Scaffold.MethodNaming.IsAsync("get_Current", type));
     }
 
     // ── Incremental scaffold mode (v3) ──
@@ -1343,7 +1343,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "StringExtensions", IsStatic = true };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("STATIC HELPER", result);
@@ -1365,7 +1365,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
             ]
         };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("POCO/DATA CLASS", result);
@@ -1376,7 +1376,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "ComplexService" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 6, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 6, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("HEAVY-DI SERVICE", result);
@@ -1388,7 +1388,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "OrderService" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 3, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 3, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("STANDARD SERVICE", result);
@@ -1399,7 +1399,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "HybridService" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 2, concreteFieldCount: 1, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 2, concreteFieldCount: 1, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("MIXED-DI SERVICE", result);
@@ -1412,7 +1412,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "ReportBuilder" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("BUILDER/FACTORY", result);
@@ -1423,7 +1423,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "EntityFactory" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("BUILDER/FACTORY", result);
@@ -1434,7 +1434,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "ConfigProvider" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
 
         Assert.NotNull(result);
         Assert.Contains("BUILDER/FACTORY", result);
@@ -1445,7 +1445,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         var type = new TypeRecord { Name = "SomeClass" };
 
-        var result = TestScaffoldTool.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
+        var result = Total.Recall.Tools.Scaffold.ArchetypeClassifier.ClassifyArchetype(type, mockFieldCount: 0, concreteFieldCount: 0, coverageGap: null);
 
         Assert.Null(result);
     }
@@ -1512,35 +1512,35 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     [Fact]
     public void ExtractParamSuffix_SystemObject_ReturnsObject()
     {
-        var result = TestScaffoldTool.ExtractParamSuffix("(System.Object)System.Boolean");
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.ExtractParamSuffix("(System.Object)System.Boolean");
         Assert.Equal("Object", result);
     }
 
     [Fact]
     public void ExtractParamSuffix_MultipleParams_ReturnsJoined()
     {
-        var result = TestScaffoldTool.ExtractParamSuffix("(System.String, System.Int32)System.Void");
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.ExtractParamSuffix("(System.String, System.Int32)System.Void");
         Assert.Equal("String_Int32", result);
     }
 
     [Fact]
     public void ExtractParamSuffix_EmptySignature_ReturnsNoArgs()
     {
-        Assert.Equal("NoArgs", TestScaffoldTool.ExtractParamSuffix(""));
-        Assert.Equal("NoArgs", TestScaffoldTool.ExtractParamSuffix(null!));
+        Assert.Equal("NoArgs", Total.Recall.Tools.Scaffold.MethodNaming.ExtractParamSuffix(""));
+        Assert.Equal("NoArgs", Total.Recall.Tools.Scaffold.MethodNaming.ExtractParamSuffix(null!));
     }
 
     [Fact]
     public void ExtractParamSuffix_EmptyParens_ReturnsNoArgs()
     {
-        var result = TestScaffoldTool.ExtractParamSuffix("()System.Void");
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.ExtractParamSuffix("()System.Void");
         Assert.Equal("NoArgs", result);
     }
 
     [Fact]
     public void ExtractParamSuffix_GenericParam_StripsArity()
     {
-        var result = TestScaffoldTool.ExtractParamSuffix("(System.Collections.Generic.List`1)System.Void");
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.ExtractParamSuffix("(System.Collections.Generic.List`1)System.Void");
         Assert.Equal("List", result);
     }
 
@@ -1553,7 +1553,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
             new() { Name = "ProcessB", Signature = "(System.Int32)System.Void" }
         };
 
-        var result = TestScaffoldTool.BuildDisambiguatedNames(methods);
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.BuildDisambiguatedNames(methods);
 
         Assert.Equal("ProcessA", result[methods[0]]);
         Assert.Equal("ProcessB", result[methods[1]]);
@@ -1568,7 +1568,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
             new() { Name = "Equals", Signature = "(MyApp.FileToken)System.Boolean" }
         };
 
-        var result = TestScaffoldTool.BuildDisambiguatedNames(methods);
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.BuildDisambiguatedNames(methods);
 
         Assert.Equal("Equals_Object", result[methods[0]]);
         Assert.Equal("Equals_FileToken", result[methods[1]]);
@@ -1583,7 +1583,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
             new() { Name = "DoWork", Signature = "(System.String)System.Boolean" }
         };
 
-        var result = TestScaffoldTool.BuildDisambiguatedNames(methods);
+        var result = Total.Recall.Tools.Scaffold.MethodNaming.BuildDisambiguatedNames(methods);
 
         // Both have same param type (String), so one gets numeric suffix
         var names = result.Values.ToList();

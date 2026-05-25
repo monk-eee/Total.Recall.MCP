@@ -5,7 +5,7 @@
 | Key | Value |
 |-----|-------|
 | Solution | `Total.Recall.sln` |
-| Version | 2.3.0 |
+| Version | 2.4.0 |
 | SDK | 8.0.400 (`rollForward: latestFeature`, actual: 8.0.418) |
 | dotnet | `C:\Program Files\dotnet\dotnet.exe` |
 | sourceRoot | `src/Total.Recall/` |
@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 1006 passing |
+| tests | 1070 passing |
 
 ## Purpose
 
@@ -40,6 +40,164 @@ These principles guide every implementation decision. When in doubt, choose the 
 6. **Performance by default** — In-memory `StoreRegistry` singletons with file-change detection. Pre-built `Dictionary<string, TypeRecord>` for O(1) type lookups. `SharedJsonOptions` (3 static instances) for serialization cache reuse. Startup pre-warm so the first tool call hits memory, not disk.
 
 7. **Three-layer observability** — Logs (stderr, configurable level, gone on restart), Metrics (in-memory counters, tool call and cache stats, gone on restart), Sessions (persistent JSONL, cross-session learning).
+
+## Agent Working Rules (Mandatory)
+
+### Prime directive (READ FIRST, OVERRIDES EVERYTHING BELOW)
+**Do the right thing, not the expedient thing.** When a clean design and a quick hack both reach green tests, pick the clean design. When fixing one test the right way would require updating fifteen other tests, update the fifteen tests — do not add a back-compat shim, a transitional bridge, a "for now" indirection, or a `Current*()` helper that hides the legacy pattern. Those shortcuts calcify. They get committed with `// TODO` comments that never get resolved.
+
+Concrete tells that you are about to take the expedient path:
+- "I'll add a fallback so legacy callers keep working" — no, migrate the legacy callers.
+- "Tests reference the old constant; I'll make the new code read both" — no, update the tests.
+- "This is a bridge until the wider refactor lands" — the bridge becomes permanent. Land the refactor now or do not introduce the new abstraction yet.
+- "Touching 15 files for one design change is too much" — if the design is right, touching 15 files is what it costs. Pay it.
+- A `// TODO: remove once X migrates` comment in a commit that does not also do X.
+
+If the right thing is genuinely too large for one commit, **stop and say so** — do not ship the expedient half. Either reduce scope or split into a sequence of right-shaped commits.
+
+### Core coding philosophy
+
+> "The code you write makes you a programmer.
+> The code you delete makes you a good one.
+> The code you don't have to write makes you a great one."
+> — Mario Fusco
+
+Lines of code are a cost, not an asset. The best contribution is often a smaller diff than you arrived expecting to write — a delete, a consolidation, or a one-line addition to an existing helper instead of a new sibling.
+
+#### Before-you-write checklist (NON-NEGOTIABLE)
+
+Run these four checks before writing any helper, utility, extension method, or "small" function:
+
+1. **Search `src/Total.Recall/Infrastructure/` for the verb.** Use `grep_search` for the operation name (e.g. `Resolve`, `Load`, `Parse`, `Classify`). If anything already does this, use it. If a near-miss exists, extend it — do not fork. Infrastructure is the canonical home for shared helpers; if the helper belongs there and isn't there yet, add it there *first*, then call it.
+2. **Search the whole repo for the method name you're about to type.** `grep_search` for `\b<MethodName>\s*\(` (regex). If it exists outside `tests/`, that's the existing implementation. Call it, or — if both are local — extract both to `Infrastructure/`.
+3. **Check the red-flag name shapes.** If your method name starts with one of these, stop and look harder:
+   - `Try*`, `Safe*`, `Resolve*`, `Load*OrDefault`, `Get*OrDefault`, `Ensure*`, `Retry*`, `Walk*`, `Atomic*`, `Canonical*`, `Normalize*`, `Sanitize*`, `Parse*`, `Build*`, `Format*`
+   - Wrapper class suffixes: `*Helper`, `*Utils`, `*Utility`, `*Manager`, `*Service` (when the type holds no state and just groups static methods)
+   - These are the exact shapes that get forked across `Tools/` and `Scanners/`. Check `Infrastructure/` again, harder. If you're tempted to add `Foo2Helper` because `FooHelper` doesn't quite fit, the answer is to fix `FooHelper`.
+4. **Look at the call site for the second occurrence rule.** If you find yourself about to write the same helper twice in one session, the second occurrence is the signal to extract to `Infrastructure/` immediately. Do not "do it once more and clean up later". Later does not arrive.
+
+#### The cheapest line is the line you didn't write
+
+- Prefer extending an existing type over creating a sibling. `MethodNaming` already has 4 methods — adding a 5th is cheaper than `MethodNaming2` or `MethodNameDisambiguator`.
+- Prefer adding a row to a data table over adding a branch to an if-chain. `AssertionRules.s_prefixHints` has 15 rows; the 16th is one line of data, not 30 lines of code.
+- Prefer deleting a helper that has one caller and inlining it over preserving "for future reuse". Future reuse rarely arrives; the indirection always costs.
+- Prefer collapsing two near-identical methods into one parameterised method over keeping both "for clarity". Two methods that differ by one literal are one method with one parameter.
+- Prefer a `record` with init properties over a class with a constructor and five private setters. Less code, more guarantees.
+
+#### Mechanical enforcement
+
+There is no automated duplicate-helper detector in this repo *yet*. Until there is, the enforcement is human: every reviewer (including the agent reviewing its own diff via `git diff --cached`) must ask "does this helper already exist?" before accepting the diff. If during a session you spot a duplicate that escaped review, add it to the `Known duplicates` section of `docs/TODO.md` per the "Code reuse" rule below — silently leaving duplication for the next agent is a violation of this philosophy.
+
+A future analyzer / Roslyn-based check that fails the build on duplicate `internal static` signatures across `Tools/` and `Scanners/` is a welcome contribution. **Do not silence it with an allowlist when it arrives — the fix is always extraction to `Infrastructure/`.**
+
+### File discipline
+- **Keep files focused.** When a `.cs` file exceeds ~500 lines or holds more than one clear responsibility (e.g. a tool class plus three helpers plus a model), split it. The `Tools/`, `Scanners/`, `Models/`, `Infrastructure/` folder split is the model — keep adding folders rather than letting one file grow.
+- **One public type per file** where practical. Nested helpers are fine; siblings belong in their own file.
+
+### Test-driven workflow (NON-NEGOTIABLE)
+- **Tests are the only way we ship.** Every tool, scanner, store, and infrastructure helper needs xUnit tests under `tests/Total.Recall.Tests/` mirroring the source folder.
+- **Run `dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj` after every change.** All 1070+ tests must pass before commit.
+- **Never skip, `[Fact(Skip=...)]`, or comment out a test to make CI pass.** Fix the code, not the test.
+- **Bug fixes require a regression test. No exceptions.**
+  - Every fixed bug gets a `[Fact]` (or `[Theory]`) in `<Module>RegressionTests.cs` alongside the existing tests for that module, with an XML doc comment describing: what went wrong, what the impact was, what the fix is.
+  - The test must FAIL against the un-fixed code and PASS against the fix. Confirm both directions before committing (revert the fix locally, watch it fail, restore the fix). **Do not use `git stash` for this** — temporarily edit the fix back out, verify, then restore.
+  - Do not delete regression tests during refactors. They pin subtle behaviour (see AGENTS.md "Architecture Decisions" #13–#51 — most of those numbered behaviours are regression-tested).
+- **Always report bugs and failures, even ones you do not fix in this run.** If you notice a bug, a flaky test, suspicious behaviour, or a latent footgun while doing other work, add an entry to a `## Known bugs` section of a `docs/TODO.md` (create it if absent) before you finish the turn. We never silently drop bugs. Each entry: (1) what you observed, (2) where (file + symbol or test name), (3) impact, (4) whether fixed in this run or left for later.
+
+### Build & test discipline
+- **`dotnet build` must succeed with zero warnings** on the changed projects before commit. Nullable warnings, unused-using warnings, and analyzer warnings all count.
+- **Use the workspace SDK** (`global.json` pins 8.0.400, rollForward `latestFeature`). Do not introduce target-framework changes (`net9.0`, etc.) without an ADR.
+- **NuGet additions go through `dotnet add package`** at the csproj level. Pin to explicit versions in the `.csproj`. Update the "NuGet Dependencies" table in this file in the same commit.
+
+### Git discipline
+- **One commit = one meaningful unit of work.** Scoped, validated, tested.
+- **Review every diff (`git diff --cached`) before commit.** Do not blindly accept generated code.
+- **Commit message convention:** `feat(total-recall): <description>` / `fix(total-recall): <description>` / `test(total-recall): <description>` / `refactor(total-recall): <description>` / `docs(total-recall): <description>`.
+
+### Doc discipline (NON-NEGOTIABLE)
+Every shipped feature must update the agent-facing surfaces in the same commit. Doc drift here is treated like a failing test.
+- **`AGENTS.md`** (this file) — if the change adds/removes a tool, scanner, env var, or introduces a new architectural behaviour, update the MCP Tools / Scanners / Environment Variables tables and add an entry to "Architecture Decisions" describing the behaviour. The numbered list is load-bearing — keep it dense and append at the end.
+- **`SPEC.md` / `README.md`** — user-visible behaviour changes (new tool, new CLI flag, new env var) go here too.
+- **`docs/TOOL_REFERENCE.md`** — keep tool input/output schemas in sync when tool signatures change.
+- **Per-tool `[Description]` attributes** — when a tool's behaviour changes, update its `[Description]` so MCP-protocol consumers see the new contract without reading docs.
+
+Internal-only refactors (helper extraction, file split) only need a one-line note in AGENTS.md if at all.
+
+### Multi-agent collaboration (READ THIS FIRST)
+Multiple AI agents may operate concurrently in this worktree. Plan for it.
+
+- **Never `git stash`.** Stash interacts catastrophically with concurrent edits and Windows file locks. To verify a regression test fails against un-fixed code, temporarily edit the fix back out in the file (and restore it). To park dirty files, commit a WIP commit (`git commit -m "wip"`) and amend later — WIP commits survive every failure mode that destroys a stash.
+- **Always `git status --short` before staging.** If files you did not touch are already staged, a sibling agent left WIP there — `git restore --staged <file>` before you commit. Hijacking another agent's WIP into your commit is the worst failure mode.
+- **Stage explicitly with named paths.** Never `git add -A` / `git add .`. Always `git add <specific-files-you-touched>`.
+- **Verify the staged set immediately before every commit.** `git diff --cached --name-only` MUST list ONLY files you authored this turn. If it doesn't match, `git restore --staged <unexpected>` before `git commit`.
+- **Stage as late as possible.** Edit, test, then `git add` + `git diff --cached --name-only` + `git commit` as a tight three-step block.
+- **Do not run mass refactors** (`dotnet format` across the whole solution, sweeping renames via Roslyn) while another agent is active. Schedule them for a quiet window.
+- **Treat `data/<namespace>/*.jsonl` as shared mutable state.** Two concurrent scanner runs against the same namespace will race on writes. Check for active scans before running `dotnet run -- scan`.
+- **Read commits that landed during your turn.** `git log --oneline -5` at the start of any non-trivial action.
+- Read-only audits (searches, `dotnet test`, `dotnet build`) are always safe in parallel. Writes are not.
+
+### Code reuse (NON-NEGOTIABLE)
+- **Always check `src/Total.Recall/Infrastructure/` before writing a new helper.** JSON serialization, store access, logging, metrics, repo config, param classification — these belong in `Infrastructure/`, not duplicated across `Tools/` and `Scanners/`. If the helper you want doesn't exist, **add it to `Infrastructure/` first** and then call it.
+- **Existing infrastructure you will likely reach for (do not reinvent):**
+  - [`SharedJsonOptions`](src/Total.Recall/Infrastructure/SharedJsonOptions.cs) — three static `JsonSerializerOptions` (CamelCase, CamelCaseIndented, Indented). Do NOT new up `JsonSerializerOptions` per call — STJ reflection cache is per-options-instance.
+  - [`StoreRegistry`](src/Total.Recall/Infrastructure/StoreRegistry.cs) / `NamespaceStores` — singleton access to all 7 JSONL stores. Do NOT instantiate `JsonLineStore<T>` directly in a tool.
+  - [`JsonLineStore<T>`](src/Total.Recall/Infrastructure/JsonLineStore.cs) — the only sanctioned JSONL reader/writer. Handles file-change detection and append semantics.
+  - [`Log`](src/Total.Recall/Infrastructure/Log.cs) — stderr-only logger with configurable level. NEVER `Console.WriteLine` to stdout (would corrupt JSON-RPC).
+  - [`Metrics`](src/Total.Recall/Infrastructure/Metrics.cs) — `Interlocked.Add`-based counters. Use `Metrics.RecordToolCall(...)` for new tools.
+  - [`RepoConfig`](src/Total.Recall/Infrastructure/RepoConfig.cs) — env var + `config.json` resolution. Use `RepoConfig.GetNamespacePath(ns, outputPath)` for all data-dir resolution.
+  - [`ParamHelper`](src/Total.Recall/Infrastructure/ParamHelper.cs) — constructor-param classification (interface vs concrete, external dependency heuristics).
+- **When you spot a duplicate during unrelated work, file it.** Add a `Known duplicates` entry to `docs/TODO.md` describing the pattern, the files, and the proposed `Infrastructure/` home. Don't silently leave duplication for the next agent.
+
+### Code design discipline (NON-NEGOTIABLE)
+Idiomatic, testable C# by default.
+
+- **Prefer instance classes over static mutable state when state has identity.** Data paths, file stores, caches — these belong on a class that takes the root in its constructor and exposes methods that close over it. Tests instantiate their own with a `tmp_path` and pass it via DI. The `StoreRegistry`/`NamespaceStores` split is the canonical example: paths are resolved per-namespace, not via a module-level mutable.
+- **Dependency injection over static patching.** Tools that read a store / clock / config take it as a parameter (defaulted to the singleton). If you find yourself writing test setup that mutates a `static` field, the production code has a missing seam — fix the seam.
+- **One seam per thing.** If both a path and a store wrapping that path are static, tests have to keep them in sync and silent drift is guaranteed. Pick one (the path) and construct the store on demand.
+- **`record` types for value objects.** All models in `Models/` should be `record` or `record class` with init-only properties unless mutation is genuinely required. Frozen-by-default is the rule.
+- **Interfaces at public seams** so contracts are checkable. Scanners and tool handlers should be reachable through an interface where multiple implementations exist or are likely.
+- **`using` / `IDisposable` for resource lifecycles.** File handles, `MetadataLoadContext`, `FileSystemWatcher` — never leak.
+- **Class only when state + behaviour bind.** A class wrapping one pure static method is anti-idiomatic; a class with shared state across methods is correct. If each method is independent, keep it a `static` helper.
+- **Anti-patterns to refuse:**
+  - Module-level `static Dictionary<string,T> _cache` + `static T Get(...)` + `static void ClearCache()`. That's a class without the class — write the class.
+  - Two helpers that differ only by which directory they walk. That's one class with two instances.
+  - "Helper" that takes the same first three args at every call site. Those are constructor params.
+  - Test that mutates a production `static` field. Production code has a missing seam.
+
+### Refactor & split discipline (NON-NEGOTIABLE)
+**When a file grows past the ~500-line cap, do not reach for `partial class`. That is hiding the line count, not solving it.** A file that big is doing too many things. The job is to find what it's actually doing, name those things, and give each one a home.
+
+The workflow, in order. Do not skip steps.
+
+1. **Audit duplication inside the file first.** Read every method. Write down (in your turn, out loud) every block of code that resembles another block. Two `foreach` loops over the same collection with branchy bodies are one loop building one model used three ways. Two switch statements over the same set of type names are one catalog. Five `if (name.StartsWith(...))` chains are a data table. Find these before you split anything.
+
+2. **Then audit duplication ACROSS files.** Before extracting an internal helper, look for the same pattern in sibling files (`Tools/*`, `Scanners/*`). If three tools repeat the same `Telemetry.Track + Metrics + Log + try/catch + JSON envelope` boilerplate, the right move is one new `Infrastructure/` helper that all three call — not three private helpers in three files. Shared infrastructure ships in its own commit, BEFORE the file split that consumes it.
+
+3. **Separate "decide what" from "do it".** Files that mix data-gathering with output-rendering (compute a plan, then write a string; query stores, then serialize JSON; analyze a class, then emit a markdown report) get long because each side accretes independently. Split them: a plain `record` capturing the decisions, a planner that produces the record from stores, a renderer that takes the record and emits output. Each side is then independently testable and each file stays small.
+
+4. **Data-driven over imperative.** A 15-branch `if (name.StartsWith("Get")) return "..." else if (name.StartsWith("Find")) ...` chain is data pretending to be code. Convert to `static readonly (string[] Prefixes, string Hint)[] s_rules` and a single walk. Same for keyword lists, type-name catalogs, archetype rules. The file shrinks 5x and the rules become trivially editable.
+
+5. **One public type per file, named for what it does.** After the split, every new file's name should be a noun that describes its single responsibility (`TestScaffoldPlanner`, `AssertionRules`, `CtorParamPlan`). If you can't name a file that way, the split is wrong — you've sliced arbitrarily, not by responsibility.
+
+6. **Validate after each extraction.** Run `dotnet test` after every move, not just at the end. If 1070 tests still pass without modification, the refactor is behaviour-preserving (which it must be — no behaviour change in a refactor commit). If a test breaks, the split sliced through a hidden contract; back out and re-plan.
+
+7. **Refuse `partial class` as a sizing tool.** `partial class` is for source generators and for legitimately disjoint concerns (designer-vs-code, generated-vs-hand-written). It is not for "this file is too long, let me cut it in half." Splitting a 1000-line class into two 500-line partials produces ONE 1000-line class spread across two files — the cognitive load is the same. Do the real work.
+
+**Tell yourself the truth.** If a "split" leaves the same total amount of logic in the same shape just spread across more files, you did not refactor — you reorganized. The line count is a symptom; the disease is mixed responsibilities and duplicated patterns. Treat the disease.
+
+### Logging standard (NON-NEGOTIABLE)
+- **Use the `Log` class.** Never `Console.WriteLine` (stdout corrupts JSON-RPC) and never `Console.Error.WriteLine` directly (bypasses level filtering).
+- **Log every tool invocation at `Debug` level** with parameters, lookup strategies, cache hits/misses, record counts. Volume is fine — the reader is an agent, and `TOTAL_RECALL_LOG_LEVEL=quiet` exists for CI.
+- **Log every scanner step at `Info`.** What was loaded, what was written, how many records.
+
+### Safety and secrets
+- **Never log paths or content from `TOTAL_RECALL_SOURCE_ROOT` that may contain credentials** (e.g. `appsettings.*.json`, `.env`). The source-root snippet tool is best-effort and trusts the consuming repo to gitignore secrets.
+- **No secrets in `data/*.jsonl`.** Gotchas, assessments, sessions are checked-in or shared — keep them descriptive without leaking keys.
+
+### MCP-specific rules
+- **stdout is reserved for JSON-RPC.** Any `Console.WriteLine`, unhandled exception with a stack trace going to stdout, or rogue `Trace.Write` will corrupt the protocol and break the agent's MCP session silently. All diagnostic output goes through `Log` to stderr.
+- **Tool `[Description]` attributes are the agent's only contract.** When you change a tool's behaviour, update the description in the same commit. Agents do not read `AGENTS.md` — they read the descriptions through MCP discovery.
+- **Backward compatibility on tool output schemas.** Agents may have cached field names. Add fields freely; do not rename or remove fields without bumping a major version note in `SPEC.md`.
 
 ## Build & Run Commands
 
@@ -96,7 +254,7 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 
 | Assembly | TFM | csproj Path | Status |
 |----------|-----|-------------|--------|
-| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1006 tests |
+| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1070 tests |
 
 ## Data Files
 
@@ -111,11 +269,16 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 | `test-inventory.jsonl` | TestProjectScanner | Existing test methods per class |
 | `assessments.jsonl` | `add_assessment` tool | Testability verdicts from agent analysis (append-only) |
 | `sessions.jsonl` | `log_session` tool | Session outcomes for cross-session learning (append-only) |
+| `tool-calls.jsonl` | `Telemetry.Track` (auto on every tool call) | Every MCP tool call: name, ns, sessionId, taskId, params summary, latency, response bytes (append-only) |
+| `tasks.jsonl` | `start_task` / `end_task` | Agent task bracketing — start/end, success/abandon, intent narrative (append-only) |
+| `cycles.jsonl` | `CycleDetector` (auto) | Detected behaviour cycles: re-query, context-loss, oscillation patterns (append-only) |
+| `challenges.jsonl` | `get_next_challenge` / `submit_challenge` | Eval challenge problems offered to agents (append-only) |
+| `evals.jsonl` | `submit_challenge` (graded by `ChallengeGrader`) | Eval scoring outcomes: pass/fail, score, breakdown (append-only) |
 | `config.json` | Scanner `--source-root` | Per-namespace scan config (source root, paths, timestamp) |
 
 ## MCP Tools
 
-23 tools. All accept an optional `ns` (namespace) parameter to target a specific dataset.
+34 tools. All accept an optional `ns` (namespace) parameter to target a specific dataset. **Every tool call is intercepted by `Telemetry.Track` and appended to `tool-calls.jsonl` when `TOTAL_RECALL_MODE` ≠ `off`.**
 
 ### v2 Tools (Decision Engine)
 
@@ -160,6 +323,22 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 | `get_gotcha_insights` | minClusterSize?, generateFootguns?, ns? | Insights JSON + Footguns markdown | Cluster gotchas by pattern (10 well-known patterns), identify systemic issues, generate AGENTS.md Footguns section. |
 | `refresh_coverage` | coveragePath?, ns? | Before/after comparison JSON | Re-parse Cobertura XML mid-session. Auto-discovers newest XML in TestResults/ if configured path is stale. |
 
+### Telemetry & Eval Tools (Cuts 1–6)
+
+| Tool Name | Input | Output | Purpose |
+|-----------|-------|--------|---------|
+| `start_task` | intent, ns? | taskId | Begin a bracketed task. Sets `Telemetry.ActiveTaskId`. Calling twice auto-abandons the prior task. |
+| `end_task` | outcome (`success`/`abandon`), notes?, ns? | Confirmation + duration | End the active task. Persists to `tasks.jsonl`. |
+| `log_task` | intent, outcome, notes?, ns? | Confirmation | Convenience: start + immediately end a task (for one-shot operations). |
+| `get_cycles` | last?, pattern?, ns? | Cycle[] JSON | Recent detected cycles (re-query / context-loss / oscillation). Useful for self-diagnosis. |
+| `get_tool_call_stats` | last?, ns? | Per-tool call counts, p50/p95 latency, avg response bytes | Tool usage histogram from `tool-calls.jsonl`. |
+| `get_efficiency_report` | last?, ns? | Sessions × cycles × tasks summary | Tokens-per-task, redundant-call rate, plateau warnings. |
+| `get_model_scorecard` | ns? | Per-model aggregated metrics | Cross-model comparison from sessions + tasks + evals. |
+| `get_next_challenge` | difficulty?, ns? | Challenge JSON (prompt, required tools, budget) | Pull a graded eval problem for the agent to attempt. |
+| `submit_challenge` | challengeId, response, toolsUsed (csv), ns? | EvalResult JSON (score, pass/fail, breakdown) | Submit a challenge attempt. Graded by `ChallengeGrader` (40% required-tools, 20% budget, 40% correctness). Pass threshold 0.7. |
+| `get_eval_leaderboard` | ns? | Model rankings JSON | Aggregated eval pass/fail rates across models. |
+| `report_context_reset` | reason?, ns? | Confirmation | Agent self-reports a compaction/context-window reset. Recorded as a session marker for downstream attribution. |
+
 ## Scanners
 
 | Scanner | Input | Output | Key Library |
@@ -193,9 +372,9 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 11. **Configurable logging**: `Log` static class writes to stderr (never stdout — would corrupt JSON-RPC). Level set via `TOTAL_RECALL_LOG_LEVEL` env var (`debug|info|warn|error|quiet`, default: `info`). `Debug` level logs every tool invocation with parameters, record counts, lookup strategies, cache hits/misses, and store loads. Use `debug` when troubleshooting, `quiet` for clean CI runs.
 
-12. **Mockability-aware scoring**: `get_testable_targets` scores by constructor param mockability, not just count. All-interface ctors get full bonus regardless of param count. Each concrete (non-interface) param applies a 0.3x penalty (`Math.Pow(0.3, n)`). Concrete params that are skip/coupled in assessments get an additional 0.15x penalty (`Math.Pow(0.15, n)`). This prevents classes with unmockable concrete dependencies (e.g., `LinterExtension`) from scoring high.
+12. **Mockability-aware scoring**: `get_testable_targets` scores by constructor param mockability, not just count. All-interface ctors get full bonus regardless of param count. Each concrete (non-interface) param applies a 0.3x penalty (`Math.Pow(0.3, n)`). Concrete params that are skip/coupled in assessments get an additional 0.15x penalty (`Math.Pow(0.15, n)`). This prevents classes with unmockable concrete dependencies from scoring high.
 
-13. **SourceSnippet name collision resolution**: When multiple classes share a name (e.g., `ZonePivot` as both a POCO and a ContentBlocks implementation), `get_source_snippet` prefers the class with the most uncovered lines, then most total lines. Includes an `ambiguityNote` field in the response when disambiguation occurred.
+13. **SourceSnippet name collision resolution**: When multiple classes share a name across different namespaces, `get_source_snippet` prefers the class with the most uncovered lines, then most total lines. Includes an `ambiguityNote` field in the response when disambiguation occurred.
 
 14. **LogSession input validation**: `log_session` detects when agents pass integer counts (e.g., `classesAttempted: "3"`) instead of comma-separated class names. Returns a warning in the response without blocking the write. Also handles JSON array input (`["ClassA", "ClassB"]`) — `ParseCsv` and `ParseFailures` detect JSON arrays (starts with `[`) and deserialize before falling back to CSV splitting.
 
@@ -205,7 +384,7 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 17. **Fuzzy test inventory matching**: When exact class name match fails against test inventory, tries: (1) stripping common suffixes (`Base`, `Impl`, `Default`), (2) prefix matching in either direction. Prevents false "no tests" reports for classes like `WriteOperationConfigurationBase` when tests exist for `WriteOperationConfiguration`.
 
-18. **Namespace-qualified deduplication**: `CoberturaParser` deduplicates by `{Namespace}.{Class}` instead of just `Class`. This prevents classes with the same short name in different namespaces (e.g., `ZonePivot` in Models vs ContentBlocks) from being incorrectly merged. Partial classes in the same namespace still merge correctly.
+18. **Namespace-qualified deduplication**: `CoberturaParser` deduplicates by `{Namespace}.{Class}` instead of just `Class`. This prevents classes with the same short name in different namespaces from being incorrectly merged. Partial classes in the same namespace still merge correctly.
 
 19. **Executable-line weighting**: `CalculateScore` applies a mild log2-scaled boost based on real (non-accessor) method count. Classes with 10 testable methods score ~23% higher than single-method classes with the same uncovered lines, preventing POCOs with many property lines from outscoring complex logic classes.
 
@@ -275,6 +454,20 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 52. **RepoConfig.ClearCache() public API**: `RepoConfig.ClearCache()` (public) replaces the internal `ResetCache()` method for clearing cached root path and default namespace. `ResetCache()` is preserved as an internal alias for backward compatibility. Used in tests and after runtime environment variable changes.
 
+53. **Universal Telemetry.Track wrap (v2.4)**: Every public MCP tool entry method is wrapped in `Telemetry.Track(toolName, ns, paramObject, () => { ... })`. The wrap is purely interception — it preserves all existing `Metrics.Increment`, `Log.Debug`, try/catch behaviour inside the lambda. `Telemetry.Track` builds a `ToolCallRecord` (toolName, ns, sessionId, activeTaskId, params summary, latency, response byte count) and appends to `tool-calls.jsonl` when `TelemetryConfig.Mode != Off`. Also calls `CycleDetector.Observe(record, ns)` for behaviour-pattern detection. Returns the handler's string result unchanged. SessionId is a per-process Guid (rotates on `report_context_reset`). ActiveTaskId is a mutable static set by `TaskTool`.
+
+54. **TelemetryConfig modes**: `TOTAL_RECALL_MODE` env var controls telemetry behaviour. Three modes: `off` (no recording, zero-overhead pass-through), `passive` (default — record every tool call + cycles to JSONL), `active-eval` (passive + agent can request challenges via `get_next_challenge`). Mode is cached in `s_cachedMode` with a snapshot-then-read pattern to avoid TOCTOU race against `ResetCache()` during test cleanup. Aliases accepted: `none`/`disabled` → off, `record`/`observe` → passive, `eval`/`challenge` → active-eval.
+
+55. **CycleDetector patterns + FireOnce**: `CycleDetector.Observe(record, ns)` runs on every tool call. Detects three behaviour cycles: **re-query** (≥3 identical `(toolName, paramHash)` within session), **context-loss** (≥2 lookup calls — `resolve_type`/`get_context`/`get_source_snippet` — with no intervening write — `add_*`/`log_*`), **oscillation** (≥3 distinct `get_source_snippet` targets within a rolling 5-call window with no `add_assessment` in between). Detected cycles are appended to `cycles.jsonl` and de-duplicated via `s_fired` HashSet keyed by `$"{sessionId}|{dedupeKey}|{pattern}"` so a single cycle fires once per session. Thresholds: `ReQueryThreshold=3`, `ContextLossThreshold=2`, `OscillationWindow=5`, `OscillationDistinctTargets=3`.
+
+56. **TaskTool bracketing with auto-abandon**: `start_task(intent)` writes a task record to in-memory state and sets `Telemetry.ActiveTaskId`. Calling `start_task` again before `end_task` auto-abandons the prior task (writes outcome `abandon` with note `"superseded by new start_task"`) so agents that forget to close tasks don't pollute task data. `end_task(outcome, notes?)` persists `(taskId, intent, outcome, startedAt, endedAt, durationMs, notes)` to `tasks.jsonl`. `log_task(intent, outcome, notes?)` is the one-shot convenience: start + immediately end.
+
+57. **ChallengeGrader rubric**: `ChallengeGrader.Grade(challenge, response, toolsUsed)` returns a `GradeResult` (Passed, Score 0.0–1.0, ActualTools, Breakdown, Feedback). Three weighted components: **0.4** fraction of required tools called (`actualTools ∩ requiredTools / requiredTools.Count`), **0.2** binary stayed-under-budget (`toolsUsed.Count <= budget`), **0.4** output correctness (substring match of expected key phrases in the response, normalized). Pass threshold: `Score >= 0.7`. Grader is deterministic — no model calls, no randomness — so eval results are reproducible.
+
+58. **ContextResetTool session-marker**: `report_context_reset(reason?)` lets an agent self-report a compaction or context-window reset. Records a marker entry to `sessions.jsonl` with type `context-reset`, rotates `Telemetry.SessionId` to a new Guid (so subsequent tool calls are attributed to the post-reset session for cycle detection and scorecards), and clears `Telemetry.ActiveTaskId`. No-op when `TelemetryConfig.Mode == Off`.
+
+59. **Tests must use `[Collection("ToolTests")]`**: Any test that touches process-global static state (`Telemetry.*`, `CycleDetector.s_fired`, `TelemetryConfig.s_cachedMode`, `StoreRegistry` caches, `RepoConfig` cache, env vars `TOTAL_RECALL_*`) MUST be in the `[Collection("ToolTests")]` xUnit collection. xUnit runs tests in different collections in parallel; without the collection attribute, two parallel tests pointing at different temp dirs trample each other's static state. `TelemetryTestHarness` (in `tests/Total.Recall.Tests/Infrastructure/`) is the canonical setup/teardown: per-test temp dir under `Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString())`, env-var snapshot/restore, `Telemetry.ResetForTests()`, `CycleDetector.ResetForTests()`, `TelemetryConfig.ResetCache()`, `StoreRegistry.Reset()`, `RepoConfig.ClearCache()`.
+
 ## Footguns
 
 1. **MetadataLoadContext assembly resolution**: The `PathAssemblyResolver` needs paths to ALL referenced assemblies (target dir + runtime libs). Missing a dependency → `FileNotFoundException` on type resolution. Solution: glob `*.dll` from both the target's output dir and runtime dir.
@@ -297,6 +490,7 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 | `TOTAL_RECALL_NAMESPACE` | `"default"` | Default namespace subdirectory under data root |
 | `TOTAL_RECALL_LOG_LEVEL` | `"info"` | Log verbosity: `debug`, `info`, `warn`, `error`, `quiet` (also accepts aliases: `verbose`, `trace`, `silent`, `none`, `warning`, `err`, `information`) |
 | `TOTAL_RECALL_SOURCE_ROOT` | (none) | Override source root for `get_source_snippet` tool. Can also be set via scanner `--source-root` flag (persisted to `config.json`). |
+| `TOTAL_RECALL_MODE` | `"passive"` | Telemetry mode: `off` (no recording), `passive` (record tool calls + cycles, no challenge serving), `active-eval` (passive + serve challenges via `get_next_challenge`). |
 
 ## VS Code MCP Configuration
 

@@ -22,6 +22,8 @@ public static class GotchaTool
         [Description("Type name to look up gotchas for")] string typeName,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_gotchas", ns, new { typeName, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetGotchas);
         Log.Debug($"[GetGotchas] typeName='{typeName}' ns='{ns ?? "(default)"}'");
         try
@@ -49,6 +51,7 @@ public static class GotchaTool
             Log.Error($"[GetGotchas] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetGotchas: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     [McpServerTool, Description(
@@ -61,6 +64,8 @@ public static class GotchaTool
         [Description("Description of the pitfall/gotcha")] string gotcha,
         [Description("Optional: namespace/session to write to (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("add_gotcha", ns, new { typeName, category, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolAddGotcha);
         Log.Debug($"[AddGotcha] typeName='{typeName}' category='{category}' ns='{ns ?? "(default)"}'");
         try
@@ -104,5 +109,6 @@ public static class GotchaTool
             Log.Error($"[AddGotcha] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in AddGotcha: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 }

@@ -82,6 +82,8 @@ public static class GotchaInsightsTool
         [Description("Max instances per cluster in detail view (default: 10). Keeps response size manageable.")] int maxInstancesPerCluster = 10,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_gotcha_insights", ns, new { minClusterSize, generateFootguns, maxInstancesPerCluster, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetGotchaInsights);
         Log.Debug($"[GetGotchaInsights] minClusterSize={minClusterSize} generateFootguns={generateFootguns} maxInstancesPerCluster={maxInstancesPerCluster} ns='{ns ?? "(default)"}'");
         try
@@ -93,6 +95,7 @@ public static class GotchaInsightsTool
             Log.Error($"[GetGotchaInsights] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetGotchaInsights: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string GetGotchaInsightsCore(int minClusterSize, bool generateFootguns, int maxInstancesPerCluster, string? ns)
