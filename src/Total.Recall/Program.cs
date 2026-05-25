@@ -844,7 +844,7 @@ static void PrintScanHelp()
     Console.WriteLine($$"""
         Total.Recall Scanner v{{AppVersion.Current}}
 
-        Usage: dotnet run -- scan [options]
+        Usage: total-recall scan [options]
 
         Options:
           --assembly <path>      Path to target .NET assembly (.dll) for type registry scan
@@ -864,7 +864,7 @@ static void PrintScanHelp()
 
         Examples:
           # Full scan with source root
-          dotnet run -- scan \
+          total-recall scan \
             --assembly "path/to/Server.dll" \
             --coverage "path/to/coverage.cobertura.xml" \
             --tests "path/to/UnitTest" \
@@ -873,7 +873,7 @@ static void PrintScanHelp()
             --enrich --analyze
 
           # Full scan for an NUnit + NSubstitute project
-          dotnet run -- scan \
+          total-recall scan \
             --assembly "path/to/MyApp.dll" \
             --tests "path/to/MyApp.Tests" \
             --namespace myapp \
@@ -882,10 +882,10 @@ static void PrintScanHelp()
             --enrich
 
           # Just re-parse coverage after a new test run
-          dotnet run -- scan --coverage "path/to/coverage.cobertura.xml" --namespace myproject --enrich
+          total-recall scan --coverage "path/to/coverage.cobertura.xml" --namespace myproject --enrich
 
           # Watch mode: auto-rescan on file changes
-          dotnet run -- scan \
+          total-recall scan \
             --assembly "path/to/Server.dll" \
             --coverage "path/to/coverage.cobertura.xml" \
             --tests "path/to/UnitTest" \
@@ -893,7 +893,7 @@ static void PrintScanHelp()
             --enrich --analyze --watch
 
           # Enrich existing data without re-scanning
-          dotnet run -- scan --namespace myproject --enrich
+          total-recall scan --namespace myproject --enrich
 
         Environment:
           TOTAL_RECALL_DATA       Root data directory (default: "data")

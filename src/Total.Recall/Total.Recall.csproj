@@ -7,14 +7,39 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Total.Recall</RootNamespace>
     <AssemblyName>Total.Recall</AssemblyName>
-    <Version>2.4.0</Version>
+    <Version>2.4.0-preview.1</Version>
     <AssemblyVersion>2.4.0.0</AssemblyVersion>
     <FileVersion>2.4.0.0</FileVersion>
-    <InformationalVersion>2.4.0</InformationalVersion>
+    <InformationalVersion>2.4.0-preview.1</InformationalVersion>
+  </PropertyGroup>
+
+  <!-- NuGet packaging: `dotnet tool install -g TotalRecall.Mcp` -->
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>total-recall</ToolCommandName>
+    <PackageId>TotalRecall.Mcp</PackageId>
+    <Title>Total.Recall MCP Server</Title>
+    <Authors>Lyndon Swan</Authors>
+    <Description>An MCP server that gives AI coding agents persistent memory — and measures their behaviour. Ships 34 Model Context Protocol tools over stdio for .NET test-coverage uplift, plus a behaviour observatory (tool-call telemetry, cycle detection, deterministic eval grading) and a reflection-based scanner (assembly, Cobertura coverage, test inventory). Install as a global .NET tool: `dotnet tool install -g TotalRecall.Mcp` then point `.vscode/mcp.json` at `total-recall`.</Description>
+    <PackageTags>mcp;modelcontextprotocol;ai;agents;copilot;dotnet;testing;coverage;observability;eval</PackageTags>
+    <PackageProjectUrl>https://github.com/monk-eee/Total.Recall.MCP</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/monk-eee/Total.Recall.MCP</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)..\..\nupkg</PackageOutputPath>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Copyright>Copyright (c) 2026 Lyndon Swan</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Total.Recall.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
