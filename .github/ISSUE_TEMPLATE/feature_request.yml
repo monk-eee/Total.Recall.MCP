@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before opening: skim `AGENTS.md` "Architecture Decisions" — if your
+        Before opening: skim `docs/DECISIONS.md` — if your
         proposal contradicts an existing entry, please name it and explain
         why the entry should be revised.
 

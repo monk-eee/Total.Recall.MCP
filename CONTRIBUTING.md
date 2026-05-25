@@ -4,7 +4,7 @@ Thanks for the interest. This project has a small, opinionated set of working ru
 
 ## Before you start
 
-**Read [AGENTS.md](AGENTS.md) end-to-end.** In particular, the "Architecture Decisions" numbered list is the soul of the project — every entry documents a specific design choice and the reasoning behind it. Most regressions come from changes that quietly contradict one of those entries. If your PR conflicts with one of them, either (a) make the conflict explicit in the PR description and propose a new numbered entry that supersedes the old one, or (b) reconsider the change.
+**Read [AGENTS.md](AGENTS.md) end-to-end** for the working rules, then skim [`docs/DECISIONS.md`](docs/DECISIONS.md) — the numbered Architecture Decisions list is the soul of the project. Every entry documents a specific design choice and the reasoning behind it. Most regressions come from changes that quietly contradict one of those entries. If your PR conflicts with one of them, either (a) make the conflict explicit in the PR description and propose a new numbered entry that supersedes the old one, or (b) reconsider the change.
 
 Also worth reading:
 
@@ -53,7 +53,7 @@ If the helper doesn't exist, add it to `Infrastructure/` first, then call it. Do
 
 Every shipped feature must update agent-facing surfaces in the same commit:
 
-- **`AGENTS.md`** — if the change adds/removes a tool, scanner, env var, or introduces architectural behaviour, update the relevant table and append an entry to the Architecture Decisions list.
+- **`AGENTS.md`** — if the change adds/removes a tool, scanner, env var, or introduces architectural behaviour, update the relevant table. Append the new numbered entry to [`docs/DECISIONS.md`](docs/DECISIONS.md) in the same commit.
 - **`SPEC.md` / `README.md`** — user-visible behaviour changes go here too.
 - **`docs/TOOL_REFERENCE.md`** — keep tool input/output schemas in sync.
 - **Per-tool `[Description]` attributes** — when a tool's behaviour changes, update its `[Description]` (this is the MCP protocol contract).

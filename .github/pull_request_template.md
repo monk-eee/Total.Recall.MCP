@@ -28,7 +28,7 @@ each item below before requesting review.
 - [ ] Any test touching static state uses `[Collection("ToolTests")]` + `TelemetryTestHarness`
 - [ ] New helpers live in `src/Total.Recall/Infrastructure/` (not duplicated across `Tools/` + `Scanners/`)
 - [ ] If this PR adds/removes a tool, scanner, or env var:
-  - [ ] `AGENTS.md` tables + Architecture Decisions list updated
+  - [ ] `AGENTS.md` tables updated + new numbered entry appended to [`docs/DECISIONS.md`](../docs/DECISIONS.md)
   - [ ] `SPEC.md` and `README.md` user-visible-behaviour sections updated
   - [ ] `docs/TOOL_REFERENCE.md` schemas updated
   - [ ] Per-tool `[Description]` attribute updated (the agent's only contract)
