@@ -35,7 +35,7 @@ public static class CoberturaParser
 
         // Deduplicate by namespace + class name (Cobertura sometimes duplicates partial classes).
         // Using namespace-qualified key prevents merging classes with the same short name
-        // from different namespaces (e.g. ZonePivot in Models vs ContentBlocks).
+        // from different namespaces (e.g. Item in Models vs Catalog).
         records = records
             .GroupBy(r => $"{r.Namespace}.{r.Class}", StringComparer.OrdinalIgnoreCase)
             .Select(g =>

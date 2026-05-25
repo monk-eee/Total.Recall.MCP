@@ -31,6 +31,8 @@ public static class SourceSnippetTool
         [Description("Max lines to return (default: 200)")] int maxLines = 200,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_source_snippet", ns, new { className, methodName, maxLines, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetSourceSnippet);
         Log.Debug($"[GetSourceSnippet] className='{className}' method='{methodName ?? "(all)"}' maxLines={maxLines} ns='{ns ?? "(default)"}'");
         try
@@ -42,6 +44,7 @@ public static class SourceSnippetTool
             Log.Error($"[GetSourceSnippet] failed for '{className}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetSourceSnippet: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string GetSourceSnippetCore(string className, string? methodName, int maxLines, string? ns)

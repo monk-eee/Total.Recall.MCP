@@ -28,8 +28,12 @@ bld/
 *.sln.docstates
 .vs/
 
-# Data files are repo-specific - keep them
-# !data/
+# Data files - scanner output is local/per-repo, never commit
+# (may contain real type names, internal class data, agent session
+#  history, telemetry, etc. — strictly local-only)
+data/*
+!data/.gitkeep
+!data/README.md
 
 # Test results & coverage (managed by coverage skill)
 TestResults/

@@ -94,4 +94,13 @@ public static class Metrics
     public const string LookupInterface = "lookup.interface";
     public const string LookupNamespace = "lookup.namespace";
     public const string LookupMiss = "lookup.miss";
+
+    // Telemetry harness (Cut 1+)
+    public const string ToolCallsRecorded = "telemetry.tool_calls_recorded";
+    public const string ToolCallsRepeat = "telemetry.tool_calls_repeat";
+    public const string CyclesDetected = "telemetry.cycles_detected";
+    public const string TasksStarted = "telemetry.tasks_started";
+    public const string TasksEnded = "telemetry.tasks_ended";
+    public const string ChallengesGraded = "telemetry.challenges_graded";
+    public const string ContextResetsReported = "telemetry.context_resets_reported";
 }

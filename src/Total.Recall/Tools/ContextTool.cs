@@ -26,6 +26,8 @@ public static class ContextTool
         [Description("How much context to return: 'shallow' (type only), 'standard' (type+coverage+gotchas+tests), or 'full' (everything). Default: 'standard'")] string depth = "standard",
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_context", ns, new { typeName, depth, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetContext);
         Log.Debug($"[GetContext] typeName='{typeName}' depth='{depth}' ns='{ns ?? "(default)"}'");
         try
@@ -37,6 +39,7 @@ public static class ContextTool
             Log.Error($"[GetContext] failed for '{typeName}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetContext: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string GetContextCore(string typeName, string depth, string? ns)

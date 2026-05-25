@@ -21,6 +21,8 @@ public static class MockRecipeTool
         [Description("Interface name (e.g. 'IJobOutputInstance' or 'JobOutputInstance')")] string interfaceName,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_mock_recipe", ns, new { interfaceName, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetMockRecipe);
         Log.Debug($"[GetMockRecipe] interfaceName='{interfaceName}' ns='{ns ?? "(default)"}'");
         try
@@ -60,5 +62,6 @@ public static class MockRecipeTool
             Log.Error($"[GetMockRecipe] failed for '{interfaceName}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetMockRecipe: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 }

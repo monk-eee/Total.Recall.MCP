@@ -28,6 +28,8 @@ public static class StubClassesTool
         [Description("Include classes with existing tests (default: false). When false, shows only untested classes.")] bool includeWithTests = false,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_stub_classes", ns, new { top, maxCoveragePercent, maxCtorParams, includeWithTests, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetStubClasses);
         Log.Debug($"[GetStubClasses] top={top} maxCov={maxCoveragePercent} maxCtor={maxCtorParams} includeWithTests={includeWithTests} ns='{ns ?? "(default)"}'");
         try
@@ -39,6 +41,7 @@ public static class StubClassesTool
             Log.Error($"[GetStubClasses] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetStubClasses: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     internal static string GetStubClassesCore(

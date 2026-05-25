@@ -27,6 +27,8 @@ public static class RefreshCoverageTool
         [Description("Re-enrich coverage gaps (update test counts + testability) after refresh (default: true)")] bool reEnrich = true,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("refresh_coverage", ns, new { coveragePath, reEnrich, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolRefreshCoverage);
         Log.Debug($"[RefreshCoverage] coveragePath='{coveragePath ?? "(from config)"}' reEnrich={reEnrich} ns='{ns ?? "(default)"}'");
         try
@@ -38,6 +40,7 @@ public static class RefreshCoverageTool
             Log.Error($"[RefreshCoverage] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in RefreshCoverage: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string RefreshCoverageCore(string? coveragePath, bool reEnrich, string? ns)

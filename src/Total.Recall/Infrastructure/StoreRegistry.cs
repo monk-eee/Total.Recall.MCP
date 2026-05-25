@@ -10,7 +10,7 @@ namespace Total.Recall.Infrastructure;
 ///
 /// Usage:
 ///   StoreRegistry.TypeRegistry                    — default namespace
-///   StoreRegistry.ForNamespace("linter").TypeRegistry — explicit namespace
+///   StoreRegistry.ForNamespace("myproject").TypeRegistry — explicit namespace
 /// </summary>
 public static class StoreRegistry
 {
@@ -19,7 +19,7 @@ public static class StoreRegistry
     /// <summary>
     /// Get (or create) the store set for a specific namespace.
     /// Uses the resolved data directory as the cache key, so ForNamespace(null)
-    /// and ForNamespace("linter") map to the same stores when they resolve to the same path.
+    /// and ForNamespace("myproject") map to the same stores when they resolve to the same path.
     /// </summary>
     public static NamespaceStores ForNamespace(string? ns = null)
     {
@@ -42,6 +42,11 @@ public static class StoreRegistry
     public static JsonLineStore<MockRecipe> MockRecipes => ForNamespace().MockRecipes;
     public static JsonLineStore<Assessment> Assessments => ForNamespace().Assessments;
     public static JsonLineStore<SessionRecord> Sessions => ForNamespace().Sessions;
+    public static JsonLineStore<ToolCall> ToolCalls => ForNamespace().ToolCalls;
+    public static JsonLineStore<TaskRecord> Tasks => ForNamespace().Tasks;
+    public static JsonLineStore<CycleRecord> Cycles => ForNamespace().Cycles;
+    public static JsonLineStore<ChallengeRecord> Challenges => ForNamespace().Challenges;
+    public static JsonLineStore<EvalRecord> Evals => ForNamespace().Evals;
 
     /// <summary>
     /// Get pre-built name→TypeRecord dictionaries for O(1) lookups (default namespace).
@@ -88,6 +93,11 @@ public sealed class NamespaceStores
         MockRecipes = new JsonLineStore<MockRecipe>(RepoConfig.MockRecipesPath(dataDir));
         Assessments = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(dataDir));
         Sessions = new JsonLineStore<SessionRecord>(RepoConfig.SessionsPath(dataDir));
+        ToolCalls = new JsonLineStore<ToolCall>(RepoConfig.ToolCallsPath(dataDir));
+        Tasks = new JsonLineStore<TaskRecord>(RepoConfig.TasksPath(dataDir));
+        Cycles = new JsonLineStore<CycleRecord>(RepoConfig.CyclesPath(dataDir));
+        Challenges = new JsonLineStore<ChallengeRecord>(RepoConfig.ChallengesPath(dataDir));
+        Evals = new JsonLineStore<EvalRecord>(RepoConfig.EvalsPath(dataDir));
     }
 
     public string Name { get; }
@@ -100,6 +110,11 @@ public sealed class NamespaceStores
     public JsonLineStore<MockRecipe> MockRecipes { get; }
     public JsonLineStore<Assessment> Assessments { get; }
     public JsonLineStore<SessionRecord> Sessions { get; }
+    public JsonLineStore<ToolCall> ToolCalls { get; }
+    public JsonLineStore<TaskRecord> Tasks { get; }
+    public JsonLineStore<CycleRecord> Cycles { get; }
+    public JsonLineStore<ChallengeRecord> Challenges { get; }
+    public JsonLineStore<EvalRecord> Evals { get; }
 
     /// <summary>
     /// Gets the namespace configuration (test framework, mock library, namespace pattern).

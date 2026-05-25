@@ -26,6 +26,8 @@ public static class AssessmentTool
         [Description("Optional: cluster name if grouped with related types")] string? cluster = null,
         [Description("Optional: namespace/session to write to (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("add_assessment", ns, new { className, verdict, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolAddAssessment);
         Log.Debug($"[AddAssessment] className='{className}' verdict='{verdict}' ns='{ns ?? "(default)"}'");
         try
@@ -60,6 +62,7 @@ public static class AssessmentTool
             Log.Error($"[AddAssessment] failed for '{className}': {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in AddAssessment: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     [McpServerTool, Description(
@@ -75,6 +78,8 @@ public static class AssessmentTool
         [Description("Number of results to skip for pagination (default: 0)")] int skip = 0,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_assessments", ns, new { className, verdict, top, skip, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetAssessments);
         Log.Debug($"[GetAssessments] className='{className ?? "(all)"}' verdict='{verdict ?? "(all)"}' ns='{ns ?? "(default)"}'");
         try
@@ -140,5 +145,6 @@ public static class AssessmentTool
             Log.Error($"[GetAssessments] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetAssessments: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 }

@@ -13,6 +13,8 @@ public static class MetricsTool
         "and uptime. Resets on server restart. Use to monitor MCP server health and effectiveness.")]
     public static string GetMetrics()
     {
+        return Telemetry.Track("get_metrics", null, new { }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetMetrics);
         Log.Debug("[GetMetrics] collecting telemetry");
         try
@@ -73,5 +75,6 @@ public static class MetricsTool
             Log.Error($"[GetMetrics] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetMetrics: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 }

@@ -26,6 +26,8 @@ public static class CoverageGapsTool
         [Description("Return condensed summary (class, uncoveredLines, ROI) without method details (default: false)")] bool summaryOnly = false,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_coverage_gaps", ns, new { top, skipUntestable, sortBy, summaryOnly, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetCoverageGaps);
         Log.Debug($"[GetCoverageGaps] top={top} skipUntestable={skipUntestable} sortBy='{sortBy}' summaryOnly={summaryOnly} ns='{ns ?? "(default)"}'");
         try
@@ -37,6 +39,7 @@ public static class CoverageGapsTool
             Log.Error($"[GetCoverageGaps] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetCoverageGaps: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     private static string GetCoverageGapsCore(int top, bool skipUntestable, string sortBy, bool summaryOnly, string? ns)

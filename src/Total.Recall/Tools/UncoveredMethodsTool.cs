@@ -28,6 +28,8 @@ public static class UncoveredMethodsTool
         [Description("Exclude boilerplate methods: constructors, property accessors (default: true)")] bool excludeBoilerplate = true,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
+        return Telemetry.Track("get_uncovered_methods", ns, new { top, minUncoveredLines, onlyWithExistingTests, excludeBoilerplate, ns }, () =>
+        {
         Metrics.Increment(Metrics.ToolGetUncoveredMethods);
         Log.Debug($"[GetUncoveredMethods] top={top} minLines={minUncoveredLines} onlyExisting={onlyWithExistingTests} ns='{ns ?? "(default)"}'");
         try
@@ -39,6 +41,7 @@ public static class UncoveredMethodsTool
             Log.Error($"[GetUncoveredMethods] failed: {ex.GetType().Name}: {ex.Message}");
             return $"ERROR in GetUncoveredMethods: {ex.GetType().Name}: {ex.Message}";
         }
+        });
     }
 
     internal static string GetUncoveredMethodsCore(
