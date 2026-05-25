@@ -218,8 +218,8 @@ public sealed class FrameworkTemplatesTests
     [Fact]
     public void DeriveTestNamespace_RootRestPattern_SplitsCorrectly()
     {
-        var result = FrameworkTemplates.DeriveTestNamespace("Server.Common.Extensions", "{RootNamespace}.Tests.{Rest}");
-        Assert.Equal("Server.Tests.Common.Extensions", result);
+        var result = FrameworkTemplates.DeriveTestNamespace("MyApp.Common.Extensions", "{RootNamespace}.Tests.{Rest}");
+        Assert.Equal("MyApp.Tests.Common.Extensions", result);
     }
 
     [Fact]

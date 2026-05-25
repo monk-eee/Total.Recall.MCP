@@ -39,14 +39,14 @@ public sealed class DataDirResolutionTests : IDisposable
     [Fact]
     public void GetNamespacePath_WithNamespaceFlag_UsesEnvVarAsRoot()
     {
-        // Before fix: --namespace linter would use CWD/data as root
-        // After fix: --namespace linter uses TOTAL_RECALL_DATA as root
+        // Before fix: --namespace myproject would use CWD/data as root
+        // After fix: --namespace myproject uses TOTAL_RECALL_DATA as root
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, _tempDir);
         RepoConfig.ClearCache();
 
-        var result = RepoConfig.GetNamespacePath("linter");
+        var result = RepoConfig.GetNamespacePath("myproject");
 
-        Assert.Equal(Path.GetFullPath(Path.Combine(_tempDir, "linter")), result);
+        Assert.Equal(Path.GetFullPath(Path.Combine(_tempDir, "myproject")), result);
     }
 
     [Fact]
@@ -55,9 +55,9 @@ public sealed class DataDirResolutionTests : IDisposable
         Environment.SetEnvironmentVariable(RepoConfig.EnvVarName, null);
         RepoConfig.ClearCache();
 
-        var result = RepoConfig.GetNamespacePath("linter");
+        var result = RepoConfig.GetNamespacePath("myproject");
 
-        Assert.Equal(Path.GetFullPath(Path.Combine("data", "linter")), result);
+        Assert.Equal(Path.GetFullPath(Path.Combine("data", "myproject")), result);
     }
 
     // ── Bug #1: --output + --namespace correctly combines ──
@@ -65,12 +65,12 @@ public sealed class DataDirResolutionTests : IDisposable
     [Fact]
     public void GetNamespacePath_OutputAndNamespace_CombinesBoth()
     {
-        // --output C:\my\data --namespace linter → C:\my\data\linter
+        // --output C:\my\data --namespace myproject → C:\my\data\myproject
         var outputPath = Path.Combine(_tempDir, "custom-output");
 
-        var result = RepoConfig.GetNamespacePath("linter", outputPath);
+        var result = RepoConfig.GetNamespacePath("myproject", outputPath);
 
-        Assert.Equal(Path.GetFullPath(Path.Combine(outputPath, "linter")), result);
+        Assert.Equal(Path.GetFullPath(Path.Combine(outputPath, "myproject")), result);
     }
 
     [Fact]
@@ -90,14 +90,14 @@ public sealed class DataDirResolutionTests : IDisposable
     [Fact]
     public void GetNamespacePath_OutputWithEnvNamespace_CombinesOutputAndEnvNs()
     {
-        // --output C:\root + env TOTAL_RECALL_NAMESPACE=linter → C:\root\linter
+        // --output C:\root + env TOTAL_RECALL_NAMESPACE=myproject → C:\root\myproject
         var outputPath = Path.Combine(_tempDir, "root-dir");
-        Environment.SetEnvironmentVariable(RepoConfig.NamespaceEnvVar, "linter");
+        Environment.SetEnvironmentVariable(RepoConfig.NamespaceEnvVar, "myproject");
         RepoConfig.ClearCache();
 
         var result = RepoConfig.GetNamespacePath(null, outputPath);
 
-        Assert.Equal(Path.GetFullPath(Path.Combine(outputPath, "linter")), result);
+        Assert.Equal(Path.GetFullPath(Path.Combine(outputPath, "myproject")), result);
     }
 
     [Fact]
@@ -172,9 +172,9 @@ public sealed class DataDirResolutionTests : IDisposable
 
     [Theory]
     [InlineData(null, null, false)]       // neither flag
-    [InlineData("linter", null, false)]   // namespace only
+    [InlineData("myproject", null, false)]   // namespace only
     [InlineData(null, "explicit", false)]  // output only
-    [InlineData("linter", "explicit", false)] // both flags
+    [InlineData("myproject", "explicit", false)] // both flags
     public void GetNamespacePath_AllCombinations_DoNotThrow(
         string? ns, string? output, bool _)
     {

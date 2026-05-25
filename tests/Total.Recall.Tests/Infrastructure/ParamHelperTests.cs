@@ -91,7 +91,7 @@ public sealed class ParamHelperTests
     [Theory]
     [InlineData("ILogger", true)]
     [InlineData("IDisposable", true)]
-    [InlineData("IContentBase", true)]
+    [InlineData("IOrderSource", true)]
     [InlineData("Int32", false)]       // I + lowercase
     [InlineData("Item", false)]        // 'I' + lowercase 't'
     [InlineData("I", false)]           // too short
@@ -107,7 +107,7 @@ public sealed class ParamHelperTests
 
     [Theory]
     [InlineData("ILogger", "Logger")]
-    [InlineData("IContentBase", "ContentBase")]
+    [InlineData("IOrderSource", "OrderSource")]
     [InlineData("IDisposable", "Disposable")]
     [InlineData("string", "string")]     // no prefix → unchanged
     [InlineData("Int32", "Int32")]       // I + lowercase → unchanged
@@ -122,7 +122,7 @@ public sealed class ParamHelperTests
     [Fact]
     public void CountInterfaceParams_MixedParams_CountsOnlyInterfaces()
     {
-        var @params = new[] { "ILogger _logger", "string name", "IContentBase content", "int count" };
+        var @params = new[] { "ILogger _logger", "string name", "IOrderSource content", "int count" };
         Assert.Equal(2, ParamHelper.CountInterfaceParams(@params));
     }
 

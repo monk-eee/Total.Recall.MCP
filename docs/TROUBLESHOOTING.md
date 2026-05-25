@@ -206,10 +206,10 @@ Each line is one JSON object — one session record. Append-only, never modified
   "promptTokens": 850000,
   "completionTokens": 320000,
   "totalTokens": 1170000,
-  "classesAttempted": ["ContentBlock", "ArtifactSchema", "DocSet"],
-  "classesSucceeded": ["ContentBlock", "ArtifactSchema"],
+  "classesAttempted": ["Invoice", "InvoiceSchema", "OrderSet"],
+  "classesSucceeded": ["Invoice", "InvoiceSchema"],
   "classesFailed": [
-    { "class": "DocSet", "reason": "Heavy DI: 8 services required" }
+    { "class": "OrderSet", "reason": "Heavy DI: 8 services required" }
   ],
   "testsGenerated": 45,
   "coverageBefore": 25.66,
@@ -217,7 +217,7 @@ Each line is one JSON object — one session record. Append-only, never modified
   "coverageDelta": 12.54,
   "gotchasDiscovered": 3,
   "assessmentsRecorded": 5,
-  "notes": "ArtifactSchema cluster was high-yield"
+  "notes": "InvoiceSchema cluster was high-yield"
 }
 ```
 
@@ -327,7 +327,7 @@ Get-Content data/myproject/sessions.jsonl |
 | Source root set? | Either set `TOTAL_RECALL_SOURCE_ROOT` in `mcp.json` env, or re-run scanner with `--source-root` |
 | `config.json` exists in data directory? | `cat data/your-namespace/config.json` — should have `sourceRoot` field |
 | Source root path actually exists? | Verify the directory exists and contains `.cs` files |
-| File paths in coverage data match source root? | Coverage XML uses relative paths (e.g., `Parsing\Models\DocSet.cs`) that get joined with source root |
+| File paths in coverage data match source root? | Coverage XML uses relative paths (e.g., `Parsing\Models\OrderSet.cs`) that get joined with source root |
 
 ### Type not found by `resolve_type`
 

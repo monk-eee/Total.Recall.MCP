@@ -235,23 +235,23 @@ Total.Recall/
 
 ```json
 {
-  "name": "ContentBlock",
-  "namespace": "Server.Parsing.Models.Parsers.Output.Container.File.Content",
-  "fullUsing": "using Server.Parsing.Models.Parsers.Output.Container.File.Content;",
+  "name": "Invoice",
+  "namespace": "MyApp.Billing",
+  "fullUsing": "using MyApp.Billing;",
   "constructors": [
     { "params": [] },
-    { "params": ["int index", "CodeContentBlock code", "ContentParameters parms", "string tag", "string lang"] }
+    { "params": ["int index", "LineItem code", "InvoiceOptions parms", "string tag", "string lang"] }
   ],
-  "baseType": "ContentBlockBase",
-  "interfaces": ["IContentBlock"],
+  "baseType": "InvoiceBase",
+  "interfaces": ["IInvoice"],
   "isAbstract": false,
   "isStatic": false,
   "isInternal": false,
   "isInterface": false,
   "isEnum": false,
   "properties": [
-    { "name": "CodeLines", "clrType": "List<ContentLine>", "hasSet": true, "hasInit": false },
-    { "name": "ArtifactType", "clrType": "ArtifactEnum", "hasSet": true, "hasInit": false }
+    { "name": "CodeLines", "clrType": "List<InvoiceLine>", "hasSet": true, "hasInit": false },
+    { "name": "ArtifactKind", "clrType": "BillingArtifactKind", "hasSet": true, "hasInit": false }
   ],
   "enumValues": null
 }
@@ -261,9 +261,9 @@ For enum types, special handling:
 
 ```json
 {
-  "name": "ArtifactEnum",
-  "namespace": "Server.Common",
-  "fullUsing": "using Server.Common;",
+  "name": "BillingArtifactKind",
+  "namespace": "MyApp.Common",
+  "fullUsing": "using MyApp.Common;",
   "constructors": [],
   "baseType": "Enum",
   "interfaces": [],
@@ -281,18 +281,18 @@ For enum types, special handling:
 
 ```json
 {
-  "interface": "IJobOutputInstance",
-  "namespace": "Server.Parsing.Models.Parsers.Output.Container.Interfaces",
+  "interface": "IOrderExport",
+  "namespace": "MyApp.Billing.Interfaces",
   "requiredUsings": [
-    "using Server.Parsing.Models.Parsers.Output.Container.Interfaces;",
-    "using Server.Parsing.Models.Parsers.Output.Container.File.Content.Interfaces;"
+    "using MyApp.Billing.Interfaces;",
+    "using MyApp.Billing.Interfaces;"
   ],
-  "recipe": "var mockJobOutput = new Mock<IJobOutputInstance>();\nvar mockFromFile = new Mock<IContentBase>();\nvar mockRepo = new Mock<IRepoBase>();\nmockFromFile.Setup(f => f.Repository).Returns(mockRepo.Object);\nmockFromFile.Setup(f => f.RepoFileName).Returns(\"test.md\");\nmockJobOutput.Setup(j => j.FromFile).Returns(mockFromFile.Object);\nmockJobOutput.Setup(j => j.Repository).Returns(mockRepo.Object);",
+  "recipe": "var mockExport = new Mock<IOrderExport>();\nvar mockSource = new Mock<IOrderSource>();\nvar mockRepo = new Mock<IRepository>();\nmockSource.Setup(f => f.Repository).Returns(mockRepo.Object);\nmockSource.Setup(f => f.FileName).Returns(\"test.md\");\nmockExport.Setup(j => j.Source).Returns(mockSource.Object);\nmockExport.Setup(j => j.Repository).Returns(mockRepo.Object);",
   "gotchas": [
-    "IJobOutputInstance.FromFile returns IContentBase (interface), NOT FileToken",
-    "Must set up Repository on BOTH mockJobOutput and mockFromFile"
+    "IOrderExport.FromFile returns IOrderSource (interface), NOT ConcreteOrder",
+    "Must set up Repository on BOTH mockExport and mockSource"
   ],
-  "usedByClasses": ["AuditEntry", "ExportOutput", "ContentDataContainer", "DiagnosticChangeEvent"]
+  "usedByClasses": ["AuditEntry", "OrderExporter", "InvoiceContainer", "DiagnosticChangeEvent"]
 }
 ```
 
@@ -300,16 +300,16 @@ For enum types, special handling:
 
 ```json
 {
-  "class": "ContentBlock",
-  "namespace": "Server.Parsing.Models.Parsers.Output.Container.File.Content",
-  "file": "Parsing/Models/Parsers/Output/Container/File/Content/ContentBlock.cs",
+  "class": "Invoice",
+  "namespace": "MyApp.Billing",
+  "file": "Billing/Invoice.cs",
   "totalLines": 412,
   "coveredLines": 156,
   "uncoveredLines": 256,
   "coveragePercent": 37.86,
   "uncoveredMethods": [
-    { "name": "SetContentParameters", "startLine": 120, "endLine": 165, "uncoveredLines": 45 },
-    { "name": "BuildBlocks", "startLine": 230, "endLine": 268, "uncoveredLines": 38 }
+    { "name": "SetInvoiceOptions", "startLine": 120, "endLine": 165, "uncoveredLines": 45 },
+    { "name": "BuildLines", "startLine": 230, "endLine": 268, "uncoveredLines": 38 }
   ],
   "existingTestCount": 18,
   "testability": "medium",
@@ -321,9 +321,9 @@ For enum types, special handling:
 
 ```json
 {
-  "type": "ContentRange",
+  "type": "InvoiceRange",
   "category": "constructor",
-  "gotcha": "Parameterless ctor leaves StartLine/EndLine null - copy ctor NREs. Initialize with new ContentLinePosition(0,0)",
+  "gotcha": "Parameterless ctor leaves StartLine/EndLine null - copy ctor NREs. Initialize with new InvoiceLinePosition(0,0)",
   "discoveredInGen": 12,
   "date": "2026-02-28"
 }
@@ -353,10 +353,10 @@ Categories: `constructor`, `namespace`, `enum`, `equality`, `mock`, `unreachable
 
 ```json
 {
-  "class": "ContentBlock",
+  "class": "Invoice",
   "verdict": "testable",
-  "reasoning": "Simple class with parameterless ctor, no external dependencies beyond IContentBlock interface",
-  "dependencies": ["IContentBlock", "ContentBlockBase"],
+  "reasoning": "Simple class with parameterless ctor, no external dependencies beyond IInvoice interface",
+  "dependencies": ["IInvoice", "InvoiceBase"],
   "cluster": "content-pipeline",
   "date": "2026-03-15"
 }
@@ -375,16 +375,16 @@ Verdicts: `testable`, `coupled`, `skip`, `deferred`. Append-only file; `get_asse
   "promptTokens": 45000,
   "completionTokens": 12000,
   "totalTokens": 57000,
-  "classesAttempted": ["ContentBlock", "AuditEntry", "ExportOutput"],
-  "classesSucceeded": ["ContentBlock", "AuditEntry"],
-  "classesFailed": [{ "class": "ExportOutput", "reason": "Heavy IJobOutputInstance coupling" }],
+  "classesAttempted": ["Invoice", "AuditEntry", "OrderExporter"],
+  "classesSucceeded": ["Invoice", "AuditEntry"],
+  "classesFailed": [{ "class": "OrderExporter", "reason": "Heavy IOrderExport coupling" }],
   "testsGenerated": 24,
   "coverageBefore": 45.2,
   "coverageAfter": 48.7,
   "coverageDelta": 3.5,
   "gotchasDiscovered": 3,
   "assessmentsRecorded": 2,
-  "notes": "ContentBlock was straightforward. ExportOutput needs mock recipe for IJobOutputInstance."
+  "notes": "Invoice was straightforward. OrderExporter needs mock recipe for IOrderExport."
 }
 ```
 
@@ -392,20 +392,20 @@ Verdicts: `testable`, `coupled`, `skip`, `deferred`. Append-only file; `get_asse
 
 ```json
 {
-  "class": "ContentBlock",
-  "namespace": "Server.Parsing.Models",
-  "file": "Parsing/Models/ContentBlock.cs",
+  "class": "Invoice",
+  "namespace": "MyApp.Billing",
+  "file": "Billing/Invoice.cs",
   "totalLines": 412,
   "uncoveredLines": 256,
   "coveragePercent": 37.86,
   "uncoveredMethodCount": 5,
-  "uncoveredMethods": ["SetContentParameters", "BuildBlocks", "ProcessLine"],
+  "uncoveredMethods": ["SetInvoiceOptions", "BuildLines", "ProcessLine"],
   "existingTestCount": 18,
   "ctorParamCount": 0,
   "ctorParams": [],
   "mockableParamCount": 0,
   "recipeCoveredParams": 0,
-  "baseType": "ContentBlockBase",
+  "baseType": "InvoiceBase",
   "isAbstract": false,
   "isStatic": false,
   "previousVerdict": "testable",
@@ -694,7 +694,7 @@ Emits a compilable xUnit test file with: correct namespace imports, mock field d
 | 8 | Handle enums | `type.GetFields(Static|Public)` for enum types (names excluding `value__`) | — |
 | 9 | Write JSONL | One line per type → `type-registry.jsonl` | — |
 
-**Critical implementation detail**: Use `MetadataLoadContext` (from `System.Reflection.MetadataLoadContext` NuGet) instead of `Assembly.LoadFrom`. This avoids loading the assembly into the execution context (which fails when dependencies like `Microsoft.Docs.Build.ContentParser` are missing). `MetadataLoadContext` does reflection-only load — perfect for metadata extraction.
+**Critical implementation detail**: Use `MetadataLoadContext` (from `System.Reflection.MetadataLoadContext` NuGet) instead of `Assembly.LoadFrom`. This avoids loading the assembly into the execution context (which fails when transitive third-party dependencies are missing from the probing path). `MetadataLoadContext` does reflection-only load — perfect for metadata extraction.
 
 **Dependency resolution for MetadataLoadContext**: The `PathAssemblyResolver` needs paths to all assemblies the target references. Collect these from the target DLL's directory (`*.dll`) plus the runtime directory (`typeof(object).Assembly.Location` parent). This handles most framework types and NuGet dependencies that copy-local.
 

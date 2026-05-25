@@ -34,7 +34,7 @@ public sealed class ContextToolTests : ToolTestBase
     {
         SeedTypes(
             new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" },
-            new TypeRecord { Name = "Parser", Namespace = "Server.Parsing" }
+            new TypeRecord { Name = "Parser", Namespace = "MyApp.Parsing" }
         );
 
         var result = ContextTool.GetContext("AuditEntry");
@@ -115,10 +115,10 @@ public sealed class ContextToolTests : ToolTestBase
         {
             Name = "AuditEntry",
             Namespace = "Server.Auditing",
-            Interfaces = ["IDisposable", "IContentBase"]
+            Interfaces = ["IDisposable", "IOrderSource"]
         });
         SeedMockRecipes(
-            new MockRecipe { Interface = "IContentBase", Namespace = "Server.Content", Recipe = "mock setup code" },
+            new MockRecipe { Interface = "IOrderSource", Namespace = "Server.Content", Recipe = "mock setup code" },
             new MockRecipe { Interface = "ILogger", Namespace = "Microsoft.Extensions.Logging", Recipe = "logger mock" }
         );
 
@@ -127,7 +127,7 @@ public sealed class ContextToolTests : ToolTestBase
         var doc = JsonDocument.Parse(result);
         var mockRecipes = doc.RootElement.GetProperty("mockRecipes");
         Assert.Equal(1, mockRecipes.GetArrayLength());
-        Assert.Contains("IContentBase", mockRecipes[0].GetProperty("interface").GetString());
+        Assert.Contains("IOrderSource", mockRecipes[0].GetProperty("interface").GetString());
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class ContextToolTests : ToolTestBase
     {
         SeedTypes(new TypeRecord { Name = "SimpleClass", Namespace = "App", Interfaces = [] });
         SeedMockRecipes(
-            new MockRecipe { Interface = "IContentBase", Namespace = "Server", Recipe = "code" }
+            new MockRecipe { Interface = "IOrderSource", Namespace = "Server", Recipe = "code" }
         );
 
         var result = ContextTool.GetContext("SimpleClass", depth: "full");
@@ -166,12 +166,12 @@ public sealed class ContextToolTests : ToolTestBase
         {
             Name = "AuditEntry",
             Namespace = "Server.Auditing",
-            Interfaces = ["IContentBase"],
+            Interfaces = ["IOrderSource"],
             Properties = [new PropertyRecord { Name = "Id", ClrType = "int", HasSet = true }]
         });
         SeedGotchas(new Gotcha { Type = "AuditEntry", Category = "bug", Description = "watch out", Date = "2025-01-01" });
         SeedTests(new TestInventoryEntry { Class = "AuditEntry", TestCount = 2, TestMethods = ["A", "B"] });
-        SeedMockRecipes(new MockRecipe { Interface = "IContentBase", Namespace = "Server", Recipe = "setup" });
+        SeedMockRecipes(new MockRecipe { Interface = "IOrderSource", Namespace = "Server", Recipe = "setup" });
 
         var result = ContextTool.GetContext("AuditEntry", depth: "full");
 
@@ -190,10 +190,10 @@ public sealed class ContextToolTests : ToolTestBase
         {
             Name = "MyService",
             Namespace = "App",
-            Interfaces = ["IJobOutputInstance"]
+            Interfaces = ["IOrderExport"]
         });
         SeedMockRecipes(
-            new MockRecipe { Interface = "IJobOutputInstance", Namespace = "Server", Recipe = "job output mock" }
+            new MockRecipe { Interface = "IOrderExport", Namespace = "Server", Recipe = "job output mock" }
         );
 
         var result = ContextTool.GetContext("MyService", depth: "full");

@@ -414,7 +414,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord
         {
             Name = "MetaClass",
-            Namespace = "Server.Common",
+            Namespace = "MyApp.Common",
             Constructors = [new ConstructorRecord { Params = ["ILogger _logger"] }]
         });
         SeedGotchas(new Gotcha { Type = "MetaClass", Category = "bug", Description = "test", Date = "2025-01-01" });
@@ -428,7 +428,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         var doc = JsonDocument.Parse(result);
 
         Assert.Equal("MetaClass", doc.RootElement.GetProperty("className").GetString());
-        Assert.Equal("Server.Common.Tests", doc.RootElement.GetProperty("namespace").GetString());
+        Assert.Equal("MyApp.Common.Tests", doc.RootElement.GetProperty("namespace").GetString());
         Assert.Equal("MetaClassTests.cs", doc.RootElement.GetProperty("suggestedFileName").GetString());
         Assert.Equal(1, doc.RootElement.GetProperty("mockCount").GetInt32());
         Assert.Equal(1, doc.RootElement.GetProperty("uncoveredMethodCount").GetInt32());
@@ -1565,13 +1565,13 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         var methods = new List<UncoveredMethod>
         {
             new() { Name = "Equals", Signature = "(System.Object)System.Boolean" },
-            new() { Name = "Equals", Signature = "(MyApp.FileToken)System.Boolean" }
+            new() { Name = "Equals", Signature = "(MyApp.ConcreteOrder)System.Boolean" }
         };
 
         var result = Total.Recall.Tools.Scaffold.MethodNaming.BuildDisambiguatedNames(methods);
 
         Assert.Equal("Equals_Object", result[methods[0]]);
-        Assert.Equal("Equals_FileToken", result[methods[1]]);
+        Assert.Equal("Equals_ConcreteOrder", result[methods[1]]);
     }
 
     [Fact]
@@ -1596,27 +1596,27 @@ public sealed class TestScaffoldToolTests : ToolTestBase
     {
         SeedTypeRegistry(new TypeRecord
         {
-            Name = "FileToken", Namespace = "App",
+            Name = "ConcreteOrder", Namespace = "App",
             Constructors = [new ConstructorRecord { Params = [] }]
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "FileToken", Namespace = "App", File = "src/FileToken.cs",
+            Class = "ConcreteOrder", Namespace = "App", File = "src/ConcreteOrder.cs",
             TotalLines = 50, CoveredLines = 20, UncoveredLines = 30,
             UncoveredMethods =
             [
                 new UncoveredMethod { Name = "Equals", Signature = "(System.Object)System.Boolean", StartLine = 10, EndLine = 20, UncoveredLines = 5 },
-                new UncoveredMethod { Name = "Equals", Signature = "(App.FileToken)System.Boolean", StartLine = 25, EndLine = 35, UncoveredLines = 5 }
+                new UncoveredMethod { Name = "Equals", Signature = "(App.ConcreteOrder)System.Boolean", StartLine = 25, EndLine = 35, UncoveredLines = 5 }
             ]
         });
 
-        var result = TestScaffoldTool.GenerateTestScaffold("FileToken");
+        var result = TestScaffoldTool.GenerateTestScaffold("ConcreteOrder");
         var doc = JsonDocument.Parse(result);
         var scaffold = doc.RootElement.GetProperty("scaffold").GetString()!;
 
         // Both overloads should have unique test names
         Assert.Contains("Equals_Object", scaffold);
-        Assert.Contains("Equals_FileToken", scaffold);
+        Assert.Contains("Equals_ConcreteOrder", scaffold);
         // Should NOT have a plain "Equals_ShouldWork" (that would be ambiguous)
         Assert.DoesNotContain("Equals_ShouldWork", scaffold);
     }

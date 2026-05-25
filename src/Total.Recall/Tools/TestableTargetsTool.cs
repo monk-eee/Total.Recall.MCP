@@ -764,7 +764,7 @@ public static class TestableTargetsTool
 
     /// <summary>
     /// Fuzzy test inventory matching: when exact match fails, try:
-    /// 1. Class name with "Base" suffix stripped (WriteOperationConfigurationBase → WriteOperationConfiguration)
+    /// 1. Class name with "Base" suffix stripped (MyServiceBase → MyService)
     /// 2. Any test inventory key that starts with the gap class name
     /// 3. Any test inventory key where the gap class name starts with the key
     /// Returns the best match (highest test count).

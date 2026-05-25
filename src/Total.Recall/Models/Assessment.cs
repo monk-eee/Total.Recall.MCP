@@ -22,14 +22,14 @@ public sealed class Assessment
 
     /// <summary>
     /// Optional: key dependencies that drive the verdict.
-    /// e.g. ["SchemaTestHarnessBase", "JobOutput.FromFile"]
+    /// e.g. ["MyTestHarnessBase", "MyService.LoadFromFile"]
     /// </summary>
     [JsonPropertyName("dependencies")]
     public List<string> Dependencies { get; set; } = [];
 
     /// <summary>
     /// Optional: cluster name if the class was grouped with related types.
-    /// e.g. "ArtifactSchema compositional graph"
+    /// e.g. "InvoiceSchema compositional graph"
     /// </summary>
     [JsonPropertyName("cluster")]
     public string? Cluster { get; set; }

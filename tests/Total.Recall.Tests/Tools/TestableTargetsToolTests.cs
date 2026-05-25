@@ -802,7 +802,7 @@ public sealed class TestableTargetsToolTests : ToolTestBase
             Namespace = "App",
             Constructors = [new ConstructorRecord
             {
-                Params = ["ILogger _logger", "LinterExtension _ext"]
+                Params = ["ILogger _logger", "MyExtension _ext"]
             }]
         });
 
@@ -812,7 +812,7 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         var reason = target.GetProperty("reason").GetString()!;
 
         Assert.Contains("1 concrete", reason);
-        Assert.Contains("LinterExtension", reason);
+        Assert.Contains("MyExtension", reason);
         Assert.Equal(1, target.GetProperty("concreteParamCount").GetInt32());
     }
 
@@ -942,7 +942,7 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [InlineData("SimpleClass", "SimpleClass")]
     [InlineData("Parent/Nested", "Nested")]
     [InlineData("A/B/C", "C")]
-    [InlineData("ForegroundThreadManager/ForegroundTaskScheduler", "ForegroundTaskScheduler")]
+    [InlineData("OuterClass/NestedClass", "NestedClass")]
     public void NormalizeName_HandlesNestedClasses(string input, string expected)
     {
         Assert.Equal(expected, TestableTargetsTool.NormalizeName(input));
@@ -1008,10 +1008,10 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         var inventory = new Dictionary<string, TestInventoryEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["WriteOperationConfiguration"] = new TestInventoryEntry { Class = "WriteOperationConfiguration", TestCount = 25 }
+            ["MyService"] = new TestInventoryEntry { Class = "MyService", TestCount = 25 }
         };
 
-        var found = TestableTargetsTool.TryFuzzyTestMatch(inventory, "WriteOperationConfigurationBase", out var entry);
+        var found = TestableTargetsTool.TryFuzzyTestMatch(inventory, "MyServiceBase", out var entry);
 
         Assert.True(found);
         Assert.Equal(25, entry.TestCount);
@@ -1488,11 +1488,11 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         SeedCoverageGaps(MakeGap("ChildClass", 50), MakeGap("CleanClass", 50));
         SeedTypeRegistry(
-            new TypeRecord { Name = "ChildClass", Namespace = "App", BaseType = "WriteOperationBase" },
+            new TypeRecord { Name = "ChildClass", Namespace = "App", BaseType = "MyOperationBase" },
             new TypeRecord { Name = "CleanClass", Namespace = "App" }
         );
         SeedAssessments(
-            new Assessment { Class = "WriteOperationBase", Verdict = "coupled", Reasoning = "heavy deps", Date = "2025-01-01" }
+            new Assessment { Class = "MyOperationBase", Verdict = "coupled", Reasoning = "heavy deps", Date = "2025-01-01" }
         );
 
         var result = TestableTargetsTool.GetTestableTargets();
@@ -1515,10 +1515,10 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         SeedCoverageGaps(MakeGap("ChildClass", 50));
         SeedTypeRegistry(
-            new TypeRecord { Name = "ChildClass", Namespace = "App", BaseType = "WriteOperationBase" }
+            new TypeRecord { Name = "ChildClass", Namespace = "App", BaseType = "MyOperationBase" }
         );
         SeedAssessments(
-            new Assessment { Class = "WriteOperationBase", Verdict = "coupled", Reasoning = "heavy deps", Date = "2025-01-01" }
+            new Assessment { Class = "MyOperationBase", Verdict = "coupled", Reasoning = "heavy deps", Date = "2025-01-01" }
         );
 
         var result = TestableTargetsTool.GetTestableTargets();
@@ -1526,7 +1526,7 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         var reason = doc.RootElement.GetProperty("targets")[0].GetProperty("reason").GetString()!;
 
         Assert.Contains("coupled base type", reason);
-        Assert.Contains("WriteOperationBase", reason);
+        Assert.Contains("MyOperationBase", reason);
     }
 
     // ── Transitive dependency detection (knownBadDeps) ──
@@ -1534,17 +1534,17 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void GetTestableTargets_TransitiveConcreteDep_CoupledPenalty()
     {
-        // ClassX was assessed as coupled with dependency "SchemaTestHarnessBase"
-        // ClassY has a concrete ctor param of type "SchemaTestHarnessBase"
+        // ClassX was assessed as coupled with dependency "MyTestHarnessBase"
+        // ClassY has a concrete ctor param of type "MyTestHarnessBase"
         // ClassY should get the coupled param penalty via knownBadDeps
         SeedCoverageGaps(MakeGap("ClassY", 50));
         SeedTypeRegistry(
             new TypeRecord { Name = "ClassY", Namespace = "App",
-                Constructors = [new ConstructorRecord { Params = ["SchemaTestHarnessBase _harness"] }] }
+                Constructors = [new ConstructorRecord { Params = ["MyTestHarnessBase _harness"] }] }
         );
         SeedAssessments(
             new Assessment { Class = "ClassX", Verdict = "coupled", Reasoning = "tight deps",
-                Dependencies = ["SchemaTestHarnessBase"], Date = "2025-01-01" }
+                Dependencies = ["MyTestHarnessBase"], Date = "2025-01-01" }
         );
 
         var result = TestableTargetsTool.GetTestableTargets();
@@ -1601,10 +1601,10 @@ public sealed class TestableTargetsToolTests : ToolTestBase
             new TypeRecord { Name = "CleanIface", Namespace = "App",
                 Constructors = [new ConstructorRecord { Params = ["ILogger _log"] }] },
             new TypeRecord { Name = "CoupledIface", Namespace = "App",
-                Constructors = [new ConstructorRecord { Params = ["ILanguageServerClient _client"] }] }
+                Constructors = [new ConstructorRecord { Params = ["ISomeServiceClient _client"] }] }
         );
         SeedAssessments(
-            new Assessment { Class = "ILanguageServerClient", Verdict = "skip",
+            new Assessment { Class = "ISomeServiceClient", Verdict = "skip",
                 Reasoning = "extension methods block mocking", Date = "2025-01-01" }
         );
 
@@ -1629,10 +1629,10 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         SeedCoverageGaps(MakeGap("CoupledIface", 50));
         SeedTypeRegistry(
             new TypeRecord { Name = "CoupledIface", Namespace = "App",
-                Constructors = [new ConstructorRecord { Params = ["ILanguageServerClient _client"] }] }
+                Constructors = [new ConstructorRecord { Params = ["ISomeServiceClient _client"] }] }
         );
         SeedAssessments(
-            new Assessment { Class = "ILanguageServerClient", Verdict = "skip",
+            new Assessment { Class = "ISomeServiceClient", Verdict = "skip",
                 Reasoning = "extension methods", Date = "2025-01-01" }
         );
 
