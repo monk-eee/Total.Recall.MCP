@@ -34,7 +34,13 @@ jobs:
         run: dotnet build Total.Recall.sln --configuration Release --no-restore -warnaserror
 
       - name: Test
-        run: dotnet test Total.Recall.sln --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+        run: >
+          dotnet test Total.Recall.sln
+          --configuration Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+          --logger "GitHubActions;report-warnings=true"
 
       - name: Upload test results
         if: always()
@@ -43,3 +49,27 @@ jobs:
           name: test-results-${{ matrix.os }}
           path: '**/TestResults/*.trx'
           if-no-files-found: ignore
+
+      - name: Publish test summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          trx_files=$(find . -name 'test-results.trx' -type f 2>/dev/null || true)
+          if [ -z "$trx_files" ]; then
+            echo "_No TRX files produced._" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Test results (${{ matrix.os }})"
+            echo ""
+            echo "| Total | Passed | Failed | Skipped |"
+            echo "|------:|-------:|-------:|--------:|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for trx in $trx_files; do
+            total=$(grep -oE 'total="[0-9]+"'    "$trx" | head -1 | grep -oE '[0-9]+' || echo 0)
+            passed=$(grep -oE 'passed="[0-9]+"'  "$trx" | head -1 | grep -oE '[0-9]+' || echo 0)
+            failed=$(grep -oE 'failed="[0-9]+"'  "$trx" | head -1 | grep -oE '[0-9]+' || echo 0)
+            skipped=$(grep -oE 'notExecuted="[0-9]+"' "$trx" | head -1 | grep -oE '[0-9]+' || echo 0)
+            echo "| $total | $passed | $failed | $skipped |" >> "$GITHUB_STEP_SUMMARY"
+          done
