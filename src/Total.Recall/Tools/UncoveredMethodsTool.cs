@@ -63,7 +63,7 @@ public static class UncoveredMethodsTool
 
         // Build assessment lookup (to skip coupled/skip classes)
         var assessments = stores.Assessments.HasData()
-            ? BuildLatestAssessments(stores.Assessments.LoadAll())
+            ? AssessmentLookup.BuildLatest(stores.Assessments.LoadAll())
             : new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
 
         var targets = new List<UncoveredMethodTarget>();
@@ -204,13 +204,5 @@ public static class UncoveredMethodsTool
             parts.Add($"{existingTestCount} existing tests");
 
         return string.Join(", ", parts);
-    }
-
-    private static Dictionary<string, Assessment> BuildLatestAssessments(List<Assessment> all)
-    {
-        var latest = new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
-        foreach (var a in all)
-            latest[a.Class] = a;
-        return latest;
     }
 }
