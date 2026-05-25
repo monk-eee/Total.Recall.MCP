@@ -238,6 +238,40 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
 | `TOTAL_RECALL_SOURCE_ROOT` | (none) | Override source root for `get_source_snippet` |
 | `TOTAL_RECALL_MODE` | `"passive"` | Telemetry mode: `off` (no recording), `passive` (record tool calls + cycles), `active-eval` (passive + serve challenges via `get_next_challenge`) |
 
+## Inspecting Telemetry (CLI Reports)
+
+The same process is a triple-mode entry point: **MCP server** (default), **scanner** (`scan` sub-command), and **report reader** (`report` sub-command). The report mode reads the recorded telemetry JSONL without needing the server to be live — handy for terminals, CI, and post-mortems.
+
+```bash
+dotnet run --project src/Total.Recall -- report tool-stats   --ns myproject
+dotnet run --project src/Total.Recall -- report cycles       --ns myproject --pattern re-query --last 50
+dotnet run --project src/Total.Recall -- report scorecard    --ns myproject
+dotnet run --project src/Total.Recall -- report sessions     --ns myproject --last 10
+dotnet run --project src/Total.Recall -- report efficiency   --ns myproject
+dotnet run --project src/Total.Recall -- report leaderboard  --ns myproject
+```
+
+| Sub-command | What it reads |
+|-------------|---------------|
+| `tool-stats` | Per-tool call counts, p50/p95 latency, avg response bytes |
+| `cycles` | Detected behaviour cycles (re-query, context-loss, oscillation) |
+| `sessions` | Session history + aggregate analytics |
+| `scorecard` | Cross-model metrics from sessions + tasks + evals |
+| `efficiency` | Sessions × cycles × tasks: tokens/task, redundant-call rate, plateau warnings |
+| `leaderboard` | Eval pass/fail rates by model |
+
+Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`.
+Exit codes: `0` ok, `1` missing/unknown sub-command, `2` underlying tool threw.
+
+All output is JSON for downstream piping:
+
+```powershell
+dotnet run --project src/Total.Recall -- report tool-stats --ns myproject `
+  | ConvertFrom-Json | Select-Object -ExpandProperty tools | Format-Table -AutoSize
+```
+
+While a report runs, `TOTAL_RECALL_MODE` is forced to `off` so the report itself doesn't append to `tool-calls.jsonl`. The original mode is restored when it exits.
+
 ## Documentation
 
 | Document | Purpose |
