@@ -555,21 +555,21 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(_sourceDir);
         StoreRegistry.Reset();
 
-        // Two files both defining "ZonePivot" — small POCO vs larger implementation
-        var smallFile = CreateSourceFile("src/Models/ZonePivot.cs", "public class ZonePivot { public string Name { get; set; } }");
-        var largeFile = CreateSourceFile("src/ContentBlocks/ZonePivot.cs",
+        // Two files both defining "PivotEntry" — small POCO vs larger implementation
+        var smallFile = CreateSourceFile("src/Models/PivotEntry.cs", "public class PivotEntry { public string Name { get; set; } }");
+        var largeFile = CreateSourceFile("src/Invoices/PivotEntry.cs",
             string.Join("\n", Enumerable.Range(1, 58).Select(i => $"// implementation line {i}")));
 
         SeedCoverageGaps(
-            new CoverageGap { Class = "ZonePivot", Namespace = "Models", File = smallFile, TotalLines = 7, UncoveredLines = 3 },
-            new CoverageGap { Class = "ZonePivot", Namespace = "ContentBlocks", File = largeFile, TotalLines = 58, UncoveredLines = 40 }
+            new CoverageGap { Class = "PivotEntry", Namespace = "Models", File = smallFile, TotalLines = 7, UncoveredLines = 3 },
+            new CoverageGap { Class = "PivotEntry", Namespace = "Invoices", File = largeFile, TotalLines = 58, UncoveredLines = 40 }
         );
 
-        var result = SourceSnippetTool.GetSourceSnippet("ZonePivot");
+        var result = SourceSnippetTool.GetSourceSnippet("PivotEntry");
         var doc = JsonDocument.Parse(result);
 
-        // Should pick the ContentBlocks version (40 uncovered lines vs 3)
-        Assert.Contains("ContentBlocks", doc.RootElement.GetProperty("relativePath").GetString());
+        // Should pick the Invoices version (40 uncovered lines vs 3)
+        Assert.Contains("Invoices", doc.RootElement.GetProperty("relativePath").GetString());
         Assert.True(doc.RootElement.TryGetProperty("ambiguityNote", out var note));
         Assert.Contains("2 classes named", note.GetString());
     }
@@ -597,19 +597,19 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(_sourceDir);
         StoreRegistry.Reset();
 
-        var smallFile = CreateSourceFile("src/SmallZone.cs", "public class SmallZonePivot { }");
+        var smallFile = CreateSourceFile("src/SmallZone.cs", "public class SmallPivotEntry { }");
         var largeFile = CreateSourceFile("src/LargeZone.cs",
             string.Join("\n", Enumerable.Range(1, 30).Select(i => $"// line {i}")));
 
         SeedCoverageGaps(
-            new CoverageGap { Class = "SmallZonePivot", Namespace = "App", File = smallFile, TotalLines = 5, UncoveredLines = 2 },
-            new CoverageGap { Class = "LargeZonePivot", Namespace = "App", File = largeFile, TotalLines = 30, UncoveredLines = 20 }
+            new CoverageGap { Class = "SmallPivotEntry", Namespace = "App", File = smallFile, TotalLines = 5, UncoveredLines = 2 },
+            new CoverageGap { Class = "LargePivotEntry", Namespace = "App", File = largeFile, TotalLines = 30, UncoveredLines = 20 }
         );
 
-        var result = SourceSnippetTool.GetSourceSnippet("ZonePivot");
+        var result = SourceSnippetTool.GetSourceSnippet("PivotEntry");
         var doc = JsonDocument.Parse(result);
 
-        // Partial match — should pick LargeZonePivot (20 uncovered vs 2)
+        // Partial match — should pick LargePivotEntry (20 uncovered vs 2)
         Assert.Contains("LargeZone", doc.RootElement.GetProperty("relativePath").GetString());
     }
 

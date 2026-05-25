@@ -18,7 +18,7 @@ public static class MockRecipeTool
         "Get a pre-built Moq setup recipe for a .NET interface, including required usings, " +
         "C# mock code, and known gotchas. Supports names with or without the 'I' prefix.")]
     public static string GetMockRecipe(
-        [Description("Interface name (e.g. 'IJobOutputInstance' or 'JobOutputInstance')")] string interfaceName,
+        [Description("Interface name (e.g. 'IOrderExport' or 'OrderExport')")] string interfaceName,
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {
         return Telemetry.Track("get_mock_recipe", ns, new { interfaceName, ns }, () =>

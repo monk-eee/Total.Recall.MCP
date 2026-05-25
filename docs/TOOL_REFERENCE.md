@@ -266,20 +266,20 @@ score = base
 
 **Returns**: Array of `Gotcha` objects with category, description, and discovery context.
 
-**Example input**: `"ContentRange"`
+**Example input**: `"InvoiceRange"`
 
 **Example output**:
 ```json
 [
   {
-    "type": "ContentRange",
+    "type": "InvoiceRange",
     "category": "constructor",
     "gotcha": "Parameterless ctor leaves StartLine/EndLine null — copy ctor NREs. Initialize with explicit values.",
     "discoveredInGen": 12,
     "date": "2026-02-28"
   },
   {
-    "type": "ContentRange",
+    "type": "InvoiceRange",
     "category": "equality",
     "gotcha": "partial record — auto-generates == value equality. Asserting reference inequality fails.",
     "discoveredInGen": 5,

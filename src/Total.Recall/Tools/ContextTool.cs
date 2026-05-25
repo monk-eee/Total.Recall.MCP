@@ -22,7 +22,7 @@ public static class ContextTool
         "Use 'shallow' for quick type checks. Use 'standard' for most test authoring. " +
         "Use 'full' only when starting a new class or debugging failures. Default: 'standard'.")]
     public static string GetContext(
-        [Description("The type name to look up (e.g. 'AuditEntry', 'IContentBase')")] string typeName,
+        [Description("The type name to look up (e.g. 'AuditEntry', 'IOrderSource')")] string typeName,
         [Description("How much context to return: 'shallow' (type only), 'standard' (type+coverage+gotchas+tests), or 'full' (everything). Default: 'standard'")] string depth = "standard",
         [Description("Optional: namespace/session to query (default: server default)")] string? ns = null)
     {

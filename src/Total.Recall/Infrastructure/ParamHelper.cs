@@ -51,7 +51,7 @@ public static class ParamHelper
 
     /// <summary>
     /// Strip the 'I' prefix from an interface name for use in field/variable names.
-    /// "ILogger" → "Logger", "IContentBase" → "ContentBase".
+    /// "ILogger" → "Logger", "IOrderSource" → "ContentBase".
     /// Returns the original name if it doesn't match the interface naming pattern.
     /// </summary>
     public static string StripIPrefix(string interfaceName)

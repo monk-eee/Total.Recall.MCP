@@ -419,14 +419,14 @@ public sealed class CoberturaParserTests : IDisposable
               <packages>
                 <package name="MyApp">
                   <classes>
-                    <class name="MyApp.Models.ZonePivot" filename="Models/ZonePivot.cs">
+                    <class name="MyApp.Models.PivotEntry" filename="Models/PivotEntry.cs">
                       <methods />
                       <lines>
                         <line number="1" hits="0" />
                         <line number="2" hits="0" />
                       </lines>
                     </class>
-                    <class name="MyApp.ContentBlocks.ZonePivot" filename="ContentBlocks/ZonePivot.cs">
+                    <class name="MyApp.Invoices.PivotEntry" filename="Invoices/PivotEntry.cs">
                       <methods />
                       <lines>
                         <line number="10" hits="0" />

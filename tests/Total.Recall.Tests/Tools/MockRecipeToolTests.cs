@@ -94,14 +94,14 @@ public sealed class MockRecipeToolTests : ToolTestBase
     public void GetMockRecipe_PartialMatch_ReturnsContainingRecipes()
     {
         SeedMockRecipes(
-            new MockRecipe { Interface = "IJobOutputInstance", Namespace = "App", Recipe = "r1", RequiredUsings = [], Gotchas = [], UsedByClasses = [] },
-            new MockRecipe { Interface = "IJobInput", Namespace = "App", Recipe = "r2", RequiredUsings = [], Gotchas = [], UsedByClasses = [] }
+            new MockRecipe { Interface = "IOrderExport", Namespace = "App", Recipe = "r1", RequiredUsings = [], Gotchas = [], UsedByClasses = [] },
+            new MockRecipe { Interface = "IOrderInput", Namespace = "App", Recipe = "r2", RequiredUsings = [], Gotchas = [], UsedByClasses = [] }
         );
 
-        var result = MockRecipeTool.GetMockRecipe("Job");
+        var result = MockRecipeTool.GetMockRecipe("Order");
 
-        Assert.Contains("IJobOutputInstance", result);
-        Assert.Contains("IJobInput", result);
+        Assert.Contains("IOrderExport", result);
+        Assert.Contains("IOrderInput", result);
     }
 
     // ── Error path coverage ──

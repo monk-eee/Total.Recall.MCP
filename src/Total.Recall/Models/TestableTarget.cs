@@ -48,7 +48,7 @@ public sealed class TestableTarget
     [JsonPropertyName("ctorParamCount")]
     public int CtorParamCount { get; set; }
 
-    /// <summary>The constructor parameter types (e.g. "ILogger", "IRepoBase").</summary>
+    /// <summary>The constructor parameter types (e.g. "ILogger", "IRepository").</summary>
     [JsonPropertyName("ctorParams")]
     public List<string> CtorParams { get; set; } = [];
 

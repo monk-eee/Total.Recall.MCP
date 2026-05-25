@@ -377,7 +377,7 @@ as the code change. The list is load-bearing - keep it dense.
 
 4. **Enum value extraction**: `Type.GetFields(BindingFlags.Public | BindingFlags.Static)` returns enum members. Filter out `value__` (the underlying value field). In MetadataLoadContext, call `GetFields()` directly (BindingFlags may behave differently).
 
-5. **Cobertura class names**: The `name` attribute uses fully qualified names with dots (e.g., `Server.Common.Extensions.StringExtensions`). Must match against type registry which stores `Name` (short) and `Namespace` separately.
+5. **Cobertura class names**: The `name` attribute uses fully qualified names with dots (e.g., `MyApp.Common.Extensions.StringExtensions`). Must match against type registry which stores `Name` (short) and `Namespace` separately.
 
 6. **JSONL encoding**: One record per line, no trailing newline after last record. Use `JsonSerializer.Serialize` on each record + `Environment.NewLine` for append.
 

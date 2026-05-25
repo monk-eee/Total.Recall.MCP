@@ -108,7 +108,7 @@ public sealed class ResolveTypeToolTests : ToolTestBase
     {
         SeedTypeRegistry(
             new TypeRecord { Name = "FooClass", Namespace = "Server.Auditing" },
-            new TypeRecord { Name = "BarClass", Namespace = "Server.Parsing" }
+            new TypeRecord { Name = "BarClass", Namespace = "MyApp.Parsing" }
         );
 
         // "Auditing" doesn't match any Name, so step 5 searches Namespace
@@ -125,7 +125,7 @@ public sealed class ResolveTypeToolTests : ToolTestBase
     {
         SeedTypeRegistry(
             new TypeRecord { Name = "Helper", Namespace = "Server.Auditing" },
-            new TypeRecord { Name = "Helper", Namespace = "Server.Parsing" }
+            new TypeRecord { Name = "Helper", Namespace = "MyApp.Parsing" }
         );
 
         var result = ResolveTypeTool.ResolveType("Helper", namespacePart: "Auditing");
@@ -154,7 +154,7 @@ public sealed class ResolveTypeToolTests : ToolTestBase
     {
         SeedTypeRegistry(
             new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" },
-            new TypeRecord { Name = "ParseResult", Namespace = "Server.Parsing" }
+            new TypeRecord { Name = "ParseResult", Namespace = "MyApp.Parsing" }
         );
         SeedCoverageGaps(
             new CoverageGap { Class = "AuditEntry", File = "src/Auditing/AuditEntry.cs" },
@@ -171,7 +171,7 @@ public sealed class ResolveTypeToolTests : ToolTestBase
     {
         SeedTypeRegistry(
             new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" },
-            new TypeRecord { Name = "ParseResult", Namespace = "Server.Parsing" }
+            new TypeRecord { Name = "ParseResult", Namespace = "MyApp.Parsing" }
         );
         SeedCoverageGaps(
             new CoverageGap { Class = "AuditEntry", File = "src/Auditing/AuditEntry.cs" },
@@ -203,7 +203,7 @@ public sealed class ResolveTypeToolTests : ToolTestBase
     {
         SeedTypeRegistry(
             new TypeRecord { Name = "Entry", Namespace = "Server.Auditing" },
-            new TypeRecord { Name = "Entry", Namespace = "Server.Parsing" }
+            new TypeRecord { Name = "Entry", Namespace = "MyApp.Parsing" }
         );
         SeedCoverageGaps(
             new CoverageGap { Class = "Entry", File = "src/Auditing/Entry.cs" }

@@ -48,9 +48,9 @@ public sealed class NamespaceTests : IDisposable
     [Fact]
     public void GetNamespacePath_ExplicitNamespace_ReturnsSubdirectory()
     {
-        var result = RepoConfig.GetNamespacePath("linter");
+        var result = RepoConfig.GetNamespacePath("myproject");
 
-        Assert.Equal(Path.GetFullPath(Path.Combine(_tempDir, "linter")), result);
+        Assert.Equal(Path.GetFullPath(Path.Combine(_tempDir, "myproject")), result);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class NamespaceTests : IDisposable
     {
         // Create .jsonl file in root (legacy layout)
         File.WriteAllText(Path.Combine(_tempDir, "type-registry.jsonl"), "{}");
-        Environment.SetEnvironmentVariable(RepoConfig.NamespaceEnvVar, "linter");
+        Environment.SetEnvironmentVariable(RepoConfig.NamespaceEnvVar, "myproject");
         StoreRegistry.Reset();
 
         // Even with env namespace set, legacy layout should return root
@@ -136,8 +136,8 @@ public sealed class NamespaceTests : IDisposable
     [Fact]
     public void ListNamespaces_MultipleNamespaces_ReturnsAll()
     {
-        var ns1 = Path.Combine(_tempDir, "linter");
-        var ns2 = Path.Combine(_tempDir, "docs-build");
+        var ns1 = Path.Combine(_tempDir, "myproject");
+        var ns2 = Path.Combine(_tempDir, "other-project");
         var ns3 = Path.Combine(_tempDir, "empty-ns"); // has no .jsonl files
         Directory.CreateDirectory(ns1);
         Directory.CreateDirectory(ns2);
@@ -148,8 +148,8 @@ public sealed class NamespaceTests : IDisposable
         var result = RepoConfig.ListNamespaces();
 
         Assert.Equal(2, result.Count);
-        Assert.Contains("docs-build", result);
-        Assert.Contains("linter", result);
+        Assert.Contains("other-project", result);
+        Assert.Contains("myproject", result);
         Assert.DoesNotContain("empty-ns", result);
     }
 
@@ -194,8 +194,8 @@ public sealed class NamespaceTests : IDisposable
     [Fact]
     public void ForNamespace_SameNamespace_ReturnsSameStores()
     {
-        var stores1 = StoreRegistry.ForNamespace("linter");
-        var stores2 = StoreRegistry.ForNamespace("linter");
+        var stores1 = StoreRegistry.ForNamespace("myproject");
+        var stores2 = StoreRegistry.ForNamespace("myproject");
 
         Assert.Same(stores1, stores2);
     }

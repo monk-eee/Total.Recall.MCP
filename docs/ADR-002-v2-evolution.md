@@ -73,7 +73,7 @@ score = uncoveredLines
 **Insight**: CoverageGap records already contain relative file paths (e.g., `Parsing\Models\OrderSet\OrderSet.cs`) and uncovered method line ranges (e.g., `GetUrlsFromFile: L658-L790`). If we know the target repo's source root, we can serve the actual method body directly. The agent asks "show me the uncovered methods of OrderSet" and gets implementation code — no `read_file` needed.
 
 **Design choices**:
-- New env var: `TOTAL_RECALL_SOURCE_ROOT` — points to the target repo's source root (e.g., `C:\Repos\MyProject\src\LanguageServer\Server`)
+- New env var: `TOTAL_RECALL_SOURCE_ROOT` — points to the target repo's source root (e.g., `C:\Repos\MyApp\src\Server`)
 - Returns up to 200 lines of source (configurable) centered on uncovered methods
 - Falls back gracefully: if source root not set or file not found, returns clear error suggesting `read_file` instead
 - Security: only serves files under the declared source root (no path traversal)
@@ -211,7 +211,7 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
 │         ▼                                                        │
 │  ┌─────────────────────────────────────────┐                     │
 │  │ Target Repo Source Root                  │                     │
-│  │ (e.g. MyProject/src/LanguageServer/Server/) │                  │
+│  │ (e.g. MyApp/src/Server/)                 │                     │
 │  │                                          │                     │
 │  │ Resolved via: TOTAL_RECALL_SOURCE_ROOT   │                     │
 │  │            or config.json.sourceRoot      │                     │
@@ -280,7 +280,7 @@ Steps 1-4 are **fully deterministic** from data we already have: TypeRecord (con
 
 ```json
 {
-  "sourceRoot": "C:\\Repos\\MyProject\\src\\LanguageServer\\Server",
+  "sourceRoot": "C:\\Repos\\MyApp\\src\\Server",
   "scannedUtc": "2026-02-27T10:00:00Z",
   "assemblyPath": "...\\Server.dll",
   "coveragePath": "...\\coverage.cobertura.xml",
