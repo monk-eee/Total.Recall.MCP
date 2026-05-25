@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 1098 passing |
+| tests | 1098 main + 6 analyzer passing |
 
 ## Purpose
 
@@ -86,9 +86,7 @@ Run these four checks before writing any helper, utility, extension method, or "
 
 #### Mechanical enforcement
 
-There is no automated duplicate-helper detector in this repo *yet*. Until there is, the enforcement is human: every reviewer (including the agent reviewing its own diff via `git diff --cached`) must ask "does this helper already exist?" before accepting the diff. If during a session you spot a duplicate that escaped review, add it to the `Known duplicates` section of `docs/TODO.md` per the "Code reuse" rule below — silently leaving duplication for the next agent is a violation of this philosophy.
-
-A future analyzer / Roslyn-based check that fails the build on duplicate `internal static` signatures across `Tools/` and `Scanners/` is a welcome contribution. **Do not silence it with an allowlist when it arrives — the fix is always extraction to `Infrastructure/`.**
+Duplicate `internal static` helpers across `Tools/` and `Scanners/` are flagged at build time by the `Total.Recall.Analyzers` Roslyn analyzer (diagnostic `TR0001`, severity `Warning`). The analyzer ships in `src/Total.Recall.Analyzers/` and is wired into `src/Total.Recall/Total.Recall.csproj` as an analyzer reference. When `TR0001` fires the fix is always extraction to `Infrastructure/` — **do not silence the diagnostic with an allowlist or a `#pragma warning disable`.** If during a session you spot a duplicate that escaped review (e.g. predates the analyzer or lives in an analyzer-blind spot), add it to the `Known duplicates` section of `docs/TODO.md` per the "Code reuse" rule below — silently leaving duplication for the next agent is a violation of this philosophy.
 
 ### File discipline
 - **Keep files focused.** When a `.cs` file exceeds ~500 lines or holds more than one clear responsibility (e.g. a tool class plus three helpers plus a model), split it. The `Tools/`, `Scanners/`, `Models/`, `Infrastructure/` folder split is the model — keep adding folders rather than letting one file grow.
@@ -257,12 +255,14 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 | Assembly | TFM | csproj Path |
 |----------|-----|-------------|
 | Total.Recall | net8.0 | `src/Total.Recall/Total.Recall.csproj` |
+| Total.Recall.Analyzers | netstandard2.0 | `src/Total.Recall.Analyzers/Total.Recall.Analyzers.csproj` |
 
 ### Test Assembly
 
 | Assembly | TFM | csproj Path | Status |
 |----------|-----|-------------|--------|
-| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1070 tests |
+| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1098 tests |
+| Total.Recall.Analyzers.Tests | net8.0 | `tests/Total.Recall.Analyzers.Tests/Total.Recall.Analyzers.Tests.csproj` | 6 tests |
 
 ## Data Files
 
@@ -479,6 +479,8 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 60. **Report CLI sub-command (triple-mode entry)**: `dotnet run -- report <sub-cmd>` dispatches to existing MCP tool methods via `ReportRunner.RunReport(string[] args, TextWriter stdout)` in `src/Total.Recall/Reporting/`. The `TextWriter` seam keeps the runner unit-testable (tests pass `StringWriter`; production passes `Console.Out`). Sub-commands: `tool-stats`, `efficiency`, `scorecard`, `cycles`, `sessions`, `leaderboard` — each routes to the already-tested tool method (`ScorecardTool.GetToolCallStats`, etc.) and prints the JSON string unchanged. Options parsed: `--ns`/`--namespace`, `--last <int>`, `--pattern <string>`. While the report runs, `TOTAL_RECALL_MODE` is forced to `off` (with `TelemetryConfig.ResetCache()`) and restored in a `finally`, so reads don't append spurious `tool-calls.jsonl` entries about the reads themselves. Exit codes: `0` ok or `--help`, `1` missing/unknown sub-command, `2` underlying tool threw. No parallel renderer — all output is the tools' existing JSON, downstream pipes `ConvertFrom-Json` / `jq` / `Format-Table`.
 
 61. **`report --format table` fixed-width renderer**: `src/Total.Recall/Reporting/TableRenderer.cs` parses each tool's JSON envelope and renders a fixed-width text table on stdout when `--format table` is set on a `report` invocation. Strategy: (1) if the input doesn't start with `{` or `[`, or doesn't parse as JSON, return it unchanged (covers empty-state messages like `"No tool calls recorded yet."`); (2) if the JSON root is an array, render that array as a table; (3) if the root is an object, find the longest array-valued property and render that as the table while rendering the object's scalar properties as a key/value block above it; (4) nested object/array cells render as compact JSON. Default remains `--format json` to keep the existing piping recipes (`ConvertFrom-Json | Format-Table`, `jq`) working. Unknown `--format` values silently fall back to `json` rather than failing — the CLI should never refuse to print data.
+
+62. **TR0001 duplicate-helper analyzer (`Total.Recall.Analyzers`)**: `src/Total.Recall.Analyzers/DuplicateInternalStaticAnalyzer.cs` is a `netstandard2.0` Roslyn `DiagnosticAnalyzer` that fires `TR0001` (Warning) when the same `internal static` method signature appears in two or more distinct files whose paths contain a `Tools` or `Scanners` directory segment. Signature is `Name(paramType1,paramType2,...)` using the literal syntax-tree text of each parameter type (e.g. `int`, `string`, `IReadOnlyList<string>`) — no symbol binding, so the analyzer stays cheap. Path matching splits on `/` and `\` and requires an exact segment match (case-insensitive) — substring matching would falsely flag things like `MyToolsHelper/`. The analyzer skips: `public`/`private`/`protected` methods (only pure `internal` static), files outside the two folder roots, and in-file overloads (same file = not a cross-boundary duplicate). It is wired into `src/Total.Recall/Total.Recall.csproj` as an analyzer-only project reference (`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`) and has six xUnit tests in `tests/Total.Recall.Analyzers.Tests/`. **When TR0001 fires the fix is extraction to `Infrastructure/` — never `#pragma warning disable` or an allowlist** (per AGENTS.md Mechanical enforcement).
 
 ## Footguns
 
