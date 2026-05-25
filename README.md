@@ -28,11 +28,37 @@ And nobody can tell whether the agent is actually getting better, worse, or just
 - **Agents write back** gotchas, assessments, and session logs, creating a feedback loop that makes each session smarter than the last
 - **Telemetry + eval harness** (v2.4) records every tool call, detects behaviour anti-patterns (re-query, context-loss, oscillation), brackets work into tasks, and runs deterministic grader challenges for cross-model scoring
 
+## Install
+
+Total.Recall ships as a [.NET global tool on NuGet](https://www.nuget.org/packages/TotalRecall.Mcp):
+
+```bash
+dotnet tool install -g TotalRecall.Mcp --version 2.4.0-preview.1
+```
+
+This exposes a single command, `total-recall`, on your `PATH`. The same
+binary is the MCP server (default), the scanner (`total-recall scan`),
+and the report reader (`total-recall report`).
+
+To update, uninstall, or build from source:
+
+```bash
+dotnet tool update    -g TotalRecall.Mcp
+dotnet tool uninstall -g TotalRecall.Mcp
+```
+
+```bash
+# Or build from source
+git clone https://github.com/monk-eee/Total.Recall.MCP
+cd Total.Recall.MCP
+dotnet build src/Total.Recall/Total.Recall.csproj
+```
+
 ## Quickstart
 
 ```bash
 # 1. Scan your target repo
-dotnet run --project src/Total.Recall -- scan \
+total-recall scan \
   --assembly path/to/YourProject.dll \
   --coverage path/to/coverage.cobertura.xml \
   --tests    path/to/YourProject.Tests \
@@ -52,12 +78,12 @@ The CLI has three modes: MCP server (default), `scan` (extract data), and `repor
 **Scanning a target assembly** — populates JSONL stores under `data/<namespace>/`:
 
 ```text
-$ dotnet run -- scan \
+$ total-recall scan \
     --assembly src/Total.Recall/bin/Debug/net8.0/Total.Recall.dll \
     --tests    tests/Total.Recall.Tests \
     --namespace self --enrich
 
-Total.Recall Scanner v2.4.0 — output: ...\data\self
+Total.Recall Scanner v2.4.0-preview.1 — output: ...\data\self
   Scanning assembly... ✓ type-registry.jsonl — 101 types
   Scanning tests...    ✓ test-inventory.jsonl — 48 test files
   Enriching coverage data... ✓ 0 classes enriched with test counts + testability
@@ -79,7 +105,7 @@ Done. [types:101, test-files:48, enriched:0]
 **Reading telemetry** — same binary, `report` sub-command. JSON by default, `--format table` for a fixed-width view; pipe JSON through `ConvertFrom-Json | Format-Table` or `jq` for custom shapes:
 
 ```text
-$ dotnet run -- report
+$ total-recall report
 
 Usage: total-recall report <sub-command> [options]
 
@@ -98,7 +124,7 @@ Options:
   --format <json|table>  Output format (default: json)
 ```
 
-**MCP server mode** — `dotnet run` with no arguments. The process speaks JSON-RPC over stdio and is launched by VS Code via `.vscode/mcp.json` (see [VS Code MCP setup](docs/QUICKSTART.md)). All 34 tools are auto-discovered via MCP protocol; the agent does not need configuration.
+**MCP server mode** — run `total-recall` with no arguments. The process speaks JSON-RPC over stdio and is launched by VS Code via `.vscode/mcp.json` (see [VS Code MCP setup](docs/QUICKSTART.md)). All 34 tools are auto-discovered via MCP protocol; the agent does not need configuration.
 
 ## Design Principles
 
@@ -207,7 +233,7 @@ VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot in
 ### Scan a target assembly
 
 ```bash
-dotnet run --project src/Total.Recall -- scan ^
+total-recall scan ^
   --assembly "path/to/YourProject.dll" ^
   --coverage "path/to/coverage.cobertura.xml" ^
   --tests "path/to/YourProject.Tests/" ^
@@ -248,7 +274,7 @@ You do **not** need to rescan for gotchas (appended live), mock recipes (manual 
 Add `--watch` to keep the scanner running and automatically re-scan when files change:
 
 ```bash
-dotnet run --project src/Total.Recall -- scan ^
+total-recall scan ^
   --assembly "path/to/YourProject.dll" ^
   --coverage "path/to/coverage.cobertura.xml" ^
   --tests "path/to/YourProject.Tests/" ^
@@ -265,7 +291,28 @@ Changes are debounced (1.5s) to coalesce rapid build events. After each re-scan,
 
 ### VS Code MCP configuration
 
-Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for):
+Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for).
+
+**Recommended — using the installed global tool** (`dotnet tool install -g TotalRecall.Mcp`):
+
+```json
+{
+  "servers": {
+    "Total.Recall": {
+      "type": "stdio",
+      "command": "total-recall",
+      "env": {
+        "TOTAL_RECALL_DATA": "C:\\path\\to\\data",
+        "TOTAL_RECALL_NAMESPACE": "your-namespace",
+        "TOTAL_RECALL_LOG_LEVEL": "info",
+        "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\target-repo\\src"
+      }
+    }
+  }
+}
+```
+
+**Alternative — running from a source checkout** (no `dotnet tool install` required):
 
 ```json
 {
@@ -276,10 +323,10 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
       "args": [
         "run",
         "--project",
-        "C:\\path\\to\\Total.Recall\\src\\Total.Recall\\Total.Recall.csproj"
+        "C:\\path\\to\\Total.Recall.MCP\\src\\Total.Recall\\Total.Recall.csproj"
       ],
       "env": {
-        "TOTAL_RECALL_DATA": "C:\\path\\to\\Total.Recall\\data",
+        "TOTAL_RECALL_DATA": "C:\\path\\to\\data",
         "TOTAL_RECALL_NAMESPACE": "your-namespace",
         "TOTAL_RECALL_LOG_LEVEL": "info",
         "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\target-repo\\src"
@@ -304,12 +351,12 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
 The same process is a triple-mode entry point: **MCP server** (default), **scanner** (`scan` sub-command), and **report reader** (`report` sub-command). The report mode reads the recorded telemetry JSONL without needing the server to be live — handy for terminals, CI, and post-mortems.
 
 ```bash
-dotnet run --project src/Total.Recall -- report tool-stats   --ns myproject
-dotnet run --project src/Total.Recall -- report cycles       --ns myproject --pattern re-query --last 50
-dotnet run --project src/Total.Recall -- report scorecard    --ns myproject
-dotnet run --project src/Total.Recall -- report sessions     --ns myproject --last 10
-dotnet run --project src/Total.Recall -- report efficiency   --ns myproject
-dotnet run --project src/Total.Recall -- report leaderboard  --ns myproject
+total-recall report tool-stats   --ns myproject
+total-recall report cycles       --ns myproject --pattern re-query --last 50
+total-recall report scorecard    --ns myproject
+total-recall report sessions     --ns myproject --last 10
+total-recall report efficiency   --ns myproject
+total-recall report leaderboard  --ns myproject
 ```
 
 | Sub-command | What it reads |
@@ -327,13 +374,13 @@ Exit codes: `0` ok, `1` missing/unknown sub-command, `2` underlying tool threw.
 Default output is JSON. Pass `--format table` for a built-in fixed-width text table:
 
 ```bash
-dotnet run --project src/Total.Recall -- report scorecard --ns myproject --format table
+total-recall report scorecard --ns myproject --format table
 ```
 
 For advanced shaping, JSON output pipes cleanly through PowerShell or `jq`:
 
 ```powershell
-dotnet run --project src/Total.Recall -- report tool-stats --ns myproject `
+total-recall report tool-stats --ns myproject `
   | ConvertFrom-Json | Select-Object -ExpandProperty tools | Format-Table -AutoSize
 ```
 
@@ -362,7 +409,7 @@ While a report runs, `TOTAL_RECALL_MODE` is forced to `off` so the report itself
 | **Metrics** | In-memory counters | No — resets on restart | Per-process tool call counts, cache hit rates, lookup strategy stats |
 | **Sessions** | `sessions.jsonl` on disk | Yes — append-only | Cross-session learning: tokens, classes, coverage deltas, failure patterns |
 
-**Logs** go to stderr (never stdout — that's the JSON-RPC transport). In VS Code: **View → Output → select "Total.Recall"**. From a terminal: `dotnet run --project src/Total.Recall 2> total-recall.log`
+**Logs** go to stderr (never stdout — that's the JSON-RPC transport). In VS Code: **View → Output → select "Total.Recall"**. From a terminal: `total-recall 2> total-recall.log`
 
 **Metrics** are queried via the `get_metrics` tool. Key signals: `cache.hitRate` > 90% is healthy; `lookup.exact` dominating lookups means agents are using precise names; `typeindex.rebuilds` ≤ 1 means the index stays warm.
 
@@ -372,8 +419,8 @@ While a report runs, `TOTAL_RECALL_MODE` is forced to `off` so the report itself
 
 | Problem | Check | Fix |
 |---------|-------|-----|
-| Server won't start | `dotnet run --project src/Total.Recall` from terminal | Fix build errors; verify `.vscode/mcp.json` paths; restart VS Code |
-| Tools return empty results | Startup log shows `✗` for data files | Run scanner: `dotnet run -- scan --assembly ... --namespace ...` |
+| Server won't start | `total-recall` from terminal | Fix build errors; verify `.vscode/mcp.json` paths; restart VS Code |
+| Tools return empty results | Startup log shows `✗` for data files | Run scanner: `total-recall scan --assembly ... --namespace ...` |
 | `get_source_snippet` fails | No `TOTAL_RECALL_SOURCE_ROOT` or `config.json` | Set env var in `mcp.json`, or re-run scanner with `--source-root` |
 | Type not found | Name not in registry | `Select-String "TypeName" data/ns/type-registry.jsonl`; re-scan if stale |
 | High cache miss rate | Another process writing JSONL? | Scanner running concurrently? File sync tools touching data dir? Exclude from antivirus/OneDrive |
