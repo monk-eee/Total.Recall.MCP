@@ -45,6 +45,61 @@ dotnet run --project src/Total.Recall -- scan \
 
 See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough and [docs/DEMO.md](docs/DEMO.md) for a 90-second end-to-end story.
 
+## Seeing it in action
+
+The CLI has three modes: MCP server (default), `scan` (extract data), and `report` (read telemetry). The blocks below are real terminal output, not mockups — `scan` was run against Total.Recall's own assembly.
+
+**Scanning a target assembly** — populates JSONL stores under `data/<namespace>/`:
+
+```text
+$ dotnet run -- scan \
+    --assembly src/Total.Recall/bin/Debug/net8.0/Total.Recall.dll \
+    --tests    tests/Total.Recall.Tests \
+    --namespace self --enrich
+
+Total.Recall Scanner v2.4.0 — output: ...\data\self
+  Scanning assembly... ✓ type-registry.jsonl — 101 types
+  Scanning tests...    ✓ test-inventory.jsonl — 48 test files
+  Enriching coverage data... ✓ 0 classes enriched with test counts + testability
+  Auto-generating mock recipes... ✓ no new recipes needed
+  ✓ config.json updated
+
+  ── Data Summary ──
+    type-registry      101 records
+    coverage-gaps        — (not found)
+    test-inventory      48 records
+    mock-recipes         — (not found)
+    gotchas              — (not found)
+    assessments          — (not found)
+    sessions             — (not found)
+
+Done. [types:101, test-files:48, enriched:0]
+```
+
+**Reading telemetry** — same binary, `report` sub-command. JSON by default, `--format table` for a fixed-width view; pipe JSON through `ConvertFrom-Json | Format-Table` or `jq` for custom shapes:
+
+```text
+$ dotnet run -- report
+
+Usage: total-recall report <sub-command> [options]
+
+Sub-commands:
+  tool-stats     Per-tool call counts, p50/p95 latency, response bytes
+  efficiency     Session-level tokens / bytes / cycles / dedupe report
+  scorecard      Per-model aggregated metrics across sessions+tasks+evals
+  cycles         Recent detected behaviour cycles (re-query, context-loss, oscillation)
+  sessions       Session history + plateau warning + lines-per-test ROI
+  leaderboard    Per-model eval pass rate / avg score
+
+Options:
+  --ns <name>            Namespace to query (default: TOTAL_RECALL_NAMESPACE)
+  --last <N>             Limit results (cycles default 20, sessions default 5)
+  --pattern <name>       Filter cycles by pattern: re-query | context-loss | oscillation
+  --format <json|table>  Output format (default: json)
+```
+
+**MCP server mode** — `dotnet run` with no arguments. The process speaks JSON-RPC over stdio and is launched by VS Code via `.vscode/mcp.json` (see [VS Code MCP setup](docs/QUICKSTART.md)). All 34 tools are auto-discovered via MCP protocol; the agent does not need configuration.
+
 ## Design Principles
 
 1. **Simplicity over cleverness** — JSONL files, no databases, no complex joins. Every tool is a single query against in-memory data. The entire data set is <2MB and loads in <1s.
