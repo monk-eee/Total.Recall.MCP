@@ -13,7 +13,7 @@ Total.Recall is two things in one process:
 1. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
 2. **A behaviour observatory + eval harness** — every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss, oscillation) are auto-detected, agent work is bracketed into named tasks, and a deterministic grader runs reproducible challenges to score models against each other without an LLM-as-judge.
 
-The included scanners target .NET (Cobertura coverage, MetadataLoadContext reflection), so out of the box this is the strongest tool available for AI-assisted code coverage uplift on a large C# codebase. But the memory + telemetry + eval substrate is language-agnostic — the .NET scanners are just the first concrete consumer.
+The included scanners target .NET (Cobertura coverage, `MetadataLoadContext` reflection), which is the only public MCP server I'm aware of in this specific niche — AI-assisted test coverage uplift on a large C# codebase. The memory + telemetry + eval substrate is designed to be language-agnostic, but .NET is the only scanner today; a Python or TypeScript scanner is left as an exercise.
 
 ## Why it exists
 
@@ -354,9 +354,31 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for the full observabilit
 
 ---
 
+## Repo layout
+
+```
+src/
+  Total.Recall/                 ← main project (MCP server + scanner + report CLI)
+    Infrastructure/             ← shared helpers (JSON, stores, logging, metrics)
+    Tools/                      ← MCP tool entry points (one class per tool)
+    Scanners/                   ← assembly / coverage / test scanners
+    Models/                     ← record types serialised to JSONL
+    Reporting/                  ← report CLI sub-commands + table renderer
+  Total.Recall.Analyzers/       ← Roslyn analyzer (TR0001 duplicate-helper rule)
+tests/
+  Total.Recall.Tests/           ← xUnit tests for main project
+  Total.Recall.Analyzers.Tests/ ← xUnit tests for the analyzer
+docs/                           ← ADRs, integration guide, tool reference, demo
+data/                           ← gitignored — scanner output lands here per-namespace
+```
+
+Start with [`AGENTS.md`](AGENTS.md) for the working rules and architecture decisions, then [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the end-to-end flow.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, please read `AGENTS.md` — in particular the Architecture Decisions numbered list, which documents every design choice and the reasoning behind it.
+
+The default branch is `develop` (kept from the project's pre-OSS history). PRs and CI run against both `develop` and `main`.
 
 ## License
 
