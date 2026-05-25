@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 1098 main + 6 analyzer passing |
+| tests | 1098 main + 8 analyzer passing |
 
 ## Purpose
 
@@ -86,7 +86,7 @@ Run these four checks before writing any helper, utility, extension method, or "
 
 #### Mechanical enforcement
 
-Duplicate `internal static` helpers across `Tools/` and `Scanners/` are flagged at build time by the `Total.Recall.Analyzers` Roslyn analyzer (diagnostic `TR0001`, severity `Warning`). The analyzer ships in `src/Total.Recall.Analyzers/` and is wired into `src/Total.Recall/Total.Recall.csproj` as an analyzer reference. When `TR0001` fires the fix is always extraction to `Infrastructure/` — **do not silence the diagnostic with an allowlist or a `#pragma warning disable`.** If during a session you spot a duplicate that escaped review (e.g. predates the analyzer or lives in an analyzer-blind spot), add it to the `Known duplicates` section of `docs/TODO.md` per the "Code reuse" rule below — silently leaving duplication for the next agent is a violation of this philosophy.
+Duplicate non-public `static` helpers (both `internal static` and `private static`) across `Tools/` and `Scanners/` are flagged at build time by the `Total.Recall.Analyzers` Roslyn analyzer (diagnostic `TR0001`, severity `Warning`). The analyzer ships in `src/Total.Recall.Analyzers/` and is wired into `src/Total.Recall/Total.Recall.csproj` as an analyzer reference. When `TR0001` fires the fix is normally extraction to `Infrastructure/`; if the two methods genuinely do different work and only collide on name + signature, rename one. **Do not silence the diagnostic with an allowlist or a `#pragma warning disable`.** If during a session you spot a duplicate that escaped review (e.g. predates the analyzer or lives in an analyzer-blind spot — e.g. `public static` helpers, which the analyzer deliberately skips), add it to the `Known duplicates` section of `docs/TODO.md` per the "Code reuse" rule below — silently leaving duplication for the next agent is a violation of this philosophy.
 
 ### File discipline
 - **Keep files focused.** When a `.cs` file exceeds ~500 lines or holds more than one clear responsibility (e.g. a tool class plus three helpers plus a model), split it. The `Tools/`, `Scanners/`, `Models/`, `Infrastructure/` folder split is the model — keep adding folders rather than letting one file grow.
@@ -262,7 +262,7 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 | Assembly | TFM | csproj Path | Status |
 |----------|-----|-------------|--------|
 | Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1098 tests |
-| Total.Recall.Analyzers.Tests | net8.0 | `tests/Total.Recall.Analyzers.Tests/Total.Recall.Analyzers.Tests.csproj` | 6 tests |
+| Total.Recall.Analyzers.Tests | net8.0 | `tests/Total.Recall.Analyzers.Tests/Total.Recall.Analyzers.Tests.csproj` | 8 tests |
 
 ## Data Files
 
@@ -480,7 +480,7 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 61. **`report --format table` fixed-width renderer**: `src/Total.Recall/Reporting/TableRenderer.cs` parses each tool's JSON envelope and renders a fixed-width text table on stdout when `--format table` is set on a `report` invocation. Strategy: (1) if the input doesn't start with `{` or `[`, or doesn't parse as JSON, return it unchanged (covers empty-state messages like `"No tool calls recorded yet."`); (2) if the JSON root is an array, render that array as a table; (3) if the root is an object, find the longest array-valued property and render that as the table while rendering the object's scalar properties as a key/value block above it; (4) nested object/array cells render as compact JSON. Default remains `--format json` to keep the existing piping recipes (`ConvertFrom-Json | Format-Table`, `jq`) working. Unknown `--format` values silently fall back to `json` rather than failing — the CLI should never refuse to print data.
 
-62. **TR0001 duplicate-helper analyzer (`Total.Recall.Analyzers`)**: `src/Total.Recall.Analyzers/DuplicateInternalStaticAnalyzer.cs` is a `netstandard2.0` Roslyn `DiagnosticAnalyzer` that fires `TR0001` (Warning) when the same `internal static` method signature appears in two or more distinct files whose paths contain a `Tools` or `Scanners` directory segment. Signature is `Name(paramType1,paramType2,...)` using the literal syntax-tree text of each parameter type (e.g. `int`, `string`, `IReadOnlyList<string>`) — no symbol binding, so the analyzer stays cheap. Path matching splits on `/` and `\` and requires an exact segment match (case-insensitive) — substring matching would falsely flag things like `MyToolsHelper/`. The analyzer skips: `public`/`private`/`protected` methods (only pure `internal` static), files outside the two folder roots, and in-file overloads (same file = not a cross-boundary duplicate). It is wired into `src/Total.Recall/Total.Recall.csproj` as an analyzer-only project reference (`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`) and has six xUnit tests in `tests/Total.Recall.Analyzers.Tests/`. **When TR0001 fires the fix is extraction to `Infrastructure/` — never `#pragma warning disable` or an allowlist** (per AGENTS.md Mechanical enforcement).
+62. **TR0001 duplicate-helper analyzer (`Total.Recall.Analyzers`)**: `src/Total.Recall.Analyzers/DuplicateInternalStaticAnalyzer.cs` is a `netstandard2.0` Roslyn `DiagnosticAnalyzer` that fires `TR0001` (Warning) when the same non-public `static` method signature (`internal static` OR `private static`) appears in two or more distinct files whose paths contain a `Tools` or `Scanners` directory segment. `public static` and `protected static` are skipped — those are deliberate API surfaces, not forked helpers. Signature is `Name(paramType1,paramType2,...)` using the literal syntax-tree text of each parameter type (e.g. `int`, `string`, `IReadOnlyList<string>`) — no symbol binding, so the analyzer stays cheap. Path matching splits on `/` and `\` and requires an exact segment match (case-insensitive) — substring matching would falsely flag things like `MyToolsHelper/`. In-file overloads are not flagged (same file = not a cross-boundary duplicate). Wired into `src/Total.Recall/Total.Recall.csproj` as an analyzer-only project reference (`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`) with eight xUnit tests in `tests/Total.Recall.Analyzers.Tests/` covering internal-static positives, private-static positives, in-file overloads, public/protected statics, and cross-folder boundaries. **When TR0001 fires the fix is normally extraction to `Infrastructure/`; rename only if the helpers genuinely do different work — never `#pragma warning disable` or add an allowlist** (per AGENTS.md Mechanical enforcement). The `private static` scope was added after the initial `internal static`-only release after a sweep found three real private-static duplicates (`SanitizeId`, `BuildLatestAssessments`, `TryGetAssessment`) that the narrower rule had missed.
 
 ## Footguns
 
