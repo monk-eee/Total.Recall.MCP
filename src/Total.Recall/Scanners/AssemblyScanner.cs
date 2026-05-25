@@ -155,6 +155,14 @@ public static class AssemblyScanner
 
     private static void AddDirectory(Dictionary<string, string> bySimpleName, string dir, bool overwriteExisting)
     {
+        // NOTE on perf: we call AssemblyName.GetAssemblyName(dll) for every dll
+        // in both the target dir and the runtime dir (~250 dlls in a typical
+        // .NET 8 shared framework). Each call parses the PE header — sub-ms,
+        // total ~100–300 ms one-time at scanner startup. A filename-only key
+        // would be cheaper but reintroduces the very bug this method exists to
+        // fix: two DLLs in different dirs can share a filename without sharing
+        // identity (ref-assembly shims, side-by-side framework copies). Identity
+        // is the only correct dedup key here. Don't "optimise" to filename.
         foreach (var dll in Directory.EnumerateFiles(dir, "*.dll"))
         {
             string? simpleName;

@@ -120,7 +120,7 @@ public class InitRunnerTests : IDisposable
         Assert.Contains("--assembly", output);
         Assert.Contains("--coverage", output);
         Assert.Contains("--tests", output);
-        Assert.Contains("--namespace sample", output);
+        Assert.Contains("--namespace \"sample\"", output);
     }
 
     [Fact]
@@ -166,5 +166,65 @@ public class InitRunnerTests : IDisposable
         Assert.Contains("No production .dll found", output);
         Assert.Contains("No coverage.cobertura.xml found", output);
         Assert.Contains("No test project detected", output);
+    }
+
+    /// <summary>
+    /// Regression test: <c>--namespace</c> values containing path separators,
+    /// traversal segments, or absolute roots must be rejected with exit 1 and
+    /// must NOT cause <c>Path.Combine</c> to escape the data root and write
+    /// <c>config.json</c> outside it. Surfaced by Copilot code review on PR #10.
+    /// </summary>
+    [Theory]
+    [InlineData("..")]
+    [InlineData("../escape")]
+    [InlineData("..\\escape")]
+    [InlineData("nested/sub")]
+    [InlineData("nested\\sub")]
+    [InlineData("C:\\absolute")]
+    [InlineData("/abs/unix")]
+    [InlineData("has space")]
+    [InlineData("colon:name")]
+    public void RunInit_UnsafeNamespace_ExitsOneAndDoesNotEscapeDataRoot(string unsafeNs)
+    {
+        using var sw = new StringWriter();
+        var exit = InitRunner.RunInit(["init", _repoRoot, "--namespace", unsafeNs], sw);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("not a safe path segment", sw.ToString());
+    }
+
+    [Theory]
+    [InlineData("simple")]
+    [InlineData("with-dash")]
+    [InlineData("with_underscore")]
+    [InlineData("dotted.name")]
+    [InlineData("Mixed-Case_1.2")]
+    public void IsSafeNamespace_AcceptsValidSegments(string ns)
+    {
+        Assert.True(InitRunner.IsSafeNamespace(ns));
+    }
+
+    /// <summary>
+    /// Regression test: <c>BuildScanCommand</c> must quote the <c>--namespace</c>
+    /// argument so the printed copy/paste command remains unambiguous if a user
+    /// later picks a namespace containing spaces or shell-special characters.
+    /// Surfaced by Copilot code review on PR #10.
+    /// </summary>
+    [Fact]
+    public void BuildScanCommand_QuotesNamespaceArgument()
+    {
+        var discovery = new DiscoveryResult(
+            RepoRoot: _repoRoot,
+            AssemblyPath: null,
+            CoveragePath: null,
+            TestsPath: null,
+            SourceRoot: _repoRoot,
+            ProductionCsproj: null,
+            TestCsproj: null,
+            SuggestedNamespace: "sample");
+
+        var cmd = InitRunner.BuildScanCommand(discovery, "sample");
+
+        Assert.Contains("--namespace \"sample\"", cmd);
     }
 }

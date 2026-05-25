@@ -56,6 +56,17 @@ internal static class InitRunner
             ? discovery.SuggestedNamespace
             : opts.NamespaceName!.Trim();
 
+        // Validate namespace as a single safe path segment. Reject path separators,
+        // rooted paths, traversal segments, and reserved names — otherwise a value
+        // like "../../../etc" would let Path.Combine escape the data root when we
+        // write config.json.
+        if (!IsSafeNamespace(ns))
+        {
+            stdout.WriteLine($"Error: namespace '{ns}' is not a safe path segment.");
+            stdout.WriteLine("       Use only letters, digits, '-', '_', '.'; no separators, no '..'.");
+            return 1;
+        }
+
         var dataRoot = string.IsNullOrWhiteSpace(opts.DataRoot)
             ? RepoConfig.GetRootPath()
             : Path.GetFullPath(opts.DataRoot!);
@@ -205,9 +216,28 @@ internal static class InitRunner
         if (discovery.TestsPath is not null)
             parts.Add($"--tests \"{discovery.TestsPath}\"");
         parts.Add($"--source-root \"{discovery.SourceRoot}\"");
-        parts.Add($"--namespace {ns}");
+        parts.Add($"--namespace \"{ns}\"");
         parts.Add("--enrich");
         return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// A safe namespace is a single path segment composed of letters, digits,
+    /// '-', '_', and '.'. Rejects empty, '.', '..', anything containing path
+    /// separators (any platform's), rooted paths, and DOS reserved names.
+    /// </summary>
+    internal static bool IsSafeNamespace(string ns)
+    {
+        if (string.IsNullOrWhiteSpace(ns)) return false;
+        if (ns == "." || ns == "..") return false;
+        if (ns.IndexOfAny(new[] { '/', '\\', ':' }) >= 0) return false;
+        if (Path.IsPathRooted(ns)) return false;
+        foreach (var ch in ns)
+        {
+            if (!(char.IsLetterOrDigit(ch) || ch == '-' || ch == '_' || ch == '.'))
+                return false;
+        }
+        return true;
     }
 
     private static string JsonEncode(string s) => JsonSerializer.Serialize(s);
