@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 1070 passing |
+| tests | 1082 passing |
 
 ## Purpose
 
@@ -229,6 +229,13 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan \
   --tests "...\YourProject.Tests" \
   --namespace myproject \
   --enrich --analyze --watch
+
+# Report CLI (read telemetry without spinning up the MCP server)
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report cycles --pattern re-query --last 50
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report scorecard --ns myproject
+# Sub-commands: tool-stats | efficiency | scorecard | cycles | sessions | leaderboard
+# All output is JSON — pipe through ConvertFrom-Json or jq for tables.
 
 # Run tests (when test project exists)
 dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
@@ -467,6 +474,8 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 58. **ContextResetTool session-marker**: `report_context_reset(reason?)` lets an agent self-report a compaction or context-window reset. Records a marker entry to `sessions.jsonl` with type `context-reset`, rotates `Telemetry.SessionId` to a new Guid (so subsequent tool calls are attributed to the post-reset session for cycle detection and scorecards), and clears `Telemetry.ActiveTaskId`. No-op when `TelemetryConfig.Mode == Off`.
 
 59. **Tests must use `[Collection("ToolTests")]`**: Any test that touches process-global static state (`Telemetry.*`, `CycleDetector.s_fired`, `TelemetryConfig.s_cachedMode`, `StoreRegistry` caches, `RepoConfig` cache, env vars `TOTAL_RECALL_*`) MUST be in the `[Collection("ToolTests")]` xUnit collection. xUnit runs tests in different collections in parallel; without the collection attribute, two parallel tests pointing at different temp dirs trample each other's static state. `TelemetryTestHarness` (in `tests/Total.Recall.Tests/Infrastructure/`) is the canonical setup/teardown: per-test temp dir under `Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString())`, env-var snapshot/restore, `Telemetry.ResetForTests()`, `CycleDetector.ResetForTests()`, `TelemetryConfig.ResetCache()`, `StoreRegistry.Reset()`, `RepoConfig.ClearCache()`.
+
+60. **Report CLI sub-command (triple-mode entry)**: `dotnet run -- report <sub-cmd>` dispatches to existing MCP tool methods via `ReportRunner.RunReport(string[] args, TextWriter stdout)` in `src/Total.Recall/Reporting/`. The `TextWriter` seam keeps the runner unit-testable (tests pass `StringWriter`; production passes `Console.Out`). Sub-commands: `tool-stats`, `efficiency`, `scorecard`, `cycles`, `sessions`, `leaderboard` — each routes to the already-tested tool method (`ScorecardTool.GetToolCallStats`, etc.) and prints the JSON string unchanged. Options parsed: `--ns`/`--namespace`, `--last <int>`, `--pattern <string>`. While the report runs, `TOTAL_RECALL_MODE` is forced to `off` (with `TelemetryConfig.ResetCache()`) and restored in a `finally`, so reads don't append spurious `tool-calls.jsonl` entries about the reads themselves. Exit codes: `0` ok or `--help`, `1` missing/unknown sub-command, `2` underlying tool threw. No parallel renderer — all output is the tools' existing JSON, downstream pipes `ConvertFrom-Json` / `jq` / `Format-Table`.
 
 ## Footguns
 
