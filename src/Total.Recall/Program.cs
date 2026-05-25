@@ -1,14 +1,18 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Total.Recall.Cli;
 using Total.Recall.Infrastructure;
 using Total.Recall.Reporting;
 using Total.Recall.Scanners;
 
-// Triple-mode entry point:
-//   Default (no args)    → stdio MCP server (VS Code launches this)
-//   "scan" subcommand    → CLI scanner that writes JSONL and exits
-//   "report" subcommand  → CLI report runner that reads telemetry JSONL and prints JSON
+// Multi-mode entry point:
+//   Default (stdin piped) → stdio MCP server (VS Code launches this)
+//   Default (TTY, no args)→ print usage (humans don't see a hung process)
+//   "init" subcommand     → auto-discover repo layout, write config.json
+//   "doctor" subcommand   → health-check data root + namespace configs
+//   "scan" subcommand     → CLI scanner that writes JSONL and exits
+//   "report" subcommand   → CLI report runner that reads telemetry JSONL and prints JSON
 
 try
 {
@@ -31,6 +35,40 @@ try
     if (args.Length > 0 && args[0].Equals("report", StringComparison.OrdinalIgnoreCase))
     {
         Environment.ExitCode = ReportRunner.RunReport(args, Console.Out);
+        return;
+    }
+
+    if (args.Length > 0 && args[0].Equals("init", StringComparison.OrdinalIgnoreCase))
+    {
+        Environment.ExitCode = InitRunner.RunInit(args, Console.Out);
+        return;
+    }
+
+    if (args.Length > 0 && args[0].Equals("doctor", StringComparison.OrdinalIgnoreCase))
+    {
+        Environment.ExitCode = DoctorRunner.RunDoctor(args, Console.Out);
+        return;
+    }
+
+    if (args.Length > 0 && (args[0] == "--help" || args[0] == "-h" || args[0].Equals("help", StringComparison.OrdinalIgnoreCase)))
+    {
+        PrintRootHelp(Console.Out);
+        return;
+    }
+
+    if (args.Length > 0 && (args[0] == "--version" || args[0] == "-v"))
+    {
+        Console.Out.WriteLine($"total-recall {AppVersion.Current}");
+        return;
+    }
+
+    // TTY guard — if the user typed `total-recall` in a terminal with no args,
+    // print usage instead of silently entering MCP stdio server mode and
+    // appearing to hang. VS Code launches us with stdin piped (JSON-RPC), so
+    // IsInputRedirected is the reliable discriminator.
+    if (args.Length == 0 && !Console.IsInputRedirected)
+    {
+        PrintRootHelp(Console.Out);
         return;
     }
 
@@ -899,6 +937,37 @@ static void PrintScanHelp()
           TOTAL_RECALL_DATA       Root data directory (default: "data")
           TOTAL_RECALL_NAMESPACE  Default namespace (default: "default")
         """);
+}
+
+static void PrintRootHelp(TextWriter w)
+{
+    w.WriteLine($"Total.Recall v{AppVersion.Current}");
+    w.WriteLine("Persistent memory server for AI agents doing .NET code coverage work.");
+    w.WriteLine();
+    w.WriteLine("Usage:");
+    w.WriteLine("  total-recall                    Start MCP stdio server (intended for VS Code; reads JSON-RPC from stdin)");
+    w.WriteLine("  total-recall init <repo-path>   Auto-discover repo layout, write config.json, print mcp.json snippet");
+    w.WriteLine("  total-recall doctor [--ns <n>]  Health-check data root + namespace configs");
+    w.WriteLine("  total-recall scan [options]     Run scanners and produce JSONL data");
+    w.WriteLine("  total-recall report <sub>       Print telemetry reports (tool-stats, efficiency, scorecard, ...)");
+    w.WriteLine("  total-recall --version          Print version and exit");
+    w.WriteLine("  total-recall --help             Show this help");
+    w.WriteLine();
+    w.WriteLine("First 5 minutes:");
+    w.WriteLine("  1. cd <your-repo>");
+    w.WriteLine("  2. total-recall init .");
+    w.WriteLine("  3. Paste the printed JSON block into .vscode/mcp.json");
+    w.WriteLine("  4. Run the printed 'total-recall scan ...' command to populate data");
+    w.WriteLine("  5. Restart VS Code and ask Copilot: \"get testable targets, top 5\"");
+    w.WriteLine();
+    w.WriteLine("Environment:");
+    w.WriteLine("  TOTAL_RECALL_DATA          Root data directory (default: 'data')");
+    w.WriteLine("  TOTAL_RECALL_NAMESPACE     Default namespace (default: 'default')");
+    w.WriteLine("  TOTAL_RECALL_SOURCE_ROOT   Target repo source root (for get_source_snippet)");
+    w.WriteLine("  TOTAL_RECALL_LOG_LEVEL     debug|info|warn|error|quiet (default: info)");
+    w.WriteLine("  TOTAL_RECALL_MODE          off|passive|active-eval (default: passive)");
+    w.WriteLine();
+    w.WriteLine("Each sub-command supports --help for detailed options.");
 }
 
 record ScanOptions

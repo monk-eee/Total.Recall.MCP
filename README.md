@@ -1,4 +1,14 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/monk-eee/Total.Recall.MCP/main/assets/recallmon.png" alt="Recallmon — Total.Recall mascot" width="220" />
+</p>
+
 # Total.Recall
+
+[![CI](https://github.com/monk-eee/Total.Recall.MCP/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/monk-eee/Total.Recall.MCP/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/TotalRecall.Mcp.svg?logo=nuget&label=NuGet)](https://www.nuget.org/packages/TotalRecall.Mcp)
+[![Downloads](https://img.shields.io/nuget/dt/TotalRecall.Mcp.svg?logo=nuget&label=downloads)](https://www.nuget.org/packages/TotalRecall.Mcp)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/download/dotnet/8.0)
 
 **An MCP server that gives AI coding agents persistent memory — and measures their behaviour.**
 

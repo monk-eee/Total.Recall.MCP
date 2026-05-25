@@ -204,7 +204,17 @@ The workflow, in order. Do not skip steps.
 dotnet build src/Total.Recall/Total.Recall.csproj
 
 # Run as MCP server (stdio mode — VS Code launches this)
+# When invoked from a terminal (TTY) with no args, prints usage instead of
+# silently waiting on stdin. VS Code pipes stdin so still enters server mode.
 dotnet run --project src/Total.Recall/Total.Recall.csproj
+
+# One-shot bootstrap for a target repo (writes config.json + prints mcp.json)
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- init "C:\path\to\target-repo"
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- init . --namespace myproject
+
+# Health check: env vars, data root, per-namespace file counts, config validity
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- doctor
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- doctor --ns myproject
 
 # Run scanner CLI (with --output)
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan \
@@ -369,7 +379,7 @@ as the code change. The list is load-bearing - keep it dense.
 
 ## Footguns
 
-1. **MetadataLoadContext assembly resolution**: The `PathAssemblyResolver` needs paths to ALL referenced assemblies (target dir + runtime libs). Missing a dependency → `FileNotFoundException` on type resolution. Solution: glob `*.dll` from both the target's output dir and runtime dir.
+1. **MetadataLoadContext assembly resolution**: The `PathAssemblyResolver` needs paths to ALL referenced assemblies (target dir + runtime libs). Missing a dependency → `FileNotFoundException` on type resolution. Solution: glob `*.dll` from both the target's output dir and runtime dir, **deduplicate by `AssemblyName.Name` (NOT file path)** — publish-style targets that ship their own `mscorlib.dll` / `System.Private.CoreLib.dll` next to the host runtime dir's copy will otherwise throw `FileLoadException: Assembly with same name is already loaded` on core-assembly probe. See `AssemblyScanner.BuildResolverPaths`.
 
 2. **MCP SDK version**: Using `0.3.0-preview.1` which is pre-release. API surface may change. The `[McpServerToolType]` / `[McpServerTool]` attribute pattern is stable in preview.
 

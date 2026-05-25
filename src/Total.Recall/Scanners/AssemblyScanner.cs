@@ -121,25 +121,59 @@ public static class AssemblyScanner
 
     private static PathAssemblyResolver CreateResolver(string assemblyPath)
     {
-        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        return new PathAssemblyResolver(BuildResolverPaths(assemblyPath));
+    }
 
-        // 1. All DLLs in the target assembly's directory
+    /// <summary>
+    /// Build the deduplicated path list fed to <see cref="PathAssemblyResolver"/>.
+    /// Internal so tests can verify identity-deduplication directly.
+    ///
+    /// Deduplicate by assembly simple-name (NOT by file path). PathAssemblyResolver
+    /// throws FileLoadException("Assembly with same name is already loaded") when
+    /// two distinct paths resolve to the same assembly identity during core-assembly
+    /// probing — which happens routinely when the target dir is a publish output
+    /// containing its own copy of mscorlib.dll / System.Private.CoreLib.dll /
+    /// netstandard.dll alongside the host runtime dir. Resolution order: target dir
+    /// wins (its versions are the ones we want to read), runtime dir fills the rest.
+    /// </summary>
+    internal static IReadOnlyCollection<string> BuildResolverPaths(string assemblyPath)
+    {
+        var bySimpleName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. All DLLs in the target assembly's directory (preferred)
         var targetDir = Path.GetDirectoryName(Path.GetFullPath(assemblyPath));
         if (targetDir is not null)
-        {
-            foreach (var dll in Directory.GetFiles(targetDir, "*.dll"))
-                paths.Add(dll);
-        }
+            AddDirectory(bySimpleName, targetDir, overwriteExisting: true);
 
-        // 2. Runtime assemblies (for framework types like System.Object, System.String, etc.)
+        // 2. Runtime assemblies (only those not already provided by target dir)
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location);
         if (runtimeDir is not null)
-        {
-            foreach (var dll in Directory.GetFiles(runtimeDir, "*.dll"))
-                paths.Add(dll);
-        }
+            AddDirectory(bySimpleName, runtimeDir, overwriteExisting: false);
 
-        return new PathAssemblyResolver(paths);
+        return bySimpleName.Values;
+    }
+
+    private static void AddDirectory(Dictionary<string, string> bySimpleName, string dir, bool overwriteExisting)
+    {
+        foreach (var dll in Directory.EnumerateFiles(dir, "*.dll"))
+        {
+            string? simpleName;
+            try
+            {
+                simpleName = AssemblyName.GetAssemblyName(dll).Name;
+            }
+            catch
+            {
+                // Native DLLs, corrupt files, or non-assembly .dlls — skip silently.
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(simpleName))
+                continue;
+
+            if (overwriteExisting || !bySimpleName.ContainsKey(simpleName))
+                bySimpleName[simpleName] = dll;
+        }
     }
 
     private static bool IsCompilerGenerated(Type type)
