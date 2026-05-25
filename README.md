@@ -2,6 +2,12 @@
 
 **An MCP server that gives AI coding agents persistent memory — and measures their behaviour.**
 
+## In one paragraph
+
+Total.Recall is a side-car process that watches your .NET repo and tells AI coding agents *which classes are worth testing next, why, and what mistakes other agents have already made on them.* A scanner extracts type metadata, coverage gaps, test inventories, and architectural metrics into small JSONL files. An MCP server then exposes 34 tools over stdio so the agent can query that data in one call instead of reading ten files — and write back what it learns (gotchas, testability verdicts, session outcomes) so the next session starts smarter. Every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss after compaction, oscillation between targets) are auto-detected, and a deterministic grader scores agents on reproducible eval challenges. No database, no LLM-as-judge, no long-running service — just flat files, ~2MB in memory, boots in under a second.
+
+## A bit more detail
+
 Total.Recall is two things in one process:
 
 1. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
