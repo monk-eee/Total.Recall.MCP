@@ -50,8 +50,6 @@ when picked up._
 
 - Roslyn analyzer to fail the build on duplicate `internal static` signatures
   across `Tools/` and `Scanners/` (per AGENTS.md "Mechanical enforcement").
-- `report` CLI: optional `--format table` to render JSON envelopes as
-  PowerShell-friendly tables without `ConvertFrom-Json | Format-Table`.
 
 ---
 
@@ -104,6 +102,14 @@ commit for the diff.
   no retired tools linger in the docs, and the "all N MCP tools" count
   in the doc header matches the live assembly. Three tests; gates every
   build because they run in the standard test suite.
+- [x] **`report --format table` text renderer.**
+  `src/Total.Recall/Reporting/TableRenderer.cs` parses each tool's JSON
+  envelope and renders it as a fixed-width text table. Strategy: parse,
+  find the longest array property as the table data, render header +
+  separator + rows; render scalar properties as a key/value list above
+  the table; pass non-JSON output (empty-state messages) through
+  unchanged. Tests: `TableRendererTests` (9) + `ReportRunnerTests`
+  format-flag coverage (4 new).
 
 ---
 

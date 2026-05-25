@@ -65,7 +65,7 @@ internal static class ReportRunner
                     return 1;
             }
 
-            stdout.WriteLine(output);
+            stdout.WriteLine(opts.Format == "table" ? TableRenderer.Render(output) : output);
             return 0;
         }
         catch (Exception ex)
@@ -85,6 +85,7 @@ internal static class ReportRunner
         public string? Namespace { get; set; }
         public int? Last { get; set; }
         public string? Pattern { get; set; }
+        public string Format { get; set; } = "json";
     }
 
     internal static ReportOptions ParseOptions(string[] args)
@@ -105,6 +106,10 @@ internal static class ReportRunner
                     break;
                 case "--pattern" when i + 1 < args.Length:
                     opts.Pattern = args[++i];
+                    break;
+                case "--format" when i + 1 < args.Length:
+                    var fmt = args[++i].ToLowerInvariant();
+                    if (fmt is "json" or "table") opts.Format = fmt;
                     break;
             }
         }
@@ -127,13 +132,14 @@ internal static class ReportRunner
         stdout.WriteLine("  --ns <name>        Namespace to query (default: TOTAL_RECALL_NAMESPACE env var)");
         stdout.WriteLine("  --last <N>         Limit results (cycles default 20, sessions default 5)");
         stdout.WriteLine("  --pattern <name>   Filter cycles by pattern: re-query | context-loss | oscillation");
+        stdout.WriteLine("  --format <json|table>  Output format (default: json)");
         stdout.WriteLine();
-        stdout.WriteLine("All output is JSON. Pipe through 'ConvertFrom-Json | Format-Table' (PowerShell)");
-        stdout.WriteLine("or 'jq' for tabular views.");
+        stdout.WriteLine("JSON output is suitable for piping through 'ConvertFrom-Json | Format-Table'");
+        stdout.WriteLine("(PowerShell) or 'jq'. Use --format table for a built-in text table.");
         stdout.WriteLine();
         stdout.WriteLine("Examples:");
         stdout.WriteLine("  dotnet run -- report tool-stats --ns myproject");
         stdout.WriteLine("  dotnet run -- report cycles --pattern re-query --last 50");
-        stdout.WriteLine("  dotnet run -- report scorecard | ConvertFrom-Json | Format-Table");
+        stdout.WriteLine("  dotnet run -- report scorecard --format table");
     }
 }

@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 1085 passing |
+| tests | 1098 passing |
 
 ## Purpose
 
@@ -236,6 +236,7 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj -- report cycles --pat
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- report scorecard --ns myproject
 # Sub-commands: tool-stats | efficiency | scorecard | cycles | sessions | leaderboard
 # All output is JSON — pipe through ConvertFrom-Json or jq for tables.
+# Or pass --format table for a built-in text table (no piping required).
 
 # Run tests (when test project exists)
 dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
@@ -476,6 +477,8 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 59. **Tests must use `[Collection("ToolTests")]`**: Any test that touches process-global static state (`Telemetry.*`, `CycleDetector.s_fired`, `TelemetryConfig.s_cachedMode`, `StoreRegistry` caches, `RepoConfig` cache, env vars `TOTAL_RECALL_*`) MUST be in the `[Collection("ToolTests")]` xUnit collection. xUnit runs tests in different collections in parallel; without the collection attribute, two parallel tests pointing at different temp dirs trample each other's static state. `TelemetryTestHarness` (in `tests/Total.Recall.Tests/Infrastructure/`) is the canonical setup/teardown: per-test temp dir under `Path.Combine(Path.GetTempPath(), "total-recall-tests", Guid.NewGuid().ToString())`, env-var snapshot/restore, `Telemetry.ResetForTests()`, `CycleDetector.ResetForTests()`, `TelemetryConfig.ResetCache()`, `StoreRegistry.Reset()`, `RepoConfig.ClearCache()`.
 
 60. **Report CLI sub-command (triple-mode entry)**: `dotnet run -- report <sub-cmd>` dispatches to existing MCP tool methods via `ReportRunner.RunReport(string[] args, TextWriter stdout)` in `src/Total.Recall/Reporting/`. The `TextWriter` seam keeps the runner unit-testable (tests pass `StringWriter`; production passes `Console.Out`). Sub-commands: `tool-stats`, `efficiency`, `scorecard`, `cycles`, `sessions`, `leaderboard` — each routes to the already-tested tool method (`ScorecardTool.GetToolCallStats`, etc.) and prints the JSON string unchanged. Options parsed: `--ns`/`--namespace`, `--last <int>`, `--pattern <string>`. While the report runs, `TOTAL_RECALL_MODE` is forced to `off` (with `TelemetryConfig.ResetCache()`) and restored in a `finally`, so reads don't append spurious `tool-calls.jsonl` entries about the reads themselves. Exit codes: `0` ok or `--help`, `1` missing/unknown sub-command, `2` underlying tool threw. No parallel renderer — all output is the tools' existing JSON, downstream pipes `ConvertFrom-Json` / `jq` / `Format-Table`.
+
+61. **`report --format table` fixed-width renderer**: `src/Total.Recall/Reporting/TableRenderer.cs` parses each tool's JSON envelope and renders a fixed-width text table on stdout when `--format table` is set on a `report` invocation. Strategy: (1) if the input doesn't start with `{` or `[`, or doesn't parse as JSON, return it unchanged (covers empty-state messages like `"No tool calls recorded yet."`); (2) if the JSON root is an array, render that array as a table; (3) if the root is an object, find the longest array-valued property and render that as the table while rendering the object's scalar properties as a key/value block above it; (4) nested object/array cells render as compact JSON. Default remains `--format json` to keep the existing piping recipes (`ConvertFrom-Json | Format-Table`, `jq`) working. Unknown `--format` values silently fall back to `json` rather than failing — the CLI should never refuse to print data.
 
 ## Footguns
 

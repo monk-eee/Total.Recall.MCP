@@ -260,10 +260,16 @@ dotnet run --project src/Total.Recall -- report leaderboard  --ns myproject
 | `efficiency` | Sessions × cycles × tasks: tokens/task, redundant-call rate, plateau warnings |
 | `leaderboard` | Eval pass/fail rates by model |
 
-Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`.
+Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`, `--format <json|table>`.
 Exit codes: `0` ok, `1` missing/unknown sub-command, `2` underlying tool threw.
 
-All output is JSON for downstream piping:
+Default output is JSON. Pass `--format table` for a built-in fixed-width text table:
+
+```bash
+dotnet run --project src/Total.Recall -- report scorecard --ns myproject --format table
+```
+
+For advanced shaping, JSON output pipes cleanly through PowerShell or `jq`:
 
 ```powershell
 dotnet run --project src/Total.Recall -- report tool-stats --ns myproject `
