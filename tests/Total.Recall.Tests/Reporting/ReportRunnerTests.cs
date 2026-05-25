@@ -145,4 +145,37 @@ public class ReportRunnerTests
         var opts = ReportRunner.ParseOptions(["report", "cycles", "--last", "notanumber"]);
         Assert.Null(opts.Last);
     }
+
+    [Fact]
+    public void ParseOptions_DefaultsFormatToJson()
+    {
+        var opts = ReportRunner.ParseOptions(["report", "tool-stats"]);
+        Assert.Equal("json", opts.Format);
+    }
+
+    [Fact]
+    public void ParseOptions_AcceptsFormatTable()
+    {
+        var opts = ReportRunner.ParseOptions(["report", "tool-stats", "--format", "table"]);
+        Assert.Equal("table", opts.Format);
+    }
+
+    [Fact]
+    public void ParseOptions_IgnoresUnknownFormatValue()
+    {
+        var opts = ReportRunner.ParseOptions(["report", "tool-stats", "--format", "yaml"]);
+        Assert.Equal("json", opts.Format);
+    }
+
+    [Fact]
+    public void RunReport_FormatTable_PassesPlainTextThrough()
+    {
+        // When there's no data, tools return plain-text messages (not JSON).
+        // TableRenderer should pass these through unchanged.
+        using var harness = new TelemetryTestHarness();
+        using var sw = new StringWriter();
+        var exit = ReportRunner.RunReport(["report", "tool-stats", "--format", "table"], sw);
+        Assert.Equal(0, exit);
+        Assert.Contains("No tool calls recorded yet", sw.ToString());
+    }
 }

@@ -130,9 +130,15 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj -- report leaderboard 
 ```
 
 Sub-commands: `tool-stats | efficiency | scorecard | cycles | sessions | leaderboard`.
-Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`.
+Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`, `--format <json|table>`.
 
-All output is JSON — pipe through `ConvertFrom-Json` (PowerShell) or `jq` for tables:
+Default output is JSON. For a quick built-in text table, add `--format table`:
+
+```bash
+dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject --format table
+```
+
+For more flexible shaping, pipe the JSON through `ConvertFrom-Json` (PowerShell) or `jq`:
 
 ```powershell
 dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject `
