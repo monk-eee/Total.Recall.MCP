@@ -2,11 +2,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Total.Recall.Infrastructure;
+using Total.Recall.Reporting;
 using Total.Recall.Scanners;
 
-// Dual-mode entry point:
-//   Default (no args)  → stdio MCP server (VS Code launches this)
-//   "scan" subcommand  → CLI scanner that writes JSONL and exits
+// Triple-mode entry point:
+//   Default (no args)    → stdio MCP server (VS Code launches this)
+//   "scan" subcommand    → CLI scanner that writes JSONL and exits
+//   "report" subcommand  → CLI report runner that reads telemetry JSONL and prints JSON
 
 try
 {
@@ -23,6 +25,12 @@ try
     if (args.Length > 0 && args[0].Equals("scan", StringComparison.OrdinalIgnoreCase))
     {
         await RunScannerAsync(args);
+        return;
+    }
+
+    if (args.Length > 0 && args[0].Equals("report", StringComparison.OrdinalIgnoreCase))
+    {
+        Environment.ExitCode = ReportRunner.RunReport(args, Console.Out);
         return;
     }
 
