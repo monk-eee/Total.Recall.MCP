@@ -127,6 +127,59 @@ public class DuplicateInternalStaticAnalyzerTests
         Assert.Empty(diagnostics);
     }
 
+    [Fact]
+    public async Task FiresForPrivateStaticDuplicateAcrossFolders()
+    {
+        const string privateInTools = """
+            namespace Total.Recall.Tools;
+            internal static class H
+            {
+                private static string SanitizeId(string name) => name.Replace('.', '_');
+            }
+            """;
+        const string privateInScanners = """
+            namespace Total.Recall.Scanners;
+            internal static class I
+            {
+                private static string SanitizeId(string name) => name.Replace('.', '_');
+            }
+            """;
+
+        var diagnostics = await RunAsync(
+            ("Tools/H.cs", privateInTools),
+            ("Scanners/I.cs", privateInScanners));
+
+        Assert.Equal(2, diagnostics.Length);
+        Assert.All(diagnostics, d => Assert.Equal("TR0001", d.Id));
+    }
+
+    [Fact]
+    public async Task DoesNotFireForProtectedStatic()
+    {
+        // protected-static exposes a member through inheritance; that's
+        // deliberate API surface, not a forked helper.
+        const string protectedInToolsA = """
+            namespace Total.Recall.Tools;
+            internal class J
+            {
+                protected static string Resolve(int x) => x.ToString();
+            }
+            """;
+        const string protectedInScannersA = """
+            namespace Total.Recall.Scanners;
+            internal class K
+            {
+                protected static string Resolve(int x) => x.ToString();
+            }
+            """;
+
+        var diagnostics = await RunAsync(
+            ("Tools/J.cs", protectedInToolsA),
+            ("Scanners/K.cs", protectedInScannersA));
+
+        Assert.Empty(diagnostics);
+    }
+
     private static async Task<ImmutableArray<Diagnostic>> RunAsync(params (string path, string source)[] files)
     {
         var trees = files

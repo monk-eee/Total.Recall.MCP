@@ -11,19 +11,24 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Total.Recall.Analyzers;
 
 /// <summary>
-/// TR0001 — flags duplicate <c>internal static</c> method signatures defined
-/// inside files under <c>Tools/</c> and/or <c>Scanners/</c>.
+/// TR0001 — flags duplicate non-public <c>static</c> method signatures
+/// (<c>internal static</c> or <c>private static</c>) defined inside files
+/// under <c>Tools/</c> and/or <c>Scanners/</c>.
 /// </summary>
 /// <remarks>
 /// AGENTS.md "Mechanical enforcement" lists this as a desired guardrail:
 /// helper duplication across <c>Tools/</c> and <c>Scanners/</c> is the exact
-/// failure mode this analyzer prevents. The fix is always extraction to
-/// <c>Infrastructure/</c> — never silence the diagnostic with an allowlist.
+/// failure mode this analyzer prevents. The fix is normally extraction to
+/// <c>Infrastructure/</c>; if two methods only share a name + signature but
+/// do genuinely different work, rename one of them — don't silence the
+/// diagnostic with an allowlist or a <c>#pragma warning disable</c>.
 ///
-/// The analyzer keys on a folder-name suffix (<c>/Tools/</c> or <c>/Scanners/</c>
+/// The analyzer keys on a folder-name segment (<c>Tools</c> or <c>Scanners</c>
 /// anywhere on the source path) so it works regardless of where the repo is
 /// cloned. Same file is fine (in-file overloads are not duplicates across the
-/// canonical-home boundary the rule is guarding).
+/// canonical-home boundary the rule is guarding). Public and protected methods
+/// are intentionally skipped — a public surface is meant to be visible across
+/// files.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class DuplicateInternalStaticAnalyzer : DiagnosticAnalyzer
@@ -32,12 +37,12 @@ public sealed class DuplicateInternalStaticAnalyzer : DiagnosticAnalyzer
 
     private static readonly DiagnosticDescriptor s_rule = new(
         id: DiagnosticId,
-        title: "Duplicate internal static method across Tools/Scanners",
-        messageFormat: "Internal static '{0}' is also defined in '{1}'. Extract a single implementation to Infrastructure/ and call it from both.",
+        title: "Duplicate non-public static method across Tools/Scanners",
+        messageFormat: "Non-public static '{0}' is also defined in '{1}'. Extract a single implementation to Infrastructure/ and call it from both, or rename one if the helpers do genuinely different work.",
         category: "Total.Recall.CodeReuse",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "AGENTS.md forbids forking helpers across Tools/ and Scanners/. Duplicate signatures must be extracted to Infrastructure/.",
+        description: "AGENTS.md forbids forking helpers across Tools/ and Scanners/. Duplicate signatures must be extracted to Infrastructure/, or renamed if the helpers do different work.",
         customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
@@ -59,7 +64,7 @@ public sealed class DuplicateInternalStaticAnalyzer : DiagnosticAnalyzer
         {
             var method = (MethodDeclarationSyntax)ctx.Node;
 
-            if (!IsInternalStatic(method))
+            if (!IsCandidateStatic(method))
             {
                 return;
             }
@@ -100,12 +105,12 @@ public sealed class DuplicateInternalStaticAnalyzer : DiagnosticAnalyzer
         });
     }
 
-    private static bool IsInternalStatic(MethodDeclarationSyntax method)
+    private static bool IsCandidateStatic(MethodDeclarationSyntax method)
     {
-        var hasInternal = false;
         var hasStatic = false;
-        var hasPublic = false;
+        var hasInternal = false;
         var hasPrivate = false;
+        var hasPublic = false;
         var hasProtected = false;
 
         foreach (var modifier in method.Modifiers)
@@ -120,8 +125,13 @@ public sealed class DuplicateInternalStaticAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Must be exactly internal (not internal-protected, not public, not private).
-        return hasInternal && hasStatic && !hasPublic && !hasPrivate && !hasProtected;
+        // Must be static. Must be non-public (i.e. internal and/or private,
+        // not public, not protected). protected-internal and private-protected
+        // are skipped because they expose the member through inheritance,
+        // which is a deliberate API surface.
+        if (!hasStatic) return false;
+        if (hasPublic || hasProtected) return false;
+        return hasInternal || hasPrivate;
     }
 
     private static bool IsInToolsOrScanners(string path)
