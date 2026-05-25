@@ -50,8 +50,6 @@ when picked up._
 
 - Roslyn analyzer to fail the build on duplicate `internal static` signatures
   across `Tools/` and `Scanners/` (per AGENTS.md "Mechanical enforcement").
-- Documentation auto-check: CI step that diffs `[Description]` attributes
-  against `docs/TOOL_REFERENCE.md` so doc drift breaks the build.
 - `report` CLI: optional `--format table` to render JSON envelopes as
   PowerShell-friendly tables without `ConvertFrom-Json | Format-Table`.
 
@@ -100,6 +98,12 @@ commit for the diff.
   Sub-commands: `tool-stats`, `efficiency`, `scorecard`, `cycles`,
   `sessions`, `leaderboard`. Tests: `ReportRunnerTests` (12). AGENTS.md
   Architecture Decision #60.
+- [x] **Doc-drift CI gate.** `tests/Total.Recall.Tests/Docs/ToolReferenceDocDriftTests.cs`
+  reflects over every `[McpServerTool]` in the production assembly and
+  asserts each snake_case tool name appears in `docs/TOOL_REFERENCE.md`,
+  no retired tools linger in the docs, and the "all N MCP tools" count
+  in the doc header matches the live assembly. Three tests; gates every
+  build because they run in the standard test suite.
 
 ---
 
