@@ -248,7 +248,7 @@ public static class AnalysisTool
         foreach (var node in nodes.Take(30)) // Limit for readability
         {
             var isCenter = node.Equals(className, StringComparison.OrdinalIgnoreCase);
-            var id = SanitizeId(node);
+            var id = MermaidId.Sanitize(node);
             if (isCenter)
                 sb.AppendLine($"  {id}[[\"{node}\"]]");
             else
@@ -260,8 +260,8 @@ public static class AnalysisTool
             if (!nodes.Contains(edge.From) || !nodes.Contains(edge.To))
                 continue;
 
-            var fromId = SanitizeId(edge.From);
-            var toId = SanitizeId(edge.To);
+            var fromId = MermaidId.Sanitize(edge.From);
+            var toId = MermaidId.Sanitize(edge.To);
             var key = $"{fromId}->{toId}";
             if (!rendered.Add(key))
                 continue;
@@ -278,7 +278,7 @@ public static class AnalysisTool
         }
 
         // Highlight center node
-        sb.AppendLine($"  style {SanitizeId(className)} fill:#ff9,stroke:#f80,stroke-width:3px");
+        sb.AppendLine($"  style {MermaidId.Sanitize(className)} fill:#ff9,stroke:#f80,stroke-width:3px");
         sb.AppendLine("```");
 
         return sb.ToString();
@@ -363,15 +363,5 @@ public static class AnalysisTool
         }
 
         return sb.ToString();
-    }
-
-    private static string SanitizeId(string name)
-    {
-        return name
-            .Replace('<', '_')
-            .Replace('>', '_')
-            .Replace(',', '_')
-            .Replace(' ', '_')
-            .Replace('.', '_');
     }
 }

@@ -63,7 +63,7 @@ public static class StubClassesTool
             : new Dictionary<string, TestInventoryEntry>(StringComparer.OrdinalIgnoreCase);
 
         var assessments = stores.Assessments.HasData()
-            ? BuildLatestAssessments(stores.Assessments.LoadAll())
+            ? AssessmentLookup.BuildLatest(stores.Assessments.LoadAll())
             : new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
 
         var targets = new List<StubClassTarget>();
@@ -85,7 +85,7 @@ public static class StubClassesTool
             var bareName = TestableTargetsTool.NormalizeName(className);
 
             // Skip assessed-skip/coupled/deferred classes
-            var assessment = TryGetAssessment(assessments, className, bareName);
+            var assessment = AssessmentLookup.TryGet(assessments, className, bareName);
             if (assessment?.Verdict is "skip" or "coupled" or "deferred")
                 continue;
 
@@ -340,23 +340,5 @@ public static class StubClassesTool
 
         // Interface params start with "I" and have a second uppercase letter (IFoo, IService)
         return simplest.Params.All(p => ParamHelper.IsInterfaceLike(ParamHelper.ExtractTypeName(p)));
-    }
-
-    private static Assessment? TryGetAssessment(
-        Dictionary<string, Assessment> assessments, string className, string bareName)
-    {
-        if (assessments.TryGetValue(className, out var assessment))
-            return assessment;
-        if (bareName != className && assessments.TryGetValue(bareName, out assessment))
-            return assessment;
-        return null;
-    }
-
-    private static Dictionary<string, Assessment> BuildLatestAssessments(List<Assessment> all)
-    {
-        var latest = new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
-        foreach (var a in all)
-            latest[a.Class] = a;
-        return latest;
     }
 }

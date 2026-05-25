@@ -66,7 +66,7 @@ public static class TestableTargetsTool
             : new Dictionary<string, TestInventoryEntry>(StringComparer.OrdinalIgnoreCase);
 
         var assessments = stores.Assessments.HasData()
-            ? BuildLatestAssessments(stores.Assessments.LoadAll())
+            ? AssessmentLookup.BuildLatest(stores.Assessments.LoadAll())
             : new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
 
         var gotchaCounts = stores.Gotchas.HasData()
@@ -297,7 +297,7 @@ public static class TestableTargetsTool
                 continue;
 
             // Check previous assessments — try exact, then bare nested name
-            var assessmentMatch = TryGetAssessment(assessments, className, bareName);
+            var assessmentMatch = AssessmentLookup.TryGet(assessments, className, bareName);
             if (excludeAssessed && assessmentMatch is not null)
             {
                 if (assessmentMatch.Verdict is "skip" or "coupled" or "deferred")
@@ -726,14 +726,6 @@ public static class TestableTargetsTool
         return string.Join(", ", parts);
     }
 
-    private static Dictionary<string, Assessment> BuildLatestAssessments(List<Assessment> all)
-    {
-        var latest = new Dictionary<string, Assessment>(StringComparer.OrdinalIgnoreCase);
-        foreach (var a in all)
-            latest[a.Class] = a; // last wins
-        return latest;
-    }
-
     /// <summary>
     /// Normalize nested class names: "Parent/Nested" → "Nested".
     /// Also handles dot-separated nested names: "Parent.Nested" → "Nested".
@@ -768,18 +760,6 @@ public static class TestableTargetsTool
     {
         return IsPropertyAccessor(methodName)
             || methodName is ".ctor" or ".cctor";
-    }
-
-    /// <summary>
-    /// Try to find an assessment for a class, trying the full name first, then the bare nested name.
-    /// </summary>
-    private static Assessment? TryGetAssessment(Dictionary<string, Assessment> assessments, string className, string bareName)
-    {
-        if (assessments.TryGetValue(className, out var assessment))
-            return assessment;
-        if (bareName != className && assessments.TryGetValue(bareName, out assessment))
-            return assessment;
-        return null;
     }
 
     /// <summary>

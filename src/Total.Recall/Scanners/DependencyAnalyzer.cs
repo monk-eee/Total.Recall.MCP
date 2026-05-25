@@ -477,7 +477,7 @@ public static class DependencyAnalyzer
             foreach (var cls in cluster.Classes.Where(c => interesting.Contains(c)))
             {
                 var archetype = metrics.FirstOrDefault(m => m.Class == cls)?.Archetype ?? "other";
-                sb.AppendLine($"    {SanitizeId(cls)}[\"{cls}<br/><small>{archetype}</small>\"]");
+                sb.AppendLine($"    {MermaidId.Sanitize(cls)}[\"{cls}<br/><small>{archetype}</small>\"]");
                 clusterAssigned.Add(cls);
             }
             sb.AppendLine("  end");
@@ -487,7 +487,7 @@ public static class DependencyAnalyzer
         foreach (var cls in interesting.Where(c => !clusterAssigned.Contains(c)))
         {
             var archetype = metrics.FirstOrDefault(m => m.Class == cls)?.Archetype ?? "other";
-            sb.AppendLine($"  {SanitizeId(cls)}[\"{cls}<br/><small>{archetype}</small>\"]");
+            sb.AppendLine($"  {MermaidId.Sanitize(cls)}[\"{cls}<br/><small>{archetype}</small>\"]");
         }
 
         // Add edges (only for interesting classes)
@@ -500,8 +500,8 @@ public static class DependencyAnalyzer
             // For ctor-interface edges, draw to the interface node
             // For ctor-concrete and base-type, draw to concrete class
             var target = edge.To;
-            var fromId = SanitizeId(edge.From);
-            var toId = SanitizeId(target);
+            var fromId = MermaidId.Sanitize(edge.From);
+            var toId = MermaidId.Sanitize(target);
             var edgeKey = $"{fromId}->{toId}:{edge.Kind}";
 
             if (!rendered.Add(edgeKey))
@@ -526,17 +526,6 @@ public static class DependencyAnalyzer
         }
 
         return sb.ToString();
-    }
-
-    private static string SanitizeId(string name)
-    {
-        // Mermaid node IDs can't contain special chars — replace generics and dots
-        return name
-            .Replace('<', '_')
-            .Replace('>', '_')
-            .Replace(',', '_')
-            .Replace(' ', '_')
-            .Replace('.', '_');
     }
 
     private static bool IsFrameworkInterface(string name)
