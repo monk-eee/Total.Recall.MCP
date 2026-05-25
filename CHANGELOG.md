@@ -10,8 +10,27 @@ Dates reflect the commit date in the local repo.
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [2.4.0-preview.1] — 2026-05-25
+
+First public release. Published to NuGet as
+[`TotalRecall.Mcp`](https://www.nuget.org/packages/TotalRecall.Mcp)
+and to GitHub at
+[`monk-eee/Total.Recall.MCP`](https://github.com/monk-eee/Total.Recall.MCP).
+
+### Packaging
+- Ships as a [.NET global tool](https://learn.microsoft.com/dotnet/core/tools/global-tools)
+  on NuGet: `dotnet tool install -g TotalRecall.Mcp --version 2.4.0-preview.1`
+  exposes a single `total-recall` command (MCP server / scanner / report reader).
+- `.vscode/mcp.json` can now point at `"command": "total-recall"` directly
+  instead of `dotnet run --project <path>`. Both forms supported.
+- Pre-release scrub: replaced internal product / type names from the development
+  sample target repo with neutral examples (`Invoice`, `OrderExport`, `MyApp.Billing`)
+  across 24 doc and test files.
+
 ### Added
-- Report CLI sub-command (`dotnet run -- report …`) for telemetry inspection
+- Report CLI sub-command (`total-recall report …`) for telemetry inspection
   without spinning up the MCP server. Sub-commands: `tool-stats`, `efficiency`,
   `scorecard`, `cycles`, `sessions`, `leaderboard`. JSON by default; pipe through
   `ConvertFrom-Json | Format-Table` or `jq`.
@@ -34,30 +53,6 @@ Dates reflect the commit date in the local repo.
   out of `AGENTS.md` so the rules file stays focused.
 - README "Seeing it in action" section with real terminal output from
   `scan` and `report` sub-commands.
-
-### Changed
-- Default branch renamed from `develop` to `main` (no remote impact — done
-  before the first push to GitHub).
-- `AGENTS.md` "Architecture Decisions" section reduced to a one-paragraph pointer
-  at `docs/DECISIONS.md`. Cross-references updated in `CONTRIBUTING.md`,
-  `README.md`, `.github/pull_request_template.md`, and the feature-request
-  issue template.
-
-### Refactored
-- Extract `MermaidId` and `AssessmentLookup` to `Infrastructure/` so callers
-  in `Tools/` and `Scanners/` don't duplicate the logic. Triggered by `TR0001`.
-- Broaden `TR0001` to cover `private static` duplicates after a sweep found
-  three real instances (`SanitizeId`, `BuildLatestAssessments`,
-  `TryGetAssessment`) that the `internal static`-only rule missed.
-
-### Documentation
-- Plain-language elevator pitch added to `README.md`.
-- `docs/TODO.md` restructured into "Now / Known bugs / Known duplicates /
-  From log sweep / Done" discipline sections.
-
-## [2.4.0] — 2026-05-25
-
-### Added
 - **Telemetry substrate**: every MCP tool call is intercepted by
   `Telemetry.Track(toolName, ns, params, handler)` and appended to
   `tool-calls.jsonl` with session ID, task ID, latency, and response bytes.
@@ -80,11 +75,32 @@ Dates reflect the commit date in the local repo.
   calls.
 - **`get_tool_call_stats`, `get_efficiency_report`, `get_model_scorecard`** —
   read-side tools that aggregate the new telemetry into useful shapes.
+
+### Changed
+- Default branch renamed from `develop` to `main`.
+- `AGENTS.md` "Architecture Decisions" section reduced to a one-paragraph pointer
+  at `docs/DECISIONS.md`. Cross-references updated in `CONTRIBUTING.md`,
+  `README.md`, `.github/pull_request_template.md`, and the feature-request
+  issue template.
+
+### Refactored
+- Extract `MermaidId` and `AssessmentLookup` to `Infrastructure/` so callers
+  in `Tools/` and `Scanners/` don't duplicate the logic. Triggered by `TR0001`.
+- Broaden `TR0001` to cover `private static` duplicates after a sweep found
+  three real instances (`SanitizeId`, `BuildLatestAssessments`,
+  `TryGetAssessment`) that the `internal static`-only rule missed.
 - Test scaffold renderer refactored: planner (`TestScaffoldPlanner`) +
   renderer separated, assertion rules pulled to a data table
   (`AssertionRules.s_prefixHints`) instead of an if-chain.
 - OSS-prep: AGENTS.md prime directive section, mechanical enforcement rules,
   refactor discipline.
+
+### Documentation
+- Plain-language elevator pitch added to `README.md`.
+- README "Install" section + global-tool-based `.vscode/mcp.json` snippet
+  in both `README.md` and `docs/QUICKSTART.md`.
+- `docs/TODO.md` restructured into "Now / Known bugs / Known duplicates /
+  From log sweep / Done" discipline sections.
 
 ## [2.3.0] — 2026-03-04
 

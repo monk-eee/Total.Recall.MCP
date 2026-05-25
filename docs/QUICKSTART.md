@@ -7,19 +7,42 @@
 - The target repo built (assembly DLL must exist)
 - Coverage report generated (`dotnet test --collect:"XPlat Code Coverage"`)
 
-## 1. Build Total.Recall
+## 1. Install Total.Recall
+
+### Option A — Install the global tool (recommended)
 
 ```bash
-cd C:\path\to\Total.Recall
+dotnet tool install -g TotalRecall.Mcp --version 2.4.0-preview.1
+```
+
+This puts a single command, `total-recall`, on your `PATH`. It is the
+MCP server (default), the scanner (`total-recall scan`), and the report
+reader (`total-recall report`) in one binary.
+
+To update or remove later:
+
+```bash
+dotnet tool update    -g TotalRecall.Mcp
+dotnet tool uninstall -g TotalRecall.Mcp
+```
+
+### Option B — Build from source
+
+```bash
+git clone https://github.com/monk-eee/Total.Recall.MCP
+cd Total.Recall.MCP
 dotnet build src/Total.Recall/Total.Recall.csproj
 ```
+
+When building from source, replace every `total-recall <args>` below with
+`dotnet run --project src/Total.Recall/Total.Recall.csproj -- <args>`.
 
 ## 2. Scan Your Target Repo
 
 ### Full scan (recommended for first run)
 
 ```bash
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
+total-recall scan ^
   --assembly "C:\path\to\YourProject.dll" ^
   --coverage "C:\path\to\coverage.cobertura.xml" ^
   --tests "C:\path\to\YourProject.Tests" ^
@@ -63,12 +86,12 @@ After running tests with fresh coverage, you don't need a full scan — just upd
 
 ```bash
 # Re-scan coverage after a test run + enrich
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
+total-recall scan ^
   --coverage "C:\path\to\new-coverage.cobertura.xml" ^
   --namespace myproject --enrich
 
 # Just re-enrich existing data (no new scans)
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
+total-recall scan ^
   --namespace myproject --enrich
 ```
 
@@ -77,7 +100,7 @@ dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
 Instead of running manual re-scans, use `--watch` to keep the scanner running and auto-rescan on file changes:
 
 ```bash
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- scan ^
+total-recall scan ^
   --assembly "C:\path\to\YourProject.dll" ^
   --coverage "C:\path\to\coverage.cobertura.xml" ^
   --tests "C:\path\to\YourProject.Tests" ^
@@ -111,22 +134,22 @@ Once agents have used the server for a few sessions, you can read the recorded t
 
 ```bash
 # Per-tool call counts + p50/p95 latency + average response bytes
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject
+total-recall report tool-stats --ns myproject
 
 # Recent behaviour cycles (re-query loops, context loss, oscillation)
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report cycles --pattern re-query --last 50 --ns myproject
+total-recall report cycles --pattern re-query --last 50 --ns myproject
 
 # Cross-model scorecard from sessions + tasks + evals
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report scorecard --ns myproject
+total-recall report scorecard --ns myproject
 
 # Session history (last N sessions)
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report sessions --last 10 --ns myproject
+total-recall report sessions --last 10 --ns myproject
 
 # Sessions × cycles × tasks efficiency summary
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report efficiency --ns myproject
+total-recall report efficiency --ns myproject
 
 # Eval pass/fail rates by model
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report leaderboard --ns myproject
+total-recall report leaderboard --ns myproject
 ```
 
 Sub-commands: `tool-stats | efficiency | scorecard | cycles | sessions | leaderboard`.
@@ -135,13 +158,13 @@ Options: `--ns <name>` (or `--namespace`), `--last <int>`, `--pattern <string>`,
 Default output is JSON. For a quick built-in text table, add `--format table`:
 
 ```bash
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject --format table
+total-recall report tool-stats --ns myproject --format table
 ```
 
 For more flexible shaping, pipe the JSON through `ConvertFrom-Json` (PowerShell) or `jq`:
 
 ```powershell
-dotnet run --project src/Total.Recall/Total.Recall.csproj -- report tool-stats --ns myproject `
+total-recall report tool-stats --ns myproject `
   | ConvertFrom-Json | Select-Object -ExpandProperty tools | Format-Table -AutoSize
 ```
 
@@ -149,7 +172,29 @@ While a report runs, telemetry recording is forced off so the report itself does
 
 ## 4. Wire Up VS Code
 
-Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for):
+Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing tests for).
+
+**Recommended — using the installed global tool** (`dotnet tool install -g TotalRecall.Mcp`):
+
+```json
+{
+  "servers": {
+    "Total.Recall": {
+      "type": "stdio",
+      "command": "total-recall",
+      "env": {
+        "TOTAL_RECALL_DATA": "C:\\path\\to\\data",
+        "TOTAL_RECALL_NAMESPACE": "myproject",
+        "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\your-repo\\src",
+        "TOTAL_RECALL_LOG_LEVEL": "info",
+        "TOTAL_RECALL_MODE": "passive"
+      }
+    }
+  }
+}
+```
+
+**Alternative — running from a source checkout** (no `dotnet tool install` required):
 
 ```json
 {
@@ -160,10 +205,10 @@ Create `.vscode/mcp.json` in your **target workspace** (the repo you're writing 
       "args": [
         "run",
         "--project",
-        "C:\\path\\to\\Total.Recall\\src\\Total.Recall\\Total.Recall.csproj"
+        "C:\\path\\to\\Total.Recall.MCP\\src\\Total.Recall\\Total.Recall.csproj"
       ],
       "env": {
-        "TOTAL_RECALL_DATA": "C:\\path\\to\\Total.Recall\\data",
+        "TOTAL_RECALL_DATA": "C:\\path\\to\\data",
         "TOTAL_RECALL_NAMESPACE": "myproject",
         "TOTAL_RECALL_SOURCE_ROOT": "C:\\path\\to\\your-repo\\src",
         "TOTAL_RECALL_LOG_LEVEL": "info",
@@ -259,7 +304,7 @@ You should see a scored list of classes. If it doesn't appear:
 
 1. `.vscode/mcp.json` exists in the workspace root
 2. VS Code was restarted after adding the file
-3. `dotnet run --project <path>` works from terminal
+3. `total-recall` is on your `PATH` (re-open the terminal after `dotnet tool install`)
 4. `TOTAL_RECALL_DATA` env var points to a directory with `.jsonl` files
 5. The namespace directory exists and contains data
 

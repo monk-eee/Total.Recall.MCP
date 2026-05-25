@@ -13,12 +13,15 @@ a JSONL store being writeable outside the configured data directory, a
 path-traversal in scanner inputs, or anything else with a security
 flavour — please **do not** open a public issue.
 
-Instead, use GitHub's private vulnerability reporting:
+Preferred channel: GitHub's private vulnerability reporting.
 
 1. Go to the repository's **Security** tab on GitHub.
 2. Click **Report a vulnerability**.
 3. Fill in what you observed, where (file + symbol or tool name), and
    the smallest reproduction you have.
+
+If GitHub's flow is unavailable, email **magic.monkee.magic@gmail.com**
+with the same content and `[Total.Recall security]` in the subject line.
 
 I aim to acknowledge reports within 7 days and to ship a fix or a public
 advisory within 30 days, depending on severity.

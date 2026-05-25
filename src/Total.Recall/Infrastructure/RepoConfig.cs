@@ -2,7 +2,7 @@ namespace Total.Recall.Infrastructure;
 
 /// <summary>
 /// Resolves the data root + namespace to produce per-namespace data directories.
-/// Layout: {root}/{namespace}/ — e.g. data/myproject/, data/docs-build/
+/// Layout: {root}/{namespace}/ — e.g. data/myproject/, data/other-project/
 ///
 /// Environment variables:
 ///   TOTAL_RECALL_DATA      — root data directory (default: "data")
