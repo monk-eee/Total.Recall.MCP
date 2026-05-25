@@ -198,4 +198,74 @@ public sealed class AssemblyScannerTests : IDisposable
         // All types should have a non-empty namespace
         Assert.All(all, t => Assert.False(string.IsNullOrEmpty(t.Namespace)));
     }
+
+    /// <summary>
+    /// Regression test: target dirs that ship their own copy of a runtime
+    /// assembly (e.g. publish output containing mscorlib.dll / System.Runtime.dll
+    /// alongside the host runtime dir's copy) used to crash
+    /// <see cref="AssemblyScanner.Scan(string, string)"/> with
+    /// <c>FileLoadException: Assembly with same name is already loaded</c>
+    /// during MetadataLoadContext core-assembly probing. The root cause was
+    /// <see cref="System.Reflection.PathAssemblyResolver"/> being fed two
+    /// distinct file paths that resolved to the same assembly identity.
+    ///
+    /// Fix: deduplicate by <see cref="AssemblyName.Name"/>, preferring the
+    /// target directory's copy over the runtime dir's copy.
+    ///
+    /// Impact when broken: <c>scan --assembly &lt;path&gt;</c> crashed mid-scan
+    /// for any publish-style target, leaving the type-registry unwritten.
+    ///
+    /// Contract: <see cref="AssemblyScanner.BuildResolverPaths(string)"/> must
+    /// return at most one path per assembly simple-name, even when the target
+    /// dir and the runtime dir both contain a copy of the same identity.
+    /// </summary>
+    [Fact]
+    public void BuildResolverPaths_DuplicateIdentityAcrossDirs_DedupesByAssemblyName()
+    {
+        // Arrange: synthesize a publish-style target dir containing copies of
+        // multiple framework DLLs that ALSO live in the host runtime dir.
+        var targetDir = Path.Combine(_tempDir, "publish-style-target");
+        Directory.CreateDirectory(targetDir);
+
+        var copiedAssembly = Path.Combine(targetDir, Path.GetFileName(s_assemblyPath));
+        File.Copy(s_assemblyPath, copiedAssembly);
+
+        var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var duplicateCandidates = new[] { "System.Runtime.dll", "System.Collections.dll", "System.Linq.dll" }
+            .Select(n => Path.Combine(runtimeDir, n))
+            .Where(File.Exists)
+            .ToList();
+
+        Assert.NotEmpty(duplicateCandidates);
+        foreach (var dll in duplicateCandidates)
+            File.Copy(dll, Path.Combine(targetDir, Path.GetFileName(dll)));
+
+        // Act
+        var paths = AssemblyScanner.BuildResolverPaths(copiedAssembly);
+
+        // Assert: every assembly simple-name appears at most once.
+        var byName = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in paths)
+        {
+            var name = System.Reflection.AssemblyName.GetAssemblyName(p).Name!;
+            if (!byName.TryGetValue(name, out var list))
+                byName[name] = list = new List<string>();
+            list.Add(p);
+        }
+
+        var duplicates = byName.Where(kv => kv.Value.Count > 1).ToList();
+        Assert.Empty(duplicates);
+
+        // And each duplicate-identity DLL we planted MUST resolve to the target dir copy.
+        foreach (var src in duplicateCandidates)
+        {
+            var name = System.Reflection.AssemblyName.GetAssemblyName(src).Name!;
+            Assert.True(byName.ContainsKey(name), $"Expected resolver to include identity '{name}'");
+            Assert.StartsWith(targetDir, byName[name][0], StringComparison.OrdinalIgnoreCase);
+        }
+
+        // And the actual scan must succeed end-to-end.
+        var count = AssemblyScanner.Scan(copiedAssembly, _tempDir);
+        Assert.True(count > 0, $"Expected types > 0, got {count}");
+    }
 }

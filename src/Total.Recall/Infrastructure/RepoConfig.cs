@@ -108,7 +108,10 @@ public static class RepoConfig
     }
 
     /// <summary>
-    /// List all available namespaces (subdirectories of root that contain .jsonl files).
+    /// List all available namespaces. A subdirectory of root counts as a
+    /// namespace if it contains at least one <c>*.jsonl</c> file (scanner has
+    /// run) OR a <c>config.json</c> file (freshly initialised via
+    /// <c>total-recall init</c> but not yet scanned).
     /// </summary>
     public static List<string> ListNamespaces(string? explicitRoot = null)
     {
@@ -122,7 +125,9 @@ public static class RepoConfig
             return [Path.GetFileName(root)];
 
         return Directory.GetDirectories(root)
-            .Where(d => Directory.EnumerateFiles(d, "*.jsonl").Any())
+            .Where(d =>
+                Directory.EnumerateFiles(d, "*.jsonl").Any()
+                || File.Exists(Path.Combine(d, "config.json")))
             .Select(d => Path.GetFileName(d))
             .OrderBy(n => n)
             .ToList();

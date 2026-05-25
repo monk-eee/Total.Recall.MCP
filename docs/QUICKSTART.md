@@ -1,5 +1,41 @@
 # Total.Recall v2 — Quick Start Guide
 
+## First 5 Minutes
+
+This is the fast path for anyone with a built .NET repo and a coverage XML
+already on disk. The five steps below take you from "never heard of it" to
+"Copilot is using Total.Recall".
+
+```bash
+# 1. Install (once, globally)
+dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
+
+# 2. From inside your target repo
+cd path/to/your-repo
+
+# 3. Auto-discover layout and write config
+total-recall init .
+# Reads your .csproj tree, locates the newest .dll under bin/, the newest
+# coverage.cobertura.xml under TestResults/, and the matching test project.
+# Writes config.json AND prints a ready-to-paste .vscode/mcp.json block.
+
+# 4. Run the scan command it printed (also auto-generated, copy & paste)
+total-recall scan --assembly ... --coverage ... --tests ... --enrich
+
+# 5. Paste the printed JSON block into .vscode/mcp.json, restart VS Code,
+#    open Copilot agent chat, and type:
+#       "get testable targets, top 5"
+```
+
+If anything looks off, run `total-recall doctor` — it prints env vars,
+data root status, per-namespace data file counts, and validates the paths
+in `config.json` are still on disk.
+
+The rest of this document is the long-form reference: full prerequisites,
+option B (build from source), per-step troubleshooting, and CI patterns.
+
+---
+
 ## Prerequisites
 
 - .NET 8.0 SDK (8.0.400+)
@@ -12,7 +48,7 @@
 ### Option A — Install the global tool (recommended)
 
 ```bash
-dotnet tool install -g TotalRecall.Mcp --version 2.4.0-preview.1
+dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
 ```
 
 This puts a single command, `total-recall`, on your `PATH`. It is the

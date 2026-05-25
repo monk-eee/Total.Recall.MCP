@@ -142,4 +142,44 @@ public sealed class RepoConfigTests : IDisposable
         Assert.Empty(result);
     }
 
+    /// <summary>
+    /// Regression test: a namespace freshly created by <c>total-recall init</c>
+    /// contains only <c>config.json</c> (no <c>*.jsonl</c> yet) until the scanner
+    /// runs. Previously, <c>ListNamespaces</c> filtered to dirs containing at
+    /// least one JSONL file, so <c>doctor</c> would report "no namespaces found"
+    /// even after a successful <c>init</c>. Surfaced by Copilot code review on
+    /// PR #10. Fix: include dirs with <c>config.json</c> OR <c>*.jsonl</c>.
+    /// </summary>
+    [Fact]
+    public void ListNamespaces_IncludesConfigOnlyDirs_FromFreshInit()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(root);
+        try
+        {
+            // Freshly init'd namespace — config.json only, no JSONL yet.
+            var freshlyInited = Path.Combine(root, "fresh");
+            Directory.CreateDirectory(freshlyInited);
+            File.WriteAllText(Path.Combine(freshlyInited, "config.json"), "{}");
+
+            // Scanned namespace — has JSONL.
+            var scanned = Path.Combine(root, "scanned");
+            Directory.CreateDirectory(scanned);
+            File.WriteAllText(Path.Combine(scanned, "type-registry.jsonl"), "");
+
+            // Empty namespace — neither file. Must NOT appear.
+            Directory.CreateDirectory(Path.Combine(root, "empty"));
+
+            var result = RepoConfig.ListNamespaces(root);
+
+            Assert.Contains("fresh", result);
+            Assert.Contains("scanned", result);
+            Assert.DoesNotContain("empty", result);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
 }
