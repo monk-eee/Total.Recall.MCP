@@ -435,6 +435,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, please skim [`docs/
 
 The default branch is `main`. CI runs on every push and PR.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the version history. Format follows
+[Keep a Changelog](https://keepachangelog.com).
+
 ## License
 
 [MIT](LICENSE) © 2026 Lyndon Swan
