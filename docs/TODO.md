@@ -1,64 +1,112 @@
-# Total.Recall — Agent Evaluation Harness (Cuts 1–6)
+# Total.Recall — TODO
 
-Tracking the six-cut rollout of the Total.Recall evaluation harness. Each cut is pure-additive — existing 23 tools and their schemas are not modified.
+Running list of known bugs, known duplicates, log-sweep findings, and
+shipped-feature history. Agents append here per the AGENTS.md "Always
+report bugs and failures" / "Code reuse" / log-sweep disciplines.
 
-## Cut 1 — Passive tool-call telemetry  [in progress]
+When adding an entry:
+- Be specific: file path + symbol or test name, what was observed, impact.
+- Use the most relevant section. Create a new section only if none fits.
+- Move entries to `## Resolved` (with the fix commit hash) rather than deleting them.
+- Keep this file linear and append-only — no nested sub-tasks.
 
-Foundation. Captures every MCP tool invocation to `tool-calls.jsonl`. All later cuts read from this.
+---
 
-- [x] `Models/ToolCall.cs` — record schema
-- [x] `Infrastructure/TelemetryConfig.cs` — `TOTAL_RECALL_MODE` env var (`passive`|`active-eval`|`off`)
-- [x] `Infrastructure/Telemetry.cs` — `Track(...)` wrapper + in-process session id + dedupe key
-- [x] `NamespaceStores` — add `ToolCalls` store
-- [x] `RepoConfig.ToolCallsPath`
-- [x] Instrument tools via `Telemetry.Track` wrapper (start: `GetGotchas`, `GetContext`, `GetTestableTargets`, `GetSourceSnippet`, `ResolveType`)
-- [x] Tests: `TelemetryTests`, `ToolCallStoreTests`
+## Known bugs
 
-## Cut 2 — Cycle detection
+_Bugs noticed in passing during unrelated work. Each entry must record:
+(1) what you observed, (2) where (file + symbol or test name),
+(3) impact, (4) whether fixed in this run or left for later. See
+AGENTS.md "Test-driven workflow (NON-NEGOTIABLE)"._
 
-Reads `tool-calls.jsonl`, surfaces wasteful loops.
+_(none currently tracked)_
 
-- [ ] `Models/CycleRecord.cs`
-- [ ] `Infrastructure/CycleDetector.cs` — re-query + oscillation patterns
-- [ ] `NamespaceStores.Cycles`
-- [ ] `Tools/CyclesTool.cs` — `get_cycles`
-- [ ] Auto-append `cycle-detected` gotchas on first detection per session
-- [ ] Tests: `CycleDetectorTests`, `CyclesToolTests`
+---
 
-## Cut 3 — Task bracketing
+## Known duplicates
 
-Sub-session unit of work attribution.
+_Helper code duplicated across `Tools/` and `Scanners/` that should live
+in `Infrastructure/`. Each entry: pattern, files involved, proposed
+`Infrastructure/` home. See AGENTS.md "Code reuse (NON-NEGOTIABLE)"._
 
-- [ ] `Models/TaskRecord.cs`
-- [ ] `NamespaceStores.Tasks`
-- [ ] `Tools/TaskTool.cs` — `start_task`, `end_task`, `log_task`
-- [ ] `Telemetry` tracks current task id, stamps it on every `ToolCall`
-- [ ] Tests: `TaskToolTests`
+_(none currently tracked)_
 
-## Cut 4 — Model scorecard
+---
 
-Pure aggregation. No new write tools.
+## From log sweep
 
-- [ ] `Tools/ScorecardTool.cs` — `get_model_scorecard`, `get_efficiency_report`, `get_tool_call_stats`
-- [ ] Tests: `ScorecardTests`
+_Recurring errors / warnings / silent failures surfaced by the
+`log-sweep` skill. Each entry: date, log source, pattern, count, suspected
+cause. See AGENTS.md "Always report bugs and failures"._
 
-## Cut 5 — Active eval
+_(none currently tracked)_
 
-- [ ] `Models/ChallengeRecord.cs`, `Models/EvalRecord.cs`
-- [ ] `NamespaceStores.Challenges`, `NamespaceStores.Evals`
-- [ ] `Infrastructure/ChallengeGrader.cs`
-- [ ] `Tools/ChallengeTool.cs` — `get_next_challenge`, `submit_challenge`, `get_eval_leaderboard`
-- [ ] Seed 5 challenges from existing assessments
-- [ ] Tests: `ChallengeGraderTests`, `ChallengeToolTests`
+---
 
-## Cut 6 — Context-loss reporting
+## Backlog (nice-to-have)
 
-- [ ] `Tools/ContextResetTool.cs` — `report_context_reset`
-- [ ] `CycleDetector` — context-loss pattern (resolve_type repeat with no write between)
-- [ ] Tests: `ContextResetTests`
+_Non-urgent improvements that don't block shipping. Move to `## In progress`
+when picked up._
 
-## Cross-cutting
+- Roslyn analyzer to fail the build on duplicate `internal static` signatures
+  across `Tools/` and `Scanners/` (per AGENTS.md "Mechanical enforcement").
+- Documentation auto-check: CI step that diffs `[Description]` attributes
+  against `docs/TOOL_REFERENCE.md` so doc drift breaks the build.
+- `report` CLI: optional `--format table` to render JSON envelopes as
+  PowerShell-friendly tables without `ConvertFrom-Json | Format-Table`.
 
-- [ ] Update `AGENTS.md` Architecture Decisions list with new behaviours
-- [ ] Update `SPEC.md` + `README.md` for new tools + `TOTAL_RECALL_MODE` env var
-- [ ] Bump version to 2.4.0 once Cuts 1–4 land
+---
+
+## Shipped
+
+### v2.4.0 — Agent evaluation harness (Cuts 1–6)
+
+Six-cut rollout. All cuts pure-additive, no existing tools modified. See
+AGENTS.md Architecture Decisions #53–#58 for design notes and the v2.4.0
+commit for the diff.
+
+- [x] **Cut 1 — Passive tool-call telemetry.** `Models/ToolCall.cs`,
+  `Infrastructure/TelemetryConfig.cs`, `Infrastructure/Telemetry.cs`,
+  `NamespaceStores.ToolCalls`, `Telemetry.Track` wrapping every public
+  tool entry. Tests: `TelemetryTests`, `ToolCallStoreTests`.
+- [x] **Cut 2 — Cycle detection.** `Models/CycleRecord.cs`,
+  `Infrastructure/CycleDetector.cs` (re-query / context-loss /
+  oscillation patterns), `NamespaceStores.Cycles`, `Tools/CyclesTool.cs`
+  (`get_cycles`). Tests: `CycleDetectorTests`, `CyclesToolTests`.
+- [x] **Cut 3 — Task bracketing.** `Models/TaskRecord.cs`,
+  `NamespaceStores.Tasks`, `Tools/TaskTool.cs` (`start_task`, `end_task`,
+  `log_task`), `Telemetry` stamps active task id on every `ToolCall`.
+  Tests: `TaskToolTests`.
+- [x] **Cut 4 — Model scorecard.** `Tools/ScorecardTool.cs`
+  (`get_model_scorecard`, `get_efficiency_report`,
+  `get_tool_call_stats`). Tests: `ScorecardTests`.
+- [x] **Cut 5 — Active eval.** `Models/ChallengeRecord.cs`,
+  `Models/EvalRecord.cs`, `NamespaceStores.Challenges`,
+  `NamespaceStores.Evals`, `Infrastructure/ChallengeGrader.cs`,
+  `Tools/ChallengeTool.cs` (`get_next_challenge`, `submit_challenge`,
+  `get_eval_leaderboard`). Tests: `ChallengeGraderTests`,
+  `ChallengeToolTests`.
+- [x] **Cut 6 — Context-loss reporting.** `Tools/ContextResetTool.cs`
+  (`report_context_reset`), `CycleDetector` context-loss pattern.
+  Tests: `ContextResetTests`.
+- [x] **Cross-cutting.** AGENTS.md Architecture Decisions #53–#58 added,
+  `SPEC.md` + `README.md` updated for `TOTAL_RECALL_MODE` env var, version
+  bumped to 2.4.0.
+
+### Post-v2.4.0 — Triple-mode entry
+
+- [x] **`report` CLI sub-command.** `src/Total.Recall/Reporting/ReportRunner.cs`
+  dispatches `dotnet run -- report <sub-cmd>` to existing tool methods.
+  Sub-commands: `tool-stats`, `efficiency`, `scorecard`, `cycles`,
+  `sessions`, `leaderboard`. Tests: `ReportRunnerTests` (12). AGENTS.md
+  Architecture Decision #60.
+
+---
+
+## Resolved
+
+_Entries from `## Known bugs` / `## Known duplicates` / `## From log sweep`
+that have been fixed. Format: `**[YYYY-MM-DD] <commit-hash>** — original
+entry text + one-line description of the fix._
+
+_(none yet)_
