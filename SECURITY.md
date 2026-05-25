@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Total.Recall is pre-1.0 and ships from `main`/`develop`. Only the latest
+Total.Recall is pre-1.0 and ships from `main`. Only the latest
 commit on the default branch is supported. There is no LTS branch.
 
 ## Reporting a vulnerability

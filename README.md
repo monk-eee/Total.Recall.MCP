@@ -10,8 +10,8 @@ Total.Recall is a side-car process that watches your .NET repo and tells AI codi
 
 Total.Recall is two things in one process:
 
-1. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
-2. **A behaviour observatory + eval harness** — every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss, oscillation) are auto-detected, agent work is bracketed into named tasks, and a deterministic grader runs reproducible challenges to score models against each other without an LLM-as-judge.
+1. **A behaviour observatory + eval harness** — every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss after compaction, oscillation between targets) are auto-detected, agent work is bracketed into named tasks, and a deterministic grader runs reproducible challenges to score models against each other without an LLM-as-judge. This is the unusual half — most "agent tooling" repos give you a tool; this one also instruments whether the tool is actually working.
+2. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
 
 The included scanners target .NET (Cobertura coverage, `MetadataLoadContext` reflection), which is the only public MCP server I'm aware of in this specific niche — AI-assisted test coverage uplift on a large C# codebase. The memory + telemetry + eval substrate is designed to be language-agnostic, but .NET is the only scanner today; a Python or TypeScript scanner is left as an exercise.
 
@@ -378,7 +378,7 @@ Start with [`AGENTS.md`](AGENTS.md) for the working rules and architecture decis
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Before opening a PR, please read `AGENTS.md` — in particular the Architecture Decisions numbered list, which documents every design choice and the reasoning behind it.
 
-The default branch is `develop` (kept from the project's pre-OSS history). PRs and CI run against both `develop` and `main`.
+The default branch is `main`. CI runs on every push and PR.
 
 ## License
 
