@@ -14,14 +14,14 @@
 
 ## In one paragraph
 
-Total.Recall is a side-car process that watches your .NET repo and tells AI coding agents *which classes are worth testing next, why, and what mistakes other agents have already made on them.* A scanner extracts type metadata, coverage gaps, test inventories, and architectural metrics into small JSONL files. An MCP server then exposes 34 tools over stdio so the agent can query that data in one call instead of reading ten files — and write back what it learns (gotchas, testability verdicts, session outcomes) so the next session starts smarter. Every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss after compaction, oscillation between targets) are auto-detected, and a deterministic grader scores agents on reproducible eval challenges. No database, no LLM-as-judge, no long-running service — just flat files, ~2MB in memory, boots in under a second.
+Total.Recall is a side-car process that watches your .NET repo and tells AI coding agents *which classes are worth testing next, why, and what mistakes other agents have already made on them.* A scanner extracts type metadata, coverage gaps, test inventories, and architectural metrics into small JSONL files. An MCP server then exposes 37 tools over stdio so the agent can query that data in one call instead of reading ten files — and write back what it learns (gotchas, testability verdicts, bug reports, session outcomes) so the next session starts smarter. Every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss after compaction, oscillation between targets) are auto-detected, and a deterministic grader scores agents on reproducible eval challenges. No database, no LLM-as-judge, no long-running service — just flat files, ~2MB in memory, boots in under a second.
 
 ## A bit more detail
 
 Total.Recall is two things in one process:
 
 1. **A behaviour observatory + eval harness** — every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss after compaction, oscillation between targets) are auto-detected, agent work is bracketed into named tasks, and a deterministic grader runs reproducible challenges to score models against each other without an LLM-as-judge. This is the unusual half — most "agent tooling" repos give you a tool; this one also instruments whether the tool is actually working.
-2. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
+2. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, bug reports, and prior-session outcomes, all queryable through 37 MCP tools. One tool call replaces 10–15 file reads.
 
 The .NET scanner ships in-process with the MCP server (Cobertura coverage, `MetadataLoadContext` reflection). Python and TypeScript scanners ship as **sibling packages** on PyPI and npm — same JSONL schema, different ecosystems, no link-time coupling. The MCP server reads whatever data is in `data/<namespace>/`; it doesn't know or care which scanner produced it. See [`docs/SCANNERS.md`](docs/SCANNERS.md) for the polyglot contributor guide and [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md) for the on-disk contract.
 
@@ -34,7 +34,7 @@ And nobody can tell whether the agent is actually getting better, worse, or just
 ## What it does
 
 - **Scanners** extract type metadata, coverage gaps, and test inventories into append-only JSONL files
-- **34 MCP tools** let agents query this data instantly — one tool call replaces 10–15 file reads
+- **37 MCP tools** let agents query this data instantly — one tool call replaces 10–15 file reads
 - **Agents write back** gotchas, assessments, and session logs, creating a feedback loop that makes each session smarter than the last
 - **Telemetry + eval harness** (v2.4) records every tool call, detects behaviour anti-patterns (re-query, context-loss, oscillation), brackets work into tasks, and runs deterministic grader challenges for cross-model scoring
 
@@ -52,7 +52,7 @@ flowchart LR
   end
   D[("data/&lt;namespace&gt;/*.jsonl")]
   S["total-recall<br/><sub>MCP server (NuGet)</sub>"]
-  VS["VS Code / Copilot<br/><sub>34 MCP tools</sub>"]
+  VS["VS Code / Copilot<br/><sub>37 MCP tools</sub>"]
   SDN --> D
   SPY --> D
   STS --> D
@@ -168,7 +168,7 @@ Options:
   --format <json|table>  Output format (default: json)
 ```
 
-**MCP server mode** — run `total-recall` with no arguments. The process speaks JSON-RPC over stdio and is launched by VS Code via `.vscode/mcp.json` (see [VS Code MCP setup](docs/QUICKSTART.md)). All 34 tools are auto-discovered via MCP protocol; the agent does not need configuration.
+**MCP server mode** — run `total-recall` with no arguments. The process speaks JSON-RPC over stdio and is launched by VS Code via `.vscode/mcp.json` (see [VS Code MCP setup](docs/QUICKSTART.md)). All 37 tools are auto-discovered via MCP protocol; the agent does not need configuration.
 
 ## Design Principles
 
@@ -205,6 +205,7 @@ Options:
 | `get_gotchas` / `add_gotcha` | Known pitfalls for a type / record new ones |
 | `get_test_inventory` | Existing test methods per class (prevent duplication) |
 | `add_assessment` / `get_assessments` | Record and query testability verdicts |
+| `report_bug` / `get_bugs` / `update_bug_status` | File class-scoped bug reports, query open bugs, transition status (append-only history). Surfaces in `get_context`. |
 
 ### Static Analysis
 
@@ -242,7 +243,7 @@ See [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) for complete parameter docu
 
 ## How It Works
 
-VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot initializes. The server stays alive for the session, and Copilot auto-discovers all 34 tools over stdio JSON-RPC.
+VS Code spawns the Total.Recall process (via `.vscode/mcp.json`) when Copilot initializes. The server stays alive for the session, and Copilot auto-discovers all 37 tools over stdio JSON-RPC.
 
 ### Recommended workflow
 
@@ -435,7 +436,7 @@ While a report runs, `TOTAL_RECALL_MODE` is forced to `off` so the report itself
 | Document | Purpose |
 |----------|---------|
 | [QUICKSTART.md](docs/QUICKSTART.md) | Step-by-step setup guide |
-| [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 34 tools |
+| [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 37 tools |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Observability guide + common problem fixes |
 | [INTEGRATION.md](docs/INTEGRATION.md) | How to wire Total.Recall into a target repo |
 | [copilot-instructions-template.md](docs/copilot-instructions-template.md) | Drop-in template for `.github/copilot-instructions.md` |

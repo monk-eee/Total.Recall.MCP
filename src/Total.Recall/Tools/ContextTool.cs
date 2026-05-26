@@ -58,7 +58,7 @@ public static class ContextTool
             return JsonSerializer.Serialize(new { type = typeRecord, depth = "shallow" }, SharedJsonOptions.CamelCaseIndented);
         }
 
-        // STANDARD and FULL: always include gotchas, coverage, tests
+        // STANDARD and FULL: always include gotchas, coverage, tests, open bugs
         var gotchas = stores.Gotchas.Query(g =>
             g.Type.Contains(typeName, StringComparison.OrdinalIgnoreCase));
         Log.Debug($"[GetContext] gotchas={gotchas.Count}");
@@ -67,13 +67,36 @@ public static class ContextTool
             t.Class.Contains(typeName, StringComparison.OrdinalIgnoreCase));
         Log.Debug($"[GetContext] tests={tests.Count}");
 
+        // Open bugs for this class (latest record per id, status == open).
+        // Bugs are surfaced ahead of authoring tests so the agent sees known-broken behaviour.
+        var openBugs = new List<BugReport>();
+        if (stores.Bugs.HasData())
+        {
+            var latestBugs = BugReportTool.BuildLatest(stores.Bugs.LoadAll());
+            var matchName = typeRecord?.Name ?? typeName;
+            foreach (var b in latestBugs.Values)
+            {
+                if (!b.Status.Equals("open", StringComparison.OrdinalIgnoreCase)) continue;
+                if (b.Class.Equals(matchName, StringComparison.OrdinalIgnoreCase) ||
+                    b.Class.Contains(typeName, StringComparison.OrdinalIgnoreCase))
+                {
+                    openBugs.Add(b);
+                }
+            }
+            openBugs = openBugs
+                .OrderBy(b => BugReportTool.SeverityRank(b.Severity))
+                .ThenByDescending(b => b.UpdatedAt, StringComparer.Ordinal)
+                .ToList();
+            Log.Debug($"[GetContext] openBugs={openBugs.Count}");
+        }
+
         var coverageGap = stores.CoverageGaps.HasData()
             ? stores.CoverageGaps.LoadAll().FirstOrDefault(g =>
                 g.Class.Equals(typeName, StringComparison.OrdinalIgnoreCase)
                 || (typeRecord is not null && g.Class.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase)))
             : null;
 
-        // STANDARD: type + gotchas + tests + coverage — good enough for most test authoring
+        // STANDARD: type + gotchas + tests + coverage + open bugs — good enough for most test authoring
         if (!isFull)
         {
             var standardResult = new
@@ -82,6 +105,7 @@ public static class ContextTool
                 gotchas,
                 tests,
                 coverageGap,
+                openBugs,
                 depth = "standard"
             };
             return JsonSerializer.Serialize(standardResult, SharedJsonOptions.CamelCaseIndented);
@@ -151,6 +175,7 @@ public static class ContextTool
             mockRecipes,
             assessments,
             coverageGap,
+            openBugs,
             sessionHistory,
             recommendedPatterns,
             depth = "full"

@@ -66,6 +66,9 @@ public static class Metrics
     public const string ToolGetTestInventory = "tool.get_test_inventory";
     public const string ToolAddAssessment = "tool.add_assessment";
     public const string ToolGetAssessments = "tool.get_assessments";
+    public const string ToolReportBug = "tool.report_bug";
+    public const string ToolGetBugs = "tool.get_bugs";
+    public const string ToolUpdateBugStatus = "tool.update_bug_status";
     public const string ToolGetMetrics = "tool.get_metrics";
     public const string ToolGetTestableTargets = "tool.get_testable_targets";
     public const string ToolGetSourceSnippet = "tool.get_source_snippet";

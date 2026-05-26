@@ -1,6 +1,6 @@
 # Total.Recall — Tool Reference
 
-Complete reference for all 34 MCP tools exposed by the server.
+Complete reference for all 37 MCP tools exposed by the server.
 
 All tools accept an optional `ns` parameter to target a specific namespace dataset.
 
@@ -392,6 +392,62 @@ score = base
 **Returns**: Array of Assessment objects. Deduplicates by class name (last assessment wins).
 
 **When to use**: Check if a class was already assessed before spending time evaluating it.
+
+---
+
+## report_bug
+
+**Purpose**: File a class-scoped bug report when broken behaviour is discovered while writing tests or reading code. The third leg of Total.Recall's persistent knowledge (alongside gotchas and assessments) — future sessions see open bugs for a class via `get_context` before authoring tests for it.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | yes | Class the bug applies to |
+| `severity` | string | yes | One of `low` \| `medium` \| `high` \| `critical` |
+| `description` | string | yes | Short description of the broken behaviour |
+| `methodName` | string | no | Method name if the bug is method-scoped |
+| `repro` | string | no | Minimal repro snippet or steps |
+| `foundInTestName` | string | no | Test name that surfaced the bug |
+| `model` | string | no | Reporting model identifier (e.g. `claude-opus-4.7`) |
+| `ns` | string | no | Namespace (default: server default) |
+
+**Returns**: JSON `{ ok, id, class, method, severity, status }`. The `id` is a stable `bug-{12-hex}` token used by `update_bug_status`.
+
+**Storage**: Appends to `bugs.jsonl`. Multiple records can share an id (status transitions are appended, not mutated); the latest record per id wins on read.
+
+---
+
+## get_bugs
+
+**Purpose**: Query bug reports. By default returns OPEN bugs only.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `className` | string | no | Filter by class (partial match) |
+| `severity` | string | no | Filter: `low` \| `medium` \| `high` \| `critical` |
+| `status` | string | no | Filter: `open` (default) \| `triaged` \| `fixed` \| `wontfix` \| `all` |
+| `top` | int | no | Max results (default 50, `0` = no limit) |
+| `ns` | string | no | Namespace |
+
+**Returns**: JSON `{ totalCount, returned, bugs[] }`. Bugs are sorted by severity (`critical` first), then by `updatedAt` descending.
+
+**When to use**: Triaging known issues, generating a bug list for `docs/TODO.md`, or pre-flight check before writing tests against a class.
+
+---
+
+## update_bug_status
+
+**Purpose**: Transition a bug to a new status. Append-only — history is preserved.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `bugId` | string | yes | Id returned from `report_bug` |
+| `status` | string | yes | New status: `open` \| `triaged` \| `fixed` \| `wontfix` |
+| `notes` | string | no | Notes for the transition (resolution rationale, etc.) |
+| `ns` | string | no | Namespace |
+
+**Returns**: JSON `{ ok, id, previousStatus, newStatus, class, method }`.
+
+**Storage**: Appends a new record with the same `id`. Original `createdAt` and immutable fields (class, severity, description, repro) are copied forward; only `status`, `statusNotes`, `updatedAt`, `sessionId`, `taskId` are refreshed.
 
 ---
 

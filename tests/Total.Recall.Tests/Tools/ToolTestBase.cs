@@ -84,4 +84,7 @@ public abstract class ToolTestBase : IDisposable
 
     protected void SeedSessions(params SessionRecord[] records)
         => SeedData(RepoConfig.SessionsPath(TempDir), records);
+
+    protected void SeedBugs(params BugReport[] records)
+        => SeedData(RepoConfig.BugsPath(TempDir), records);
 }

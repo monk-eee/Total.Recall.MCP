@@ -58,6 +58,14 @@ internal static class ReportRunner
                 case "leaderboard":
                     output = ChallengeTool.GetEvalLeaderboard(ns: opts.Namespace);
                     break;
+                case "bugs":
+                    output = BugReportTool.GetBugs(
+                        className: opts.Class,
+                        severity: opts.Severity,
+                        status: opts.Status ?? "open",
+                        top: opts.Last ?? 50,
+                        ns: opts.Namespace);
+                    break;
                 default:
                     stdout.WriteLine($"Unknown report sub-command: '{subCommand}'");
                     stdout.WriteLine();
@@ -86,6 +94,9 @@ internal static class ReportRunner
         public int? Last { get; set; }
         public string? Pattern { get; set; }
         public string Format { get; set; } = "json";
+        public string? Class { get; set; }
+        public string? Severity { get; set; }
+        public string? Status { get; set; }
     }
 
     internal static ReportOptions ParseOptions(string[] args)
@@ -111,6 +122,15 @@ internal static class ReportRunner
                     var fmt = args[++i].ToLowerInvariant();
                     if (fmt is "json" or "table") opts.Format = fmt;
                     break;
+                case "--class" when i + 1 < args.Length:
+                    opts.Class = args[++i];
+                    break;
+                case "--severity" when i + 1 < args.Length:
+                    opts.Severity = args[++i];
+                    break;
+                case "--status" when i + 1 < args.Length:
+                    opts.Status = args[++i];
+                    break;
             }
         }
         return opts;
@@ -127,11 +147,15 @@ internal static class ReportRunner
         stdout.WriteLine("  cycles         Recent detected behaviour cycles (re-query, context-loss, oscillation)");
         stdout.WriteLine("  sessions       Session history + plateau warning + lines-per-test ROI");
         stdout.WriteLine("  leaderboard    Per-model eval pass rate / avg score");
+        stdout.WriteLine("  bugs           Class-scoped bug reports (latest record per id wins)");
         stdout.WriteLine();
         stdout.WriteLine("Options:");
         stdout.WriteLine("  --ns <name>        Namespace to query (default: TOTAL_RECALL_NAMESPACE env var)");
-        stdout.WriteLine("  --last <N>         Limit results (cycles default 20, sessions default 5)");
+        stdout.WriteLine("  --last <N>         Limit results (cycles default 20, sessions default 5, bugs default 50)");
         stdout.WriteLine("  --pattern <name>   Filter cycles by pattern: re-query | context-loss | oscillation");
+        stdout.WriteLine("  --class <name>     (bugs) Filter by class (partial match)");
+        stdout.WriteLine("  --severity <s>     (bugs) Filter by severity: low|medium|high|critical");
+        stdout.WriteLine("  --status <s>       (bugs) Filter by status: open|triaged|fixed|wontfix|all (default: open)");
         stdout.WriteLine("  --format <json|table>  Output format (default: json)");
         stdout.WriteLine();
         stdout.WriteLine("JSON output is suitable for piping through 'ConvertFrom-Json | Format-Table'");
