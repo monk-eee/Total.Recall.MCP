@@ -11,6 +11,38 @@ Dates reflect the commit date in the local repo.
 ## [Unreleased]
 
 ### Added
+- **Python scanner `init` sub-command** (`total-recall-py init <repo>`) —
+  auto-discovers a Python repo's source root (`src/<pkg>` or flat layout
+  via `pyproject.toml` `[project].name`), tests directory (`tests/` /
+  `test/`), newest Cobertura coverage XML (skipping junk dirs like
+  `.venv`, `__pycache__`, `node_modules`), and suggests a sanitised
+  namespace from the package name. Writes `<data>/<ns>/config.json`
+  preserving any prior `lastScanUtc`, prints a copy-pasteable
+  `.vscode/mcp.json` block with `command: "total-recall"` and the
+  resolved env vars, and prints the exact `scan` command to run next.
+  Exit codes mirror `scan`: 0 success, 1 on warnings (missing
+  coverage/tests), 2 on filesystem error. Namespace validation
+  rejects path separators and traversal segments.
+- **Python scanner `--watch` mode** (`total-recall-py scan --watch`) —
+  after the initial scan, polls every 1.5 s for `.py` mtime changes
+  under the source root + tests dir + the coverage XML, debounces
+  bursts (0.5 s) into a single rescan, and re-emits all three JSONL
+  files. Zero new runtime deps — pure stdlib `os.stat`. Ctrl+C exits
+  cleanly. Watcher is fully injectable (`sleep`, `snapshot`,
+  `iterations`) so tests run deterministically without sleeping.
+- **PyPI publish workflow** (`.github/workflows/publish-python-scanner.yml`)
+  — manual `workflow_dispatch` with `target` input (`testpypi` /
+  `pypi`) plus a `pyscan-v*` tag trigger that publishes to PyPI prod
+  after verifying `pyproject.toml` version matches the tag.
+  Builds sdist + wheel via `python -m build`, validates with `twine
+  check`, uploads built artifacts to the GH run. Uses
+  `PYPI_API_TOKEN` / `TEST_PYPI_API_TOKEN` repo secrets.
+- **npm publish workflow** (`.github/workflows/publish-typescript-scanner.yml`)
+  — manual `workflow_dispatch` with `dist_tag` input (`next` /
+  `latest`) plus a `tsscan-v*` tag trigger that publishes with
+  `--access public --tag latest` after verifying `package.json`
+  version matches the tag. Uses `NPM_TOKEN` repo secret. Uploads a
+  `npm pack` tarball as a GH run artifact for inspection.
 - **TypeScript scanner skeleton** (`src/Total.Recall.Scanners.TypeScript/`) —
   Node 18+ / TypeScript 5+ sibling project published as npm
   `@total-recall/scan` with console script `total-recall-ts`. Uses the
