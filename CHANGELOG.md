@@ -11,6 +11,21 @@ Dates reflect the commit date in the local repo.
 ## [Unreleased]
 
 ### Added
+- **TypeScript scanner skeleton** (`src/Total.Recall.Scanners.TypeScript/`) —
+  Node 18+ / TypeScript 5+ sibling project published as npm
+  `@total-recall/scan` with console script `total-recall-ts`. Uses the
+  TypeScript compiler API (`ts.createSourceFile`) for single-file AST
+  parsing — no project resolution, no type-checker, fast and predictable.
+  Emits canonical `type-registry.jsonl` (class, interface, enum,
+  function, type-alias), `coverage-gaps.jsonl` (Cobertura via
+  `fast-xml-parser`), `test-inventory.jsonl` (vitest/jest test
+  extraction), and `config.json`. Records carry `lang.kind:
+  "typescript"` with the documented extension fields (`isExported`,
+  `isAmbient`, `isReadonlyClass`, `generics`). Detects `extends` →
+  `baseType`, `implements` → `interfaces[]`, `abstract` modifier,
+  parameter-properties, and forward-slashes `filePath`. Conformance
+  fixture at `tests/conformance/fixtures/typescript-sample/` exercises
+  every shape. 22-test vitest suite green; `tsc -p` clean.
 - **Python scanner skeleton** (`src/Total.Recall.Scanners.Python/`) —
   pure-stdlib AST walker that emits canonical `type-registry.jsonl`,
   `coverage-gaps.jsonl` (Cobertura XML), `test-inventory.jsonl` (pytest),

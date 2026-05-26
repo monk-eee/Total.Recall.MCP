@@ -281,7 +281,7 @@ These live as sibling folders under `src/` but are **independent projects** ship
 | Scanner | Language | Path | Package | Entry point | Status |
 |---------|----------|------|---------|-------------|--------|
 | Total.Recall.Scanners.Python | Python 3.10+ | `src/Total.Recall.Scanners.Python/` | PyPI `total-recall-scan-py` | `total-recall-py` | scaffolded (feat/scanners) |
-| Total.Recall.Scanners.TypeScript | Node 18+ / TS 5+ | `src/Total.Recall.Scanners.TypeScript/` | npm `@total-recall/scan` | `total-recall-ts` | planned (feat/scanners) |
+| Total.Recall.Scanners.TypeScript | Node 18+ / TS 5+ | `src/Total.Recall.Scanners.TypeScript/` | npm `@total-recall/scan` | `total-recall-ts` | scaffolded (feat/scanners) |
 
 **Rules for sibling-scanner work:**
 - Never modify `src/Total.Recall/Total.Recall.csproj` to reference these dirs. Verify after each scanner addition: `dotnet pack src/Total.Recall/Total.Recall.csproj -c Release` and confirm the `.nupkg` contains NO `.py`, `.ts`, `node_modules`, or `__pycache__` entries.
