@@ -23,7 +23,7 @@ Total.Recall is two things in one process:
 1. **A behaviour observatory + eval harness** — every tool call is recorded, behavioural anti-patterns (re-query loops, context-loss after compaction, oscillation between targets) are auto-detected, agent work is bracketed into named tasks, and a deterministic grader runs reproducible challenges to score models against each other without an LLM-as-judge. This is the unusual half — most "agent tooling" repos give you a tool; this one also instruments whether the tool is actually working.
 2. **A persistent memory store** — the agent's notes, gotchas, testability verdicts, mock recipes, and prior-session outcomes, all queryable through 34 MCP tools. One tool call replaces 10–15 file reads.
 
-The included scanners target .NET (Cobertura coverage, `MetadataLoadContext` reflection), which is the only public MCP server I'm aware of in this specific niche — AI-assisted test coverage uplift on a large C# codebase. The memory + telemetry + eval substrate is designed to be language-agnostic, but .NET is the only scanner today; a Python or TypeScript scanner is left as an exercise.
+The .NET scanner ships in-process with the MCP server (Cobertura coverage, `MetadataLoadContext` reflection). Python and TypeScript scanners ship as **sibling packages** on PyPI and npm — same JSONL schema, different ecosystems, no link-time coupling. The MCP server reads whatever data is in `data/<namespace>/`; it doesn't know or care which scanner produced it. See [`docs/SCANNERS.md`](docs/SCANNERS.md) for the polyglot contributor guide and [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md) for the on-disk contract.
 
 ## Why it exists
 
@@ -504,18 +504,21 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for the full observabilit
 
 ```
 src/
-  Total.Recall/                 ← main project (MCP server + scanner + report CLI)
-    Infrastructure/             ← shared helpers (JSON, stores, logging, metrics)
-    Tools/                      ← MCP tool entry points (one class per tool)
-    Scanners/                   ← assembly / coverage / test scanners
-    Models/                     ← record types serialised to JSONL
-    Reporting/                  ← report CLI sub-commands + table renderer
-  Total.Recall.Analyzers/       ← Roslyn analyzer (TR0001 duplicate-helper rule)
+  Total.Recall/                       ← main project (MCP server + .NET scanner + report CLI)
+    Infrastructure/                   ← shared helpers (JSON, stores, logging, metrics)
+    Tools/                            ← MCP tool entry points (one class per tool)
+    Scanners/                         ← .NET assembly / coverage / test scanners
+    Models/                           ← record types serialised to JSONL
+    Reporting/                        ← report CLI sub-commands + table renderer
+  Total.Recall.Analyzers/             ← Roslyn analyzer (TR0001 duplicate-helper rule)
+  Total.Recall.Scanners.Python/       ← sibling — ships on PyPI, not part of the .NET sln (planned)
+  Total.Recall.Scanners.TypeScript/   ← sibling — ships on npm, not part of the .NET sln (planned)
 tests/
-  Total.Recall.Tests/           ← xUnit tests for main project
-  Total.Recall.Analyzers.Tests/ ← xUnit tests for the analyzer
-docs/                           ← ADRs, integration guide, tool reference, demo
-data/                           ← gitignored — scanner output lands here per-namespace
+  Total.Recall.Tests/                 ← xUnit tests for main project
+  Total.Recall.Analyzers.Tests/       ← xUnit tests for the analyzer
+  conformance/                        ← cross-language fixture + golden JSONL snapshots
+docs/                                 ← ADRs, integration guide, tool reference, demo, SCANNERS.md
+data/                                 ← gitignored — scanner output lands here per-namespace
 ```
 
 Start with [`AGENTS.md`](AGENTS.md) for the working rules, [`docs/DECISIONS.md`](docs/DECISIONS.md) for the architectural reasoning, then [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the end-to-end flow.

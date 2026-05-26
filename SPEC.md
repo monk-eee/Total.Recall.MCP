@@ -2,7 +2,9 @@
 
 ## 1. Overview
 
-**Total.Recall** is an MCP (Model Context Protocol) server that provides persistent, queryable memory for AI-driven code coverage work on large .NET repositories. It eliminates the 60-70% of context burned on re-discovering type metadata, mock patterns, and coverage gaps each generation.
+**Total.Recall** is an MCP (Model Context Protocol) server that provides persistent, queryable memory for AI-driven code coverage work on large code repositories. It eliminates the 60-70% of context burned on re-discovering type metadata, mock patterns, and coverage gaps each generation.
+
+The MCP server is .NET (NuGet `TotalRecall.Mcp`). The **scanners** that populate its JSONL data files are **sibling projects per language** — they ship on each language's native package manager (NuGet / PyPI / npm) and never link into the server process. The server reads JSONL written by any scanner; it does not know or care which language produced the data. See [`docs/SCANNERS.md`](docs/SCANNERS.md) and [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md).
 
 ### Problem Statement
 
@@ -118,6 +120,7 @@
 | **Testable Target** | A pre-scored, pre-filtered test target produced by `get_testable_targets`. Cross-joins 6 data sources into a composite ROI score. |
 | **Source Snippet** | Actual C# source code fetched from the target repo's source root, used by `get_source_snippet` to replace expensive `read_file` calls. |
 | **Scan** | One-time or periodic data generation: reflect assembly → type-registry.jsonl, parse Cobertura → coverage-gaps.jsonl, scan tests → test-inventory.jsonl. |
+| **Sibling scanner** | A scanner implementation for a non-.NET language (Python, TypeScript, …) shipped on that language's native package manager. Writes the same JSONL schema as the in-process .NET scanner. Decoupled from the MCP server — communicates only through `data/<namespace>/*.jsonl`. |
 
 ---
 

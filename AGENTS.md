@@ -274,6 +274,21 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 | Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1098 tests |
 | Total.Recall.Analyzers.Tests | net8.0 | `tests/Total.Recall.Analyzers.Tests/Total.Recall.Analyzers.Tests.csproj` | 8 tests |
 
+### Sibling Scanners (separate distribution, NOT in `Total.Recall.sln`)
+
+These live as sibling folders under `src/` but are **independent projects** shipped on their language's native package manager. They are NOT referenced by `Total.Recall.csproj` and NOT added to `Total.Recall.sln` — the .NET SDK pack globs are scoped to `src/Total.Recall/` and will not pick them up. Each writes the canonical JSONL schema in [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md).
+
+| Scanner | Language | Path | Package | Entry point | Status |
+|---------|----------|------|---------|-------------|--------|
+| Total.Recall.Scanners.Python | Python 3.10+ | `src/Total.Recall.Scanners.Python/` | PyPI `total-recall-scan-py` | `total-recall-py` | planned (feat/scanners) |
+| Total.Recall.Scanners.TypeScript | Node 18+ / TS 5+ | `src/Total.Recall.Scanners.TypeScript/` | npm `@total-recall/scan` | `total-recall-ts` | planned (feat/scanners) |
+
+**Rules for sibling-scanner work:**
+- Never modify `src/Total.Recall/Total.Recall.csproj` to reference these dirs. Verify after each scanner addition: `dotnet pack src/Total.Recall/Total.Recall.csproj -c Release` and confirm the `.nupkg` contains NO `.py`, `.ts`, `node_modules`, or `__pycache__` entries.
+- Conformance tests live under `tests/conformance/fixtures/{dotnet,python,typescript}-sample/` with golden JSONL snapshots — all three must produce identical schema-shaped output for analogous source.
+- Real-world integration tests are gated by env vars (`TOTAL_RECALL_PY_INTEGRATION_REPO`, `TOTAL_RECALL_TS_INTEGRATION_REPO`); they skip if unset so CI without those repos still passes.
+- Root `.gitignore` covers the sibling ecosystems: `__pycache__/`, `*.pyc`, `.venv/`, `node_modules/`, `dist/`, `*.tsbuildinfo`, `.pytest_cache/`, `.mypy_cache/`.
+
 ## Data Files
 
 All located under `$TOTAL_RECALL_DATA/{namespace}/`:
