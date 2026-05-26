@@ -93,8 +93,8 @@ dotnet build src/Total.Recall/Total.Recall.csproj
 | Language | Install | Scan command |
 |---|---|---|
 | **.NET** | _already installed_ in step 1 | `total-recall scan --assembly path/to/Foo.dll --tests tests/Foo.Tests --namespace foo` |
-| **Python** *(coming soon)* | `pipx install total-recall-scan-py` <br/>or `uv tool install total-recall-scan-py` | `total-recall-py scan --source-root src --coverage coverage.xml --tests tests --namespace foo` |
-| **TypeScript** *(coming soon)* | `npm install -g @total-recall/scan` <br/>or `npx @total-recall/scan` | `total-recall-ts scan --tsconfig tsconfig.json --coverage coverage/cobertura.xml --tests src --namespace foo` |
+| **Python** | `pipx install total-recall-scan-py` <br/>or `uv tool install total-recall-scan-py` | `total-recall-py scan --source-root src --coverage coverage.xml --tests tests --namespace foo` |
+| **TypeScript** | `npm install -g @total-recall/scan` <br/>or `npx @total-recall/scan` | `total-recall-ts scan --tsconfig tsconfig.json --coverage coverage/cobertura.xml --tests src --namespace foo` |
 
 The scanners are **siblings**, not plugins — they ship on each ecosystem's native package manager so Python devs don't need npm and TS devs don't need pip. They write the same JSONL schema (see [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md)); the MCP server doesn't know or care which one produced the data.
 
