@@ -79,6 +79,8 @@ dotnet tool update    -g TotalRecall.Mcp
 dotnet tool uninstall -g TotalRecall.Mcp
 ```
 
+Upgrading is drop-in: data files are forward- and backward-compatible, `.vscode/mcp.json` does not change, and new tools are auto-discovered over MCP. After updating, restart VS Code and run `total-recall doctor` to verify. See [docs/UPGRADE.md](docs/UPGRADE.md) for the full guide.
+
 ```bash
 # Or build from source
 git clone https://github.com/monk-eee/Total.Recall.MCP
@@ -436,6 +438,7 @@ While a report runs, `TOTAL_RECALL_MODE` is forced to `off` so the report itself
 | Document | Purpose |
 |----------|---------|
 | [QUICKSTART.md](docs/QUICKSTART.md) | Step-by-step setup guide |
+| [UPGRADE.md](docs/UPGRADE.md) | Upgrade guide — every release is a drop-in. No data migration. |
 | [TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) | Complete parameter docs for all 37 tools |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Observability guide + common problem fixes |
 | [INTEGRATION.md](docs/INTEGRATION.md) | How to wire Total.Recall into a target repo |

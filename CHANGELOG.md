@@ -10,7 +10,41 @@ Dates reflect the commit date in the local repo.
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+- **Bug reports as a first-class persistent-knowledge surface** alongside
+  gotchas and assessments. Three new MCP tools:
+  - `report_bug` — file a class-scoped bug report. Fixed severity enum
+    (`low` / `medium` / `high` / `critical`). Returns a stable
+    `bug-{12-hex}` id.
+  - `get_bugs` — query bugs by class (partial match) / severity / status.
+    Defaults to `status=open`, sorted critical-first.
+  - `update_bug_status` — transition `open` → `triaged` / `fixed` /
+    `wontfix`. Append-only history; latest record per id wins.
+  - Bumps server tool count 34 → 37.
+- **`bugs.jsonl` data file** — eighth append-only JSONL store, registered
+  through `RepoConfig.BugsPath` + `NamespaceStores.Bugs`. Pre-warmed on
+  startup. Surfaced by `total-recall doctor` like every other store.
+- **`get_context` now folds open bugs** into both `standard` and `full`
+  depth responses, so agents see known-broken behaviour before authoring
+  tests — no extra tool call needed.
+- **`total-recall report bugs`** CLI sub-command (`--class`, `--severity`,
+  `--status` options) for inspecting bugs without spinning up the MCP
+  server.
+- **Additive `TypeRecord` schema fields** — `schemaVersion` (int, default
+  `1`), `kind` (string discriminator, default `"class"`), `lang`
+  (optional language-specific block), and optional `filePath`. Existing
+  pre-2.5 `type-registry.jsonl` files keep working unchanged — readers
+  default missing fields. Rescan with 2.5 to populate them. See
+  [docs/SCANNER_SCHEMA.md](docs/SCANNER_SCHEMA.md).
+- **[docs/UPGRADE.md](docs/UPGRADE.md)** — dedicated upgrade guide
+  covering the 2.4 → 2.5 path, doctor warnings, optional rescan,
+  rollback, and recovery from partial writes. Linked from the README.
+
+### Notes
+- All on-disk changes in this release are strictly additive. No
+  migration is required; `dotnet tool update -g TotalRecall.Mcp` is the
+  whole upgrade procedure. Existing `data/<namespace>/*.jsonl` files
+  keep working without rewrite.
 
 ## [2.5.0-preview.1] — 2026-05-25
 
