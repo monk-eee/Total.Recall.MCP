@@ -1,6 +1,7 @@
 name: publish-python-scanner
 
-# Publishes `total-recall-scan-py` to TestPyPI or PyPI.
+# Publishes `total-recall-scan-py` to TestPyPI or PyPI via PyPI Trusted
+# Publishing (OIDC). No long-lived API tokens are stored in GitHub.
 #
 # Two ways to trigger:
 #   1. Manual: Actions tab -> "publish-python-scanner" -> Run workflow.
@@ -8,10 +9,12 @@ name: publish-python-scanner
 #   2. Tagged release: push a tag matching `pyscan-v*` (e.g. pyscan-v0.1.0).
 #      Tag-driven runs always publish to PyPI (prod).
 #
-# Required repository secrets:
-#   - PYPI_API_TOKEN        (scoped to project `total-recall-scan-py`)
-#   - TEST_PYPI_API_TOKEN   (scoped to the project on test.pypi.org)
-# Tokens are project-scoped per PyPI best practice; rotate via pypi.org UI.
+# Trusted Publisher setup (one-time, on each registry):
+#   - pypi.org:      Account -> Publishing -> Add publisher (GitHub)
+#                    workflow filename: publish-python-scanner.yml
+#   - test.pypi.org: same, on the test.pypi.org account
+# No GitHub secrets required. PyPI mints a short-lived token at job time
+# using the OIDC claim that `id-token: write` provides below.
 #
 # The job verifies the version in pyproject.toml matches the tag (for
 # tag-triggered runs) before uploading, so a forgotten version bump
@@ -38,6 +41,9 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # required for PyPI Trusted Publishing (OIDC)
     defaults:
       run:
         working-directory: src/Total.Recall.Scanners.Python
@@ -51,9 +57,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: python -m pip install --upgrade pip build twine
-
-      - name: Install package + dev extras for verification
+        run: python -m pip install --upgrade pip build twine      - name: Install package + dev extras for verification
         run: python -m pip install -e ".[dev]"
 
       - name: Lint
@@ -91,17 +95,16 @@ jobs:
 
       - name: Publish to TestPyPI
         if: steps.target.outputs.name == 'testpypi'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: src/Total.Recall.Scanners.Python/dist/
 
       - name: Publish to PyPI
         if: steps.target.outputs.name == 'pypi'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: python -m twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: src/Total.Recall.Scanners.Python/dist/
 
       - name: Upload built artifacts
         uses: actions/upload-artifact@v4
