@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "total-recall-scan-py"
+version = "0.1.0"
+description = "Python source scanner for Total.Recall — emits canonical JSONL records consumed by the Total.Recall MCP server."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Lyndon Swan", email = "magic.monkee.magic@gmail.com" },
+]
+keywords = ["mcp", "total-recall", "scanner", "coverage", "ai", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+total-recall-py = "total_recall_scan.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/monk-eee/Total.Recall.MCP"
+Repository = "https://github.com/monk-eee/Total.Recall.MCP"
+Issues = "https://github.com/monk-eee/Total.Recall.MCP/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/total_recall_scan"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/total_recall_scan",
+    "tests",
+    "README.md",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

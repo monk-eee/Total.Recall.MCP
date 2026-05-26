@@ -11,6 +11,23 @@ Dates reflect the commit date in the local repo.
 ## [Unreleased]
 
 ### Added
+- **Python scanner skeleton** (`src/Total.Recall.Scanners.Python/`) —
+  pure-stdlib AST walker that emits canonical `type-registry.jsonl`,
+  `coverage-gaps.jsonl` (Cobertura XML), `test-inventory.jsonl` (pytest),
+  and `config.json`. Ships as a sibling project, not part of the .NET
+  pack. Console script `total-recall-py scan --source-root ... --tests
+  ... --coverage ... --namespace ... --output ...`. Detects dataclasses,
+  frozen dataclasses, `typing.Protocol`, `abc.ABC`, enums, abstract
+  methods, leading-underscore-internal classes, and emits the
+  `lang.kind: "python"` discriminator with the documented extension
+  fields. PyPI package name `total-recall-scan-py`; install via
+  `pipx install total-recall-scan-py`. 26-test pytest suite (registry +
+  coverage + tests inventory + CLI) green; conformance fixture lives at
+  `tests/conformance/fixtures/python-sample/` so the .NET / Python / TS
+  scanners can be diffed against identical source.
+- **`.gitignore` Python + Node entries** — `__pycache__/`, `*.py[cod]`,
+  `.venv/`, `*.egg-info/`, `.pytest_cache/`, `.mypy_cache/`,
+  `.ruff_cache/`, `node_modules/`, `*.tsbuildinfo`, etc.
 - **Bug reports as a first-class persistent-knowledge surface** alongside
   gotchas and assessments. Three new MCP tools:
   - `report_bug` — file a class-scoped bug report. Fixed severity enum
