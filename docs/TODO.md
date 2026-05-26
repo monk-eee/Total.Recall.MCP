@@ -19,7 +19,14 @@ _Bugs noticed in passing during unrelated work. Each entry must record:
 (3) impact, (4) whether fixed in this run or left for later. See
 AGENTS.md "Test-driven workflow (NON-NEGOTIABLE)"._
 
-_(none currently tracked)_
+### static-singleton test races (root cause; band-aided by `[assembly: CollectionBehavior(DisableTestParallelization = true)]`)
+
+- Observed: `MetricsToolTests.GetMetrics_CacheHitRate_CalculatesCorrectly` (windows) and `AssessmentToolTests.AddAssessment_IncrementsMetrics` (ubuntu) flaked on CI run 26480790808 against `main` (commit d0a989b).
+- Where: `tests/Total.Recall.Tests/Tools/MetricsToolTests.cs:91`, `tests/Total.Recall.Tests/Tools/AssessmentToolTests.cs:180`.
+- Root cause: `Metrics` and `StoreRegistry` are static singletons. `JsonLineStore.LoadAll()` bumps `Metrics.CacheHit` / `CacheMiss`, so any parallel test that creates a `JsonLineStore<T>` (e.g. `JsonLineStoreTests`) races with tests asserting Metrics counts. 14 test classes lacked `[Collection("ToolTests")]`.
+- Impact: intermittent CI red on `main`. Currently mitigated assembly-wide via `[assembly: CollectionBehavior(DisableTestParallelization = true)]` in `tests/Total.Recall.Tests/TestCollectionConfig.cs`. Cost: full suite went from ~22s parallel to ~36s serial.
+- Long-term fix (per AGENTS.md design discipline): inject `Metrics` and `StoreRegistry` rather than hold them as process-wide static state. Until then, leave the parallelism disabled.
+- Fixed in this run: race symptom only (parallelism disabled). Architectural fix deferred.
 
 ---
 
