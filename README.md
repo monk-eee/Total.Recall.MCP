@@ -38,17 +38,39 @@ And nobody can tell whether the agent is actually getting better, worse, or just
 - **Agents write back** gotchas, assessments, and session logs, creating a feedback loop that makes each session smarter than the last
 - **Telemetry + eval harness** (v2.4) records every tool call, detects behaviour anti-patterns (re-query, context-loss, oscillation), brackets work into tasks, and runs deterministic grader challenges for cross-model scoring
 
+## How the pieces fit
+
+One MCP server. One scanner per language. They communicate only through flat JSONL files on disk — no sockets, no shared process, no language coupling. Install the server once; install the scanner that matches the repo you're testing.
+
+```mermaid
+flowchart LR
+  subgraph scanners["Scanners (write JSONL)"]
+    direction TB
+    SDN["total-recall scan<br/><sub>NuGet — .NET</sub>"]
+    SPY["total-recall-py scan<br/><sub>PyPI — Python</sub>"]
+    STS["total-recall-ts scan<br/><sub>npm — TypeScript</sub>"]
+  end
+  D[("data/&lt;namespace&gt;/*.jsonl")]
+  S["total-recall<br/><sub>MCP server (NuGet)</sub>"]
+  VS["VS Code / Copilot<br/><sub>34 MCP tools</sub>"]
+  SDN --> D
+  SPY --> D
+  STS --> D
+  D --> S
+  S <--> VS
+```
+
 ## Install
 
-Total.Recall ships as a [.NET global tool on NuGet](https://www.nuget.org/packages/TotalRecall.Mcp):
+Pick the language of the repo you're writing tests for. **Step 1 is the same for everyone — the MCP server is .NET.** Step 2 is the scanner that matches your codebase.
+
+### Step 1 — Install the MCP server (all users)
 
 ```bash
 dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
 ```
 
-This exposes a single command, `total-recall`, on your `PATH`. The same
-binary is the MCP server (default), the scanner (`total-recall scan`),
-and the report reader (`total-recall report`).
+This exposes a single command, `total-recall`, on your `PATH`. The same binary is the MCP server (default), the .NET scanner (`total-recall scan`), and the report reader (`total-recall report`). Requires the [.NET 8 runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 To update, uninstall, or build from source:
 
@@ -63,6 +85,18 @@ git clone https://github.com/monk-eee/Total.Recall.MCP
 cd Total.Recall.MCP
 dotnet build src/Total.Recall/Total.Recall.csproj
 ```
+
+### Step 2 — Install the scanner for your language
+
+| Language | Install | Scan command |
+|---|---|---|
+| **.NET** | _already installed_ in step 1 | `total-recall scan --assembly path/to/Foo.dll --tests tests/Foo.Tests --namespace foo` |
+| **Python** *(coming soon)* | `pipx install total-recall-scan-py` <br/>or `uv tool install total-recall-scan-py` | `total-recall-py scan --source-root src --coverage coverage.xml --tests tests --namespace foo` |
+| **TypeScript** *(coming soon)* | `npm install -g @total-recall/scan` <br/>or `npx @total-recall/scan` | `total-recall-ts scan --tsconfig tsconfig.json --coverage coverage/cobertura.xml --tests src --namespace foo` |
+
+The scanners are **siblings**, not plugins — they ship on each ecosystem's native package manager so Python devs don't need npm and TS devs don't need pip. They write the same JSONL schema (see [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md)); the MCP server doesn't know or care which one produced the data.
+
+For full build-from-source instructions and the polyglot contributor guide, see [`docs/SCANNERS.md`](docs/SCANNERS.md).
 
 ## Quickstart
 
