@@ -86,10 +86,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
 
-      - name: Upload tarball artifact
+      - name: Pack tarball
         if: always()
         run: npm pack
-      - uses: actions/upload-artifact@v5
+      - name: Upload tarball artifact
+        if: always()
+        uses: actions/upload-artifact@v5
         with:
           name: total-recall-scan-ts-tarball
           path: src/Total.Recall.Scanners.TypeScript/total-recall-scan-*.tgz
