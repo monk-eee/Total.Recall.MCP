@@ -57,7 +57,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: python -m pip install --upgrade pip build twine      - name: Install package + dev extras for verification
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Install package + dev extras for verification
         run: python -m pip install -e ".[dev]"
 
       - name: Lint
