@@ -199,6 +199,146 @@ public sealed class AssemblyScannerTests : IDisposable
         Assert.All(all, t => Assert.False(string.IsNullOrEmpty(t.Namespace)));
     }
 
+    // -----------------------------------------------------------------------
+    // schemaVersion / kind / lang block (v2.5 sibling-scanner contract)
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Regression test: every record emitted by the .NET scanner must carry
+    /// <c>schemaVersion = 1</c>. This pins the on-disk contract shared by the
+    /// Python and TypeScript sibling scanners — the MCP server reads any
+    /// scanner's output through the same TypeRecord deserializer, so an
+    /// accidental zero / unset on .NET would mask compatibility regressions.
+    /// </summary>
+    [Fact]
+    public void Scan_OwnAssembly_StampsSchemaVersionOneOnEveryRecord()
+    {
+        AssemblyScanner.Scan(s_assemblyPath, _tempDir);
+
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        var all = store.LoadAll();
+
+        Assert.NotEmpty(all);
+        Assert.All(all, t => Assert.Equal(1, t.SchemaVersion));
+    }
+
+    /// <summary>
+    /// Regression test: the language-agnostic <c>kind</c> discriminator must
+    /// be set correctly for the four .NET shapes. Cross-language consumers
+    /// (e.g. MCP tools that filter by kind) rely on this string being one of
+    /// <c>class | interface | enum | struct</c> for .NET output.
+    /// </summary>
+    [Theory]
+    [InlineData("TypeRecord", "class")]      // sealed class
+    [InlineData("CoverageGap", "class")]     // plain class
+    [InlineData("RepoConfig", "class")]      // static class still reports as class
+    public void Scan_OwnAssembly_DerivesKindForKnownTypes(string typeName, string expectedKind)
+    {
+        AssemblyScanner.Scan(s_assemblyPath, _tempDir);
+
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        var record = store.LoadAll().First(t => t.Name == typeName);
+
+        Assert.Equal(expectedKind, record.Kind);
+    }
+
+    /// <summary>
+    /// Regression test: enums and interfaces in the scanned assembly must be
+    /// tagged with the correct <c>kind</c> discriminator. Uses a discovery
+    /// pattern (find-any-enum / find-any-interface) rather than hard-coding
+    /// type names so the test survives renames inside Total.Recall.
+    /// </summary>
+    [Fact]
+    public void Scan_OwnAssembly_DerivesKindForEnumsAndInterfaces()
+    {
+        AssemblyScanner.Scan(s_assemblyPath, _tempDir);
+
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        var all = store.LoadAll();
+
+        var anyEnum = all.FirstOrDefault(t => t.IsEnum);
+        if (anyEnum is not null)
+            Assert.Equal("enum", anyEnum.Kind);
+
+        var anyInterface = all.FirstOrDefault(t => t.IsInterface);
+        if (anyInterface is not null)
+            Assert.Equal("interface", anyInterface.Kind);
+    }
+
+    /// <summary>
+    /// Regression test: every emitted record must carry the <c>lang</c> block
+    /// with <c>kind = "dotnet"</c>. This is the discriminator that Python and
+    /// TypeScript scanners will replace with <c>"python"</c> / <c>"typescript"</c>
+    /// in their own output; the MCP server uses it to route language-specific
+    /// rendering (e.g. mock-recipe templates).
+    /// </summary>
+    [Fact]
+    public void Scan_OwnAssembly_StampsLangBlockOnEveryRecord()
+    {
+        AssemblyScanner.Scan(s_assemblyPath, _tempDir);
+
+        var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
+        var all = store.LoadAll();
+
+        Assert.NotEmpty(all);
+        Assert.All(all, t =>
+        {
+            Assert.NotNull(t.Lang);
+            Assert.Equal("dotnet", t.Lang!.Kind);
+        });
+    }
+
+    /// <summary>
+    /// Regression test: <see cref="AssemblyScanner.DeriveKind"/> classifies
+    /// every .NET shape correctly when called directly with a real
+    /// <see cref="Type"/>. Pure unit test — no MetadataLoadContext.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(TypeRecord), "class")]
+    [InlineData(typeof(IDisposable), "interface")]
+    [InlineData(typeof(DayOfWeek), "enum")]
+    [InlineData(typeof(int), "struct")]
+    [InlineData(typeof(Guid), "struct")]
+    public void DeriveKind_ClassifiesEveryDotNetShape(Type type, string expectedKind)
+    {
+        Assert.Equal(expectedKind, AssemblyScanner.DeriveKind(type));
+    }
+
+    /// <summary>
+    /// Regression test: <see cref="AssemblyScanner.BuildLangInfo"/> reports
+    /// <c>genericArity = 0</c> for closed types and the correct arity for
+    /// open generic definitions. Cross-language scanners use this field to
+    /// decide whether to surface generic placeholders in mock recipes.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(TypeRecord), 0)]
+    [InlineData(typeof(List<>), 1)]
+    [InlineData(typeof(Dictionary<,>), 2)]
+    public void BuildLangInfo_ReportsGenericArity(Type type, int expectedArity)
+    {
+        var info = AssemblyScanner.BuildLangInfo(type);
+
+        Assert.Equal("dotnet", info.Kind);
+        Assert.Equal(expectedArity, info.GenericArity);
+    }
+
+    /// <summary>
+    /// Regression test: <see cref="AssemblyScanner.BuildLangInfo"/> sets
+    /// <c>isSealed = false</c> for static classes even though .NET reports
+    /// <c>Type.IsSealed = true</c> on them (static = abstract + sealed). The
+    /// "sealed" discriminator in the JSONL is meant to signal user intent
+    /// ("you cannot inherit from this"), not the compiler's bit pattern.
+    /// </summary>
+    [Fact]
+    public void BuildLangInfo_StaticClassNotReportedAsSealed()
+    {
+        var info = AssemblyScanner.BuildLangInfo(typeof(Total.Recall.Infrastructure.RepoConfig));
+
+        Assert.False(info.IsSealed);
+    }
+
+    // -----------------------------------------------------------------------
+
     /// <summary>
     /// Regression test: target dirs that ship their own copy of a runtime
     /// assembly (e.g. publish output containing mscorlib.dll / System.Runtime.dll

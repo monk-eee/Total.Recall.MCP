@@ -52,15 +52,18 @@ public static class AssemblyScanner
     {
         var record = new TypeRecord
         {
+            SchemaVersion = 1,
             Name = type.Name,
             Namespace = type.Namespace ?? "",
+            Kind = DeriveKind(type),
             FullUsing = string.IsNullOrEmpty(type.Namespace) ? "" : $"using {type.Namespace};",
             IsAbstract = type.IsAbstract && !type.IsSealed, // static classes are abstract+sealed
             IsStatic = type.IsAbstract && type.IsSealed,
             IsInternal = !type.IsPublic && !type.IsNestedPublic,
             IsInterface = type.IsInterface,
             IsEnum = type.IsEnum,
-            BaseType = type.BaseType?.Name
+            BaseType = type.BaseType?.Name,
+            Lang = BuildLangInfo(type)
         };
 
         // Constructors
@@ -221,6 +224,60 @@ public static class AssemblyScanner
             "Object" => "object",
             "Byte" => "byte",
             _ => type.Name
+        };
+    }
+
+    /// <summary>
+    /// Derive the language-agnostic <c>kind</c> discriminator from a .NET
+    /// <see cref="Type"/>. Records collapse to "class" (their record-ness is
+    /// captured via <see cref="LangInfo.IsRecord"/>).
+    /// </summary>
+    internal static string DeriveKind(Type type)
+    {
+        if (type.IsInterface) return "interface";
+        if (type.IsEnum) return "enum";
+        if (type.IsValueType) return "struct";
+        return "class";
+    }
+
+    /// <summary>
+    /// Populate the .NET-specific <see cref="LangInfo"/> block. Detection of
+    /// records uses the public <c>EqualityContract</c> property emitted by the
+    /// C# compiler on every record (class or struct); MetadataLoadContext
+    /// surfaces it as a normal property. Falls back to <c>false</c> if
+    /// reflection throws.
+    /// </summary>
+    internal static LangInfo BuildLangInfo(Type type)
+    {
+        bool? isRecord = null;
+        try
+        {
+            // Records emit a public instance property "EqualityContract" of
+            // type System.Type. Cheaper than scanning for the compiler-emitted
+            // "<Clone>$" method, which MetadataLoadContext may filter out due
+            // to the angle-bracket prefix.
+            isRecord = type.GetProperty(
+                "EqualityContract",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) is not null;
+        }
+        catch { /* MLC quirks on some types — fall back to null */ }
+
+        int? genericArity = null;
+        try
+        {
+            if (type.IsGenericTypeDefinition || type.IsGenericType)
+                genericArity = type.GetGenericArguments().Length;
+            else
+                genericArity = 0;
+        }
+        catch { /* skip — leave null */ }
+
+        return new LangInfo
+        {
+            Kind = "dotnet",
+            IsSealed = type.IsSealed && !type.IsAbstract, // static classes are sealed+abstract; don't claim "sealed"
+            IsRecord = isRecord,
+            GenericArity = genericArity
         };
     }
 }
