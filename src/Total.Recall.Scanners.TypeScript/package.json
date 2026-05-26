@@ -1,0 +1,37 @@
+{
+  "name": "@total-recall/scan",
+  "version": "0.1.0",
+  "description": "TypeScript/JavaScript scanner for Total.Recall MCP — extracts type registry, coverage gaps, and test inventory as canonical JSONL.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/monk-eee/Total.Recall.MCP.git",
+    "directory": "src/Total.Recall.Scanners.TypeScript"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "total-recall-ts": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "typescript": "^5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "vitest": "^2.1.0"
+  }
+}

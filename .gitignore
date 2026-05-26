@@ -45,3 +45,25 @@ TestResults2/
 coveragereport*/
 **/coverage.cobertura.xml
 CoverageResults/
+
+# Python (sibling scanners)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+dist/
+
+# Node / TypeScript (sibling scanners)
+node_modules/
+*.tsbuildinfo
+.npm/

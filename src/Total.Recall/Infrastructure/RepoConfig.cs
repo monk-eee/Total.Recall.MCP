@@ -159,6 +159,7 @@ public static class RepoConfig
     public static string TestInventoryPath(string dataDir) => Path.Combine(dataDir, "test-inventory.jsonl");
     public static string AssessmentsPath(string dataDir) => Path.Combine(dataDir, "assessments.jsonl");
     public static string SessionsPath(string dataDir) => Path.Combine(dataDir, "sessions.jsonl");
+    public static string BugsPath(string dataDir) => Path.Combine(dataDir, "bugs.jsonl");
     public static string ConfigJsonPath(string dataDir) => Path.Combine(dataDir, "config.json");
 
     // ── Eval harness stores (Cuts 1–6) ──

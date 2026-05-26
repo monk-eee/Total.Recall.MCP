@@ -135,6 +135,7 @@ internal static class DoctorRunner
         yield return ("gotchas.jsonl", RepoConfig.GotchasPath(dir));
         yield return ("test-inventory.jsonl", RepoConfig.TestInventoryPath(dir));
         yield return ("assessments.jsonl", RepoConfig.AssessmentsPath(dir));
+        yield return ("bugs.jsonl", RepoConfig.BugsPath(dir));
         yield return ("sessions.jsonl", RepoConfig.SessionsPath(dir));
         yield return ("tool-calls.jsonl", RepoConfig.ToolCallsPath(dir));
         yield return ("tasks.jsonl", RepoConfig.TasksPath(dir));

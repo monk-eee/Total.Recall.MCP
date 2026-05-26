@@ -21,7 +21,7 @@
 
 When an AI agent writes tests for a large .NET codebase, it burns 60–70% of its context re-discovering the same information every session: type constructors, mock patterns, coverage gaps, known pitfalls, and what's already tested. Over 30 sessions to reach a coverage target, this wastes ~450K tokens and ~22 hours of wall-clock time.
 
-Total.Recall eliminates this waste by converting ephemeral agent knowledge into durable, queryable data. Scanners extract type metadata, coverage gaps, and test inventories into JSONL files. An MCP server exposes 34 tools that let agents query this data instantly — one tool call replaces 10–15 file reads. Agents also write data back (gotchas, assessments, session logs), creating a feedback loop that makes each session smarter than the last.
+Total.Recall eliminates this waste by converting ephemeral agent knowledge into durable, queryable data. Scanners extract type metadata, coverage gaps, and test inventories into JSONL files. An MCP server exposes 37 tools that let agents query this data instantly — one tool call replaces 10–15 file reads. Agents also write data back (gotchas, assessments, bug reports, session logs), creating a feedback loop that makes each session smarter than the last.
 
 ## Design Principles
 
@@ -274,6 +274,21 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 | Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1098 tests |
 | Total.Recall.Analyzers.Tests | net8.0 | `tests/Total.Recall.Analyzers.Tests/Total.Recall.Analyzers.Tests.csproj` | 8 tests |
 
+### Sibling Scanners (separate distribution, NOT in `Total.Recall.sln`)
+
+These live as sibling folders under `src/` but are **independent projects** shipped on their language's native package manager. They are NOT referenced by `Total.Recall.csproj` and NOT added to `Total.Recall.sln` — the .NET SDK pack globs are scoped to `src/Total.Recall/` and will not pick them up. Each writes the canonical JSONL schema in [`docs/SCANNER_SCHEMA.md`](docs/SCANNER_SCHEMA.md).
+
+| Scanner | Language | Path | Package | Entry point | Status |
+|---------|----------|------|---------|-------------|--------|
+| Total.Recall.Scanners.Python | Python 3.10+ | `src/Total.Recall.Scanners.Python/` | PyPI `total-recall-scan-py` | `total-recall-py` (sub-cmds: `scan`, `init`, `version`; `scan --watch` for polling re-scans) | scaffolded + init/watch (feat/scanners) |
+| Total.Recall.Scanners.TypeScript | Node 18+ / TS 5+ | `src/Total.Recall.Scanners.TypeScript/` | npm `@total-recall/scan` | `total-recall-ts` | scaffolded (feat/scanners) |
+
+**Rules for sibling-scanner work:**
+- Never modify `src/Total.Recall/Total.Recall.csproj` to reference these dirs. Verify after each scanner addition: `dotnet pack src/Total.Recall/Total.Recall.csproj -c Release` and confirm the `.nupkg` contains NO `.py`, `.ts`, `node_modules`, or `__pycache__` entries.
+- Conformance tests live under `tests/conformance/fixtures/{dotnet,python,typescript}-sample/` with golden JSONL snapshots — all three must produce identical schema-shaped output for analogous source.
+- Real-world integration tests are gated by env vars (`TOTAL_RECALL_PY_INTEGRATION_REPO`, `TOTAL_RECALL_TS_INTEGRATION_REPO`); they skip if unset so CI without those repos still passes.
+- Root `.gitignore` covers the sibling ecosystems: `__pycache__/`, `*.pyc`, `.venv/`, `node_modules/`, `dist/`, `*.tsbuildinfo`, `.pytest_cache/`, `.mypy_cache/`.
+
 ## Data Files
 
 All located under `$TOTAL_RECALL_DATA/{namespace}/`:
@@ -286,6 +301,7 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 | `gotchas.jsonl` | Seeded + `add_gotcha` tool | Type-specific traps and workarounds (append-only) |
 | `test-inventory.jsonl` | TestProjectScanner | Existing test methods per class |
 | `assessments.jsonl` | `add_assessment` tool | Testability verdicts from agent analysis (append-only) |
+| `bugs.jsonl` | `report_bug` / `update_bug_status` tools | Class-scoped bug reports (append-only, latest record per id wins) |
 | `sessions.jsonl` | `log_session` tool | Session outcomes for cross-session learning (append-only) |
 | `tool-calls.jsonl` | `Telemetry.Track` (auto on every tool call) | Every MCP tool call: name, ns, sessionId, taskId, params summary, latency, response bytes (append-only) |
 | `tasks.jsonl` | `start_task` / `end_task` | Agent task bracketing — start/end, success/abandon, intent narrative (append-only) |
@@ -296,7 +312,7 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 
 ## MCP Tools
 
-34 tools. All accept an optional `ns` (namespace) parameter to target a specific dataset. **Every tool call is intercepted by `Telemetry.Track` and appended to `tool-calls.jsonl` when `TOTAL_RECALL_MODE` ≠ `off`.**
+37 tools. All accept an optional `ns` (namespace) parameter to target a specific dataset. **Every tool call is intercepted by `Telemetry.Track` and appended to `tool-calls.jsonl` when `TOTAL_RECALL_MODE` ≠ `off`.**
 
 ### v2 Tools (Decision Engine)
 
@@ -322,6 +338,9 @@ All located under `$TOTAL_RECALL_DATA/{namespace}/`:
 | `add_gotcha` | typeName, category, gotcha, ns? | Confirmation | Append a new pitfall to gotchas.jsonl. |
 | `get_test_inventory` | className, ns? | TestInventoryEntry JSON | Existing test methods per class. |
 | `add_assessment` | className, verdict, reasoning, deps?, cluster?, ns? | Confirmation | Record testability verdict. Verdicts: `testable`, `coupled`, `skip`, `deferred`. |
+| `report_bug` | className, severity, description, methodName?, repro?, foundInTestName?, model?, ns? | JSON {ok, id, ...} | File a class-scoped bug report. Severity: `low`\|`medium`\|`high`\|`critical`. Returns stable `bug-{12-hex}` id. |
+| `get_bugs` | className?, severity?, status? (default `open`), top?, ns? | JSON {totalCount, bugs[]} | Query bugs. Latest record per id wins; sorted critical-first. |
+| `update_bug_status` | bugId, status, notes?, ns? | JSON {ok, previousStatus, newStatus, …} | Transition a bug. Appends a new record with the same id (append-only history). |
 | `get_assessments` | className?, verdict?, ns? | Assessment[] JSON | Previous testability assessments. Last verdict per class wins. |
 | `get_metrics` | (none) | Telemetry JSON | Tool call counts, cache hit rates, type index stats, uptime. |
 

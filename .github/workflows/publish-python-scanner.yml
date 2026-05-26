@@ -1,0 +1,114 @@
+name: publish-python-scanner
+
+# Publishes `total-recall-scan-py` to TestPyPI or PyPI via PyPI Trusted
+# Publishing (OIDC). No long-lived API tokens are stored in GitHub.
+#
+# Two ways to trigger:
+#   1. Manual: Actions tab -> "publish-python-scanner" -> Run workflow.
+#      Choose target = testpypi (default) or pypi.
+#   2. Tagged release: push a tag matching `pyscan-v*` (e.g. pyscan-v0.1.0).
+#      Tag-driven runs always publish to PyPI (prod).
+#
+# Trusted Publisher setup (one-time, on each registry):
+#   - pypi.org:      Account -> Publishing -> Add publisher (GitHub)
+#                    workflow filename: publish-python-scanner.yml
+#   - test.pypi.org: same, on the test.pypi.org account
+# No GitHub secrets required. PyPI mints a short-lived token at job time
+# using the OIDC claim that `id-token: write` provides below.
+#
+# The job verifies the version in pyproject.toml matches the tag (for
+# tag-triggered runs) before uploading, so a forgotten version bump
+# fails fast instead of publishing a mismatched wheel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Publish target"
+        required: true
+        default: testpypi
+        type: choice
+        options:
+          - testpypi
+          - pypi
+  push:
+    tags:
+      - "pyscan-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # required for PyPI Trusted Publishing (OIDC)
+    defaults:
+      run:
+        working-directory: src/Total.Recall.Scanners.Python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build twine      - name: Install package + dev extras for verification
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: python -m ruff check src tests
+
+      - name: Tests
+        run: python -m pytest -q
+
+      - name: Verify version matches tag (tag-triggered only)
+        if: startsWith(github.ref, 'refs/tags/pyscan-v')
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          TAG_VERSION="${TAG#pyscan-v}"
+          PKG_VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "tag=$TAG_VERSION pyproject=$PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml ($PKG_VERSION)."
+            exit 1
+          fi
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Validate distributions
+        run: python -m twine check dist/*
+
+      - name: Resolve publish target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "name=pypi" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ inputs.target }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to TestPyPI
+        if: steps.target.outputs.name == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: src/Total.Recall.Scanners.Python/dist/
+
+      - name: Publish to PyPI
+        if: steps.target.outputs.name == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: src/Total.Recall.Scanners.Python/dist/
+
+      - name: Upload built artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-recall-scan-py-dist
+          path: src/Total.Recall.Scanners.Python/dist/*
+          retention-days: 14

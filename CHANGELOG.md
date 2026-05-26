@@ -10,7 +10,105 @@ Dates reflect the commit date in the local repo.
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+- **Python scanner `init` sub-command** (`total-recall-py init <repo>`) —
+  auto-discovers a Python repo's source root (`src/<pkg>` or flat layout
+  via `pyproject.toml` `[project].name`), tests directory (`tests/` /
+  `test/`), newest Cobertura coverage XML (skipping junk dirs like
+  `.venv`, `__pycache__`, `node_modules`), and suggests a sanitised
+  namespace from the package name. Writes `<data>/<ns>/config.json`
+  preserving any prior `lastScanUtc`, prints a copy-pasteable
+  `.vscode/mcp.json` block with `command: "total-recall"` and the
+  resolved env vars, and prints the exact `scan` command to run next.
+  Exit codes mirror `scan`: 0 success, 1 on warnings (missing
+  coverage/tests), 2 on filesystem error. Namespace validation
+  rejects path separators and traversal segments.
+- **Python scanner `--watch` mode** (`total-recall-py scan --watch`) —
+  after the initial scan, polls every 1.5 s for `.py` mtime changes
+  under the source root + tests dir + the coverage XML, debounces
+  bursts (0.5 s) into a single rescan, and re-emits all three JSONL
+  files. Zero new runtime deps — pure stdlib `os.stat`. Ctrl+C exits
+  cleanly. Watcher is fully injectable (`sleep`, `snapshot`,
+  `iterations`) so tests run deterministically without sleeping.
+- **PyPI publish workflow** (`.github/workflows/publish-python-scanner.yml`)
+  — manual `workflow_dispatch` with `target` input (`testpypi` /
+  `pypi`) plus a `pyscan-v*` tag trigger that publishes to PyPI prod
+  after verifying `pyproject.toml` version matches the tag.
+  Builds sdist + wheel via `python -m build`, validates with `twine
+  check`, uploads built artifacts to the GH run. Uses
+  `PYPI_API_TOKEN` / `TEST_PYPI_API_TOKEN` repo secrets.
+- **npm publish workflow** (`.github/workflows/publish-typescript-scanner.yml`)
+  — manual `workflow_dispatch` with `dist_tag` input (`next` /
+  `latest`) plus a `tsscan-v*` tag trigger that publishes with
+  `--access public --tag latest` after verifying `package.json`
+  version matches the tag. Uses `NPM_TOKEN` repo secret. Uploads a
+  `npm pack` tarball as a GH run artifact for inspection.
+- **TypeScript scanner skeleton** (`src/Total.Recall.Scanners.TypeScript/`) —
+  Node 18+ / TypeScript 5+ sibling project published as npm
+  `@total-recall/scan` with console script `total-recall-ts`. Uses the
+  TypeScript compiler API (`ts.createSourceFile`) for single-file AST
+  parsing — no project resolution, no type-checker, fast and predictable.
+  Emits canonical `type-registry.jsonl` (class, interface, enum,
+  function, type-alias), `coverage-gaps.jsonl` (Cobertura via
+  `fast-xml-parser`), `test-inventory.jsonl` (vitest/jest test
+  extraction), and `config.json`. Records carry `lang.kind:
+  "typescript"` with the documented extension fields (`isExported`,
+  `isAmbient`, `isReadonlyClass`, `generics`). Detects `extends` →
+  `baseType`, `implements` → `interfaces[]`, `abstract` modifier,
+  parameter-properties, and forward-slashes `filePath`. Conformance
+  fixture at `tests/conformance/fixtures/typescript-sample/` exercises
+  every shape. 22-test vitest suite green; `tsc -p` clean.
+- **Python scanner skeleton** (`src/Total.Recall.Scanners.Python/`) —
+  pure-stdlib AST walker that emits canonical `type-registry.jsonl`,
+  `coverage-gaps.jsonl` (Cobertura XML), `test-inventory.jsonl` (pytest),
+  and `config.json`. Ships as a sibling project, not part of the .NET
+  pack. Console script `total-recall-py scan --source-root ... --tests
+  ... --coverage ... --namespace ... --output ...`. Detects dataclasses,
+  frozen dataclasses, `typing.Protocol`, `abc.ABC`, enums, abstract
+  methods, leading-underscore-internal classes, and emits the
+  `lang.kind: "python"` discriminator with the documented extension
+  fields. PyPI package name `total-recall-scan-py`; install via
+  `pipx install total-recall-scan-py`. 26-test pytest suite (registry +
+  coverage + tests inventory + CLI) green; conformance fixture lives at
+  `tests/conformance/fixtures/python-sample/` so the .NET / Python / TS
+  scanners can be diffed against identical source.
+- **`.gitignore` Python + Node entries** — `__pycache__/`, `*.py[cod]`,
+  `.venv/`, `*.egg-info/`, `.pytest_cache/`, `.mypy_cache/`,
+  `.ruff_cache/`, `node_modules/`, `*.tsbuildinfo`, etc.
+- **Bug reports as a first-class persistent-knowledge surface** alongside
+  gotchas and assessments. Three new MCP tools:
+  - `report_bug` — file a class-scoped bug report. Fixed severity enum
+    (`low` / `medium` / `high` / `critical`). Returns a stable
+    `bug-{12-hex}` id.
+  - `get_bugs` — query bugs by class (partial match) / severity / status.
+    Defaults to `status=open`, sorted critical-first.
+  - `update_bug_status` — transition `open` → `triaged` / `fixed` /
+    `wontfix`. Append-only history; latest record per id wins.
+  - Bumps server tool count 34 → 37.
+- **`bugs.jsonl` data file** — eighth append-only JSONL store, registered
+  through `RepoConfig.BugsPath` + `NamespaceStores.Bugs`. Pre-warmed on
+  startup. Surfaced by `total-recall doctor` like every other store.
+- **`get_context` now folds open bugs** into both `standard` and `full`
+  depth responses, so agents see known-broken behaviour before authoring
+  tests — no extra tool call needed.
+- **`total-recall report bugs`** CLI sub-command (`--class`, `--severity`,
+  `--status` options) for inspecting bugs without spinning up the MCP
+  server.
+- **Additive `TypeRecord` schema fields** — `schemaVersion` (int, default
+  `1`), `kind` (string discriminator, default `"class"`), `lang`
+  (optional language-specific block), and optional `filePath`. Existing
+  pre-2.5 `type-registry.jsonl` files keep working unchanged — readers
+  default missing fields. Rescan with 2.5 to populate them. See
+  [docs/SCANNER_SCHEMA.md](docs/SCANNER_SCHEMA.md).
+- **[docs/UPGRADE.md](docs/UPGRADE.md)** — dedicated upgrade guide
+  covering the 2.4 → 2.5 path, doctor warnings, optional rescan,
+  rollback, and recovery from partial writes. Linked from the README.
+
+### Notes
+- All on-disk changes in this release are strictly additive. No
+  migration is required; `dotnet tool update -g TotalRecall.Mcp` is the
+  whole upgrade procedure. Existing `data/<namespace>/*.jsonl` files
+  keep working without rewrite.
 
 ## [2.5.0-preview.1] — 2026-05-25
 

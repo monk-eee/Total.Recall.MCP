@@ -170,6 +170,7 @@ static void ValidateDataOnStartup()
     LogStore("mock-recipes", () => StoreRegistry.MockRecipes);
     LogStore("assessments", () => StoreRegistry.Assessments);
     LogStore("sessions", () => StoreRegistry.Sessions);
+    LogStore("bugs", () => StoreRegistry.Bugs);
 
     // Pre-build the type name index
     try

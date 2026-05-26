@@ -42,6 +42,7 @@ public static class StoreRegistry
     public static JsonLineStore<MockRecipe> MockRecipes => ForNamespace().MockRecipes;
     public static JsonLineStore<Assessment> Assessments => ForNamespace().Assessments;
     public static JsonLineStore<SessionRecord> Sessions => ForNamespace().Sessions;
+    public static JsonLineStore<BugReport> Bugs => ForNamespace().Bugs;
     public static JsonLineStore<ToolCall> ToolCalls => ForNamespace().ToolCalls;
     public static JsonLineStore<TaskRecord> Tasks => ForNamespace().Tasks;
     public static JsonLineStore<CycleRecord> Cycles => ForNamespace().Cycles;
@@ -93,6 +94,7 @@ public sealed class NamespaceStores
         MockRecipes = new JsonLineStore<MockRecipe>(RepoConfig.MockRecipesPath(dataDir));
         Assessments = new JsonLineStore<Assessment>(RepoConfig.AssessmentsPath(dataDir));
         Sessions = new JsonLineStore<SessionRecord>(RepoConfig.SessionsPath(dataDir));
+        Bugs = new JsonLineStore<BugReport>(RepoConfig.BugsPath(dataDir));
         ToolCalls = new JsonLineStore<ToolCall>(RepoConfig.ToolCallsPath(dataDir));
         Tasks = new JsonLineStore<TaskRecord>(RepoConfig.TasksPath(dataDir));
         Cycles = new JsonLineStore<CycleRecord>(RepoConfig.CyclesPath(dataDir));
@@ -110,6 +112,7 @@ public sealed class NamespaceStores
     public JsonLineStore<MockRecipe> MockRecipes { get; }
     public JsonLineStore<Assessment> Assessments { get; }
     public JsonLineStore<SessionRecord> Sessions { get; }
+    public JsonLineStore<BugReport> Bugs { get; }
     public JsonLineStore<ToolCall> ToolCalls { get; }
     public JsonLineStore<TaskRecord> Tasks { get; }
     public JsonLineStore<CycleRecord> Cycles { get; }

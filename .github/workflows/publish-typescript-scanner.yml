@@ -1,0 +1,96 @@
+name: publish-typescript-scanner
+
+# Publishes `@total-recall/scan` to npm.
+#
+# Two ways to trigger:
+#   1. Manual: Actions tab -> "publish-typescript-scanner" -> Run workflow.
+#      Choose tag = next (dist-tag, default) or latest (production).
+#   2. Tagged release: push a tag matching `tsscan-v*` (e.g. tsscan-v0.1.0).
+#      Tag-driven runs publish with dist-tag = latest.
+#
+# Required repository secret:
+#   - NPM_TOKEN   (Automation token from npmjs.com, project-scoped to
+#                  @total-recall/scan). Stored as a GitHub Actions secret.
+#
+# The first publish of a scoped package requires `--access public`;
+# subsequent publishes inherit the package's access setting.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dist_tag:
+        description: "npm dist-tag (next = pre-release channel, latest = prod)"
+        required: true
+        default: next
+        type: choice
+        options:
+          - next
+          - latest
+  push:
+    tags:
+      - "tsscan-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/Total.Recall.Scanners.TypeScript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+          cache-dependency-path: src/Total.Recall.Scanners.TypeScript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+      - name: Verify version matches tag (tag-triggered only)
+        if: startsWith(github.ref, 'refs/tags/tsscan-v')
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          TAG_VERSION="${TAG#tsscan-v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "tag=$TAG_VERSION package=$PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)."
+            exit 1
+          fi
+
+      - name: Resolve dist-tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "value=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.dist_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --tag ${{ steps.tag.outputs.value }}
+
+      - name: Upload tarball artifact
+        if: always()
+        run: npm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: total-recall-scan-ts-tarball
+          path: src/Total.Recall.Scanners.TypeScript/total-recall-scan-*.tgz
+          retention-days: 14
