@@ -10,6 +10,12 @@ Dates reflect the commit date in the local repo.
 
 ## [Unreleased]
 
+## [2.6.0-preview.1] — 2026-05-27
+
+Multi-language scanner expansion and bug-report tooling. All on-disk
+changes are strictly additive; no migration required.
+`dotnet tool update -g TotalRecall.Mcp` is the whole upgrade procedure.
+
 ### Fixed
 - **TypeScript scanner `scan` exits 0 on benign warnings (0.1.1)** —
   `total-recall-ts scan` previously returned exit code 1 whenever the

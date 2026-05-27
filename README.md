@@ -67,7 +67,7 @@ Pick the language of the repo you're writing tests for. **Step 1 is the same for
 ### Step 1 — Install the MCP server (all users)
 
 ```bash
-dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
+dotnet tool install -g TotalRecall.Mcp --version 2.6.0-preview.1
 ```
 
 This exposes a single command, `total-recall`, on your `PATH`. The same binary is the MCP server (default), the .NET scanner (`total-recall scan`), and the report reader (`total-recall report`). Requires the [.NET 8 runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
@@ -129,7 +129,7 @@ $ total-recall scan \
     --tests    tests/Total.Recall.Tests \
     --namespace self --enrich
 
-Total.Recall Scanner v2.5.0-preview.1 — output: ...\data\self
+Total.Recall Scanner v2.6.0-preview.1 — output: ...\data\self
   Scanning assembly... ✓ type-registry.jsonl — 101 types
   Scanning tests...    ✓ test-inventory.jsonl — 48 test files
   Enriching coverage data... ✓ 0 classes enriched with test counts + testability

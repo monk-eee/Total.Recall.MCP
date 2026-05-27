@@ -272,7 +272,7 @@ Single JSON object (not JSONL). Persisted at the namespace data dir root.
   "mockLibrary": "moq",
   "testNamespacePattern": "{Namespace}.Tests",
   "scannedUtc": "2026-05-26T10:42:31.123Z",
-  "scannerVersion": "2.5.0-preview.1"
+  "scannerVersion": "2.6.0-preview.1"
 }
 ```
 
