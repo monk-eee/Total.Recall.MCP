@@ -135,4 +135,9 @@ _Entries from `## Known bugs` / `## Known duplicates` / `## From log sweep`
 that have been fixed. Format: `**[YYYY-MM-DD] <commit-hash>** — original
 entry text + one-line description of the fix._
 
-_(none yet)_
+**[2026-05-27] fix/python-init-exit-on-warnings** — `total-recall-py init`
+exited 1 on benign warnings (no `tests/`, no `coverage.xml`), breaking CI
+bootstrap on fresh repos. Fixed in `src/Total.Recall.Scanners.Python/src/total_recall_scan/init_cmd.py`:
+return 0 on success; exit 1 reserved for validation errors, exit 2 for
+filesystem errors. Regression tests in `tests/test_init.py` pin the
+contract. PyPI release 0.1.1.

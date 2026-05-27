@@ -10,6 +10,18 @@ Dates reflect the commit date in the local repo.
 
 ## [Unreleased]
 
+### Fixed
+- **Python scanner `init` exits 0 on benign warnings (0.1.1)** —
+  `total-recall-py init <repo>` previously returned exit code 1 whenever
+  discovery raised any notes (missing `tests/`, missing `coverage.xml`),
+  even though the command had succeeded (config.json written, mcp.json
+  printed). That broke CI bootstrap steps on fresh repos that
+  legitimately have no coverage yet, and surprised users following the
+  QUICKSTART. Init now returns 0 on success and surfaces warnings only
+  in the printed report. Exit 1 is reserved for validation errors
+  (unsafe namespace) and exit 2 for filesystem errors. Regression tests
+  in `tests/test_init.py` pin the new contract. PyPI release 0.1.1.
+
 ### Added
 - **Python scanner `init` sub-command** (`total-recall-py init <repo>`) —
   auto-discovers a Python repo's source root (`src/<pkg>` or flat layout
@@ -20,9 +32,10 @@ Dates reflect the commit date in the local repo.
   preserving any prior `lastScanUtc`, prints a copy-pasteable
   `.vscode/mcp.json` block with `command: "total-recall"` and the
   resolved env vars, and prints the exact `scan` command to run next.
-  Exit codes mirror `scan`: 0 success, 1 on warnings (missing
-  coverage/tests), 2 on filesystem error. Namespace validation
-  rejects path separators and traversal segments.
+  Exit codes: 0 success (warnings are informational only, surfaced in
+  the report), 1 on validation error (unsafe namespace), 2 on
+  filesystem error. Namespace validation rejects path separators and
+  traversal segments.
 - **Python scanner `--watch` mode** (`total-recall-py scan --watch`) —
   after the initial scan, polls every 1.5 s for `.py` mtime changes
   under the source root + tests dir + the coverage XML, debounces
