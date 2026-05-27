@@ -29,7 +29,7 @@ These principles guide every implementation decision. When in doubt, choose the 
 
 1. **Simplicity over cleverness** — JSONL files, no databases, no complex joins. Every tool is a single query against in-memory data. The entire data set is <2MB and loads in <1s. If a feature requires a query planner, it's too complex.
 
-2. **Read-heavy, append-only** — Most operations are reads from pre-warmed in-memory caches. Writes are always appends to JSONL files (gotchas, assessments, sessions). No updates, no deletes. This makes the data git-friendly, grep-friendly, and corruption-resistant.
+2. **Read-heavy, append-only** — Most operations are reads from pre-warmed in-memory caches. Writes are always appends to JSONL files (gotchas, assessments, sessions, bugs). There are no in-place updates and no deletes; logical updates (e.g. `update_bug_status`) are modelled as last-writer-wins — a new record with the same id is appended and readers fold the stream so the latest record per id wins. This makes the data git-friendly, grep-friendly, and corruption-resistant.
 
 3. **Zero-config for agents** — Tools are auto-discovered via MCP protocol. Rich `[Description]` attributes on each tool tell the agent what it does, what parameters it takes, and when to use it. Agents don't need to be taught about Total.Recall — they find it.
 
@@ -119,7 +119,7 @@ Every shipped feature must update the agent-facing surfaces in the same commit. 
 - **`docs/TOOL_REFERENCE.md`** — keep tool input/output schemas in sync when tool signatures change.
 - **Per-tool `[Description]` attributes** — when a tool's behaviour changes, update its `[Description]` so MCP-protocol consumers see the new contract without reading docs.
 
-Internal-only refactors (helper extraction, file split) only need a one-line note in AGENTS.md if at all.
+Internal-only refactors (helper extraction, file split) do NOT require AGENTS.md updates unless they change a public API or move a file listed in a table above.
 
 ### Multi-agent collaboration (READ THIS FIRST)
 Multiple AI agents may operate concurrently in this worktree. Plan for it.
@@ -129,10 +129,11 @@ Multiple AI agents may operate concurrently in this worktree. Plan for it.
 - **Stage explicitly with named paths.** Never `git add -A` / `git add .`. Always `git add <specific-files-you-touched>`.
 - **Verify the staged set immediately before every commit.** `git diff --cached --name-only` MUST list ONLY files you authored this turn. If it doesn't match, `git restore --staged <unexpected>` before `git commit`.
 - **Stage as late as possible.** Edit, test, then `git add` + `git diff --cached --name-only` + `git commit` as a tight three-step block.
-- **Do not run mass refactors** (`dotnet format` across the whole solution, sweeping renames via Roslyn) while another agent is active. Schedule them for a quiet window.
+- **Do not run mass refactors** (`dotnet format` across the whole solution, sweeping renames via Roslyn) while another agent is active. Schedule them for a quiet window. If the prime directive demands a mass refactor and another agent is active, stop and say so — coordinate the quiet window rather than taking the expedient path or blocking on the concurrent agent.
 - **Treat `data/<namespace>/*.jsonl` as shared mutable state.** Two concurrent scanner runs against the same namespace will race on writes. Check for active scans before running `dotnet run -- scan`.
 - **Read commits that landed during your turn.** `git log --oneline -5` at the start of any non-trivial action.
 - Read-only audits (searches, `dotnet test`, `dotnet build`) are always safe in parallel. Writes are not.
+- **If tests fail in code you did not change**, run `git log --oneline -3` to check for concurrent commits. If a sibling agent broke tests, do not fix them in your commit — report the failure (per the bug-reporting rule above) and either wait or rebase onto a known-good commit. Never silently fold an unrelated test fix into your release.
 
 ### Code reuse (NON-NEGOTIABLE)
 - **Always check `src/Total.Recall/Infrastructure/` before writing a new helper.** JSON serialization, store access, logging, metrics, repo config, param classification — these belong in `Infrastructure/`, not duplicated across `Tools/` and `Scanners/`. If the helper you want doesn't exist, **add it to `Infrastructure/` first** and then call it.
@@ -194,7 +195,7 @@ The workflow, in order. Do not skip steps.
 
 ### MCP-specific rules
 - **stdout is reserved for JSON-RPC.** Any `Console.WriteLine`, unhandled exception with a stack trace going to stdout, or rogue `Trace.Write` will corrupt the protocol and break the agent's MCP session silently. All diagnostic output goes through `Log` to stderr.
-- **Tool `[Description]` attributes are the agent's only contract.** When you change a tool's behaviour, update the description in the same commit. Agents do not read `AGENTS.md` — they read the descriptions through MCP discovery.
+- **Tool `[Description]` attributes are the runtime contract for consuming agents.** Consuming agents (the MCP clients that call these tools) discover behaviour only through `[Description]` — they do not read `AGENTS.md`, `SPEC.md`, or `docs/TOOL_REFERENCE.md`. Contributing agents (you, modifying this codebase) MUST keep all four in sync as required by the Doc discipline section above: change a tool, update its `[Description]` AND the markdown surfaces in the same commit.
 - **Backward compatibility on tool output schemas.** Agents may have cached field names. Add fields freely; do not rename or remove fields without bumping a major version note in `SPEC.md`.
 
 ## Build & Run Commands
@@ -408,7 +409,7 @@ as the code change. The list is load-bearing - keep it dense.
 
 5. **Cobertura class names**: The `name` attribute uses fully qualified names with dots (e.g., `MyApp.Common.Extensions.StringExtensions`). Must match against type registry which stores `Name` (short) and `Namespace` separately.
 
-6. **JSONL encoding**: One record per line, no trailing newline after last record. Use `JsonSerializer.Serialize` on each record + `Environment.NewLine` for append.
+6. **JSONL encoding**: One record per line, terminated by `Environment.NewLine`. Every record — including the last — ends with a newline (line-terminator semantics, not line-separator), so appending another record is a pure concatenation. Use `JsonSerializer.Serialize` on each record + `Environment.NewLine` for append.
 
 ## Environment Variables
 
