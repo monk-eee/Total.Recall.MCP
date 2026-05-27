@@ -318,6 +318,10 @@ def run_init(
     config_path = write_config(data_dir, discovery)
     print_report(out, discovery, namespace, data_root.resolve(), data_dir, config_path)
 
-    # Warnings reduce to exit 1 so CI can flag misconfigured runs; the data is
-    # still written either way.
-    return 1 if discovery.notes else 0
+    # Init succeeded: config.json is written and the mcp.json block is printed.
+    # Discovery warnings (e.g. missing tests/ or coverage.xml) are surfaced in
+    # the printed report but do NOT fail the command — those are the normal
+    # state of a fresh repo and CI bootstrap steps depend on init returning 0.
+    # Reserve exit 1 for genuine errors (validation failures) and exit 2 for
+    # filesystem errors. See docs/TODO.md history and CHANGELOG 0.1.1.
+    return 0

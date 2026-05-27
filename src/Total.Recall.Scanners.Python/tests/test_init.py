@@ -181,7 +181,12 @@ def test_run_init_writes_config_and_returns_zero_on_full_repo(tmp_path: Path) ->
     assert "total-recall-py scan" in output
 
 
-def test_run_init_returns_one_when_coverage_missing(tmp_path: Path) -> None:
+def test_run_init_returns_zero_with_warnings_when_coverage_missing(tmp_path: Path) -> None:
+    """Regression: `init` previously returned exit 1 whenever discovery had any
+    notes (missing tests/, missing coverage.xml). That broke CI bootstrap steps
+    on fresh repos that legitimately have no coverage yet. Warnings are now
+    surfaced in the printed report but do not fail the command. See
+    CHANGELOG Python scanner 0.1.1."""
     (tmp_path / "src" / "myproj").mkdir(parents=True)
     (tmp_path / "src" / "myproj" / "__init__.py").write_text("")
     (tmp_path / "tests").mkdir()
@@ -190,8 +195,26 @@ def test_run_init_returns_one_when_coverage_missing(tmp_path: Path) -> None:
 
     code = run_init(tmp_path, namespace_override=None, data_root=tmp_path / "data", out=buf)
 
-    assert code == 1
+    assert code == 0
+    # Warning is still surfaced to the user even though exit is success.
     assert "coverage.xml" in buf.getvalue()
+
+
+def test_run_init_returns_zero_when_tests_and_coverage_both_missing(tmp_path: Path) -> None:
+    """Regression: a brand-new repo with neither tests/ nor coverage.xml is the
+    most common shape when an agent first onboards a project. Init must exit 0
+    so the user can copy the printed mcp.json and proceed."""
+    (tmp_path / "src" / "myproj").mkdir(parents=True)
+    (tmp_path / "src" / "myproj" / "__init__.py").write_text("")
+    _make_pyproject(tmp_path, "myproj")
+    buf = io.StringIO()
+
+    code = run_init(tmp_path, namespace_override=None, data_root=tmp_path / "data", out=buf)
+
+    assert code == 0
+    out = buf.getvalue()
+    assert "tests" in out.lower()
+    assert "Suggested .vscode/mcp.json" in out
 
 
 def test_run_init_rejects_unsafe_namespace(tmp_path: Path, capsys) -> None:

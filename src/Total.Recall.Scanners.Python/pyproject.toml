@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "total-recall-scan-py"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python source scanner for Total.Recall — emits canonical JSONL records consumed by the Total.Recall MCP server."
 readme = "README.md"
 requires-python = ">=3.10"
