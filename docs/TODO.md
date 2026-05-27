@@ -135,6 +135,14 @@ _Entries from `## Known bugs` / `## Known duplicates` / `## From log sweep`
 that have been fixed. Format: `**[YYYY-MM-DD] <commit-hash>** — original
 entry text + one-line description of the fix._
 
+**[2026-05-27] fix/typescript-scanner-exit-on-warnings** — `total-recall-ts scan`
+exited 1 whenever the source root had no `.ts`/`.js` files or `--tests`
+pointed at a missing path, even though the data files were written.
+Same bug class as the Python init fix. Fixed in `src/Total.Recall.Scanners.TypeScript/src/cli.ts`:
+return 0 on success; warnings print to stderr; exit 2 reserved for
+filesystem / validation errors. Regression tests in `tests/cli.test.ts`
+pin the contract. npm release 0.1.1.
+
 **[2026-05-27] fix/python-init-exit-on-warnings** — `total-recall-py init`
 exited 1 on benign warnings (no `tests/`, no `coverage.xml`), breaking CI
 bootstrap on fresh repos. Fixed in `src/Total.Recall.Scanners.Python/src/total_recall_scan/init_cmd.py`:

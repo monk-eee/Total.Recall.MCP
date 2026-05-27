@@ -1,6 +1,6 @@
 {
   "name": "@total-recall/scan",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript/JavaScript scanner for Total.Recall MCP — extracts type registry, coverage gaps, and test inventory as canonical JSONL.",
   "license": "MIT",
   "repository": {

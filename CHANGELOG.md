@@ -11,6 +11,16 @@ Dates reflect the commit date in the local repo.
 ## [Unreleased]
 
 ### Fixed
+- **TypeScript scanner `scan` exits 0 on benign warnings (0.1.1)** —
+  `total-recall-ts scan` previously returned exit code 1 whenever the
+  source root contained no `.ts`/`.js` files OR `--tests` pointed at a
+  path that didn't exist, even though the data files were written
+  successfully (type-registry.jsonl emitted, config.json written). That
+  broke CI bootstrap steps on fresh repos and tripped users whose test
+  directory has a non-standard name. Scan now returns 0 on success,
+  surfaces warnings on stderr, and reserves exit 2 for filesystem
+  errors (missing `--source-root`, parseArgs failures). Regression
+  tests in `tests/cli.test.ts` pin the new contract. npm release 0.1.1.
 - **Python scanner `init` exits 0 on benign warnings (0.1.1)** —
   `total-recall-py init <repo>` previously returned exit code 1 whenever
   discovery raised any notes (missing `tests/`, missing `coverage.xml`),
