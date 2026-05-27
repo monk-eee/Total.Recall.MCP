@@ -105,8 +105,11 @@ function runScan(args: string[]): number {
   const records = scanSourceRoot({ sourceRoot, repoRoot });
   writeJsonl(join(nsDir, "type-registry.jsonl"), records);
 
-  let warnings = 0;
-  if (records.length === 0) warnings++;
+  if (records.length === 0) {
+    process.stderr.write(
+      `Warning: no TypeScript files found under source-root: ${sourceRoot}\n`,
+    );
+  }
 
   if (opts.coverage) {
     const cov = parseCobertura(resolve(opts.coverage));
@@ -117,7 +120,6 @@ function runScan(args: string[]): number {
     const testsRoot = resolve(opts.tests);
     if (!existsSync(testsRoot)) {
       process.stderr.write(`Warning: tests path does not exist: ${testsRoot}\n`);
-      warnings++;
     } else {
       const inv = scanTests(testsRoot, repoRoot);
       writeJsonl(join(nsDir, "test-inventory.jsonl"), inv);
@@ -137,7 +139,12 @@ function runScan(args: string[]): number {
   };
   writeFileSync(join(nsDir, "config.json"), JSON.stringify(config, null, 2));
 
-  return warnings > 0 ? 1 : 0;
+  // Scan succeeded: data files are written. Warnings (no source files,
+  // missing tests path) are surfaced on stderr but do NOT fail the command
+  // — they are the normal state of a fresh repo and CI bootstrap steps
+  // depend on `scan` returning 0. Reserve exit 2 for filesystem errors
+  // (missing source-root, parseArgs errors) which are caught above.
+  return 0;
 }
 
 function resolveDataRoot(explicit: string | undefined): string {
