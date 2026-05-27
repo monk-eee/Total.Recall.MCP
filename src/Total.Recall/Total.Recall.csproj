@@ -7,10 +7,10 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Total.Recall</RootNamespace>
     <AssemblyName>Total.Recall</AssemblyName>
-    <Version>2.5.0-preview.1</Version>
-    <AssemblyVersion>2.5.0.0</AssemblyVersion>
-    <FileVersion>2.5.0.0</FileVersion>
-    <InformationalVersion>2.5.0-preview.1</InformationalVersion>
+    <Version>2.6.0-preview.1</Version>
+    <AssemblyVersion>2.6.0.0</AssemblyVersion>
+    <FileVersion>2.6.0.0</FileVersion>
+    <InformationalVersion>2.6.0-preview.1</InformationalVersion>
   </PropertyGroup>
 
   <!-- NuGet packaging: `dotnet tool install -g TotalRecall.Mcp` -->

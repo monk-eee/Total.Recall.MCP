@@ -8,7 +8,7 @@ already on disk. The five steps below take you from "never heard of it" to
 
 ```bash
 # 1. Install (once, globally)
-dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
+dotnet tool install -g TotalRecall.Mcp --version 2.6.0-preview.1
 
 # 2. From inside your target repo
 cd path/to/your-repo
@@ -48,7 +48,7 @@ option B (build from source), per-step troubleshooting, and CI patterns.
 ### Option A — Install the global tool (recommended)
 
 ```bash
-dotnet tool install -g TotalRecall.Mcp --version 2.5.0-preview.1
+dotnet tool install -g TotalRecall.Mcp --version 2.6.0-preview.1
 ```
 
 This puts a single command, `total-recall`, on your `PATH`. It is the
