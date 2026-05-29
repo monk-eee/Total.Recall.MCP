@@ -20,7 +20,7 @@
     <PackageId>TotalRecall.Mcp</PackageId>
     <Title>Total.Recall MCP Server</Title>
     <Authors>Lyndon Swan &lt;magic.monkee.magic@gmail.com&gt;</Authors>
-    <Description>An MCP server that gives AI coding agents persistent memory — and measures their behaviour. Ships 34 Model Context Protocol tools over stdio for .NET test-coverage uplift, plus a behaviour observatory (tool-call telemetry, cycle detection, deterministic eval grading) and a reflection-based scanner (assembly, Cobertura coverage, test inventory). Install as a global .NET tool: `dotnet tool install -g TotalRecall.Mcp` then point `.vscode/mcp.json` at `total-recall`.</Description>
+    <Description>An MCP server that gives AI coding agents persistent memory — and measures their behaviour. Ships 37 Model Context Protocol tools over stdio for .NET test-coverage uplift, plus a behaviour observatory (tool-call telemetry, cycle detection, deterministic eval grading) and a reflection-based scanner (assembly, Cobertura coverage, test inventory). Install as a global .NET tool: `dotnet tool install -g TotalRecall.Mcp` then point `.vscode/mcp.json` at `total-recall`.</Description>
     <PackageTags>mcp;modelcontextprotocol;ai;agents;copilot;dotnet;testing;coverage;observability;eval</PackageTags>
     <PackageProjectUrl>https://github.com/monk-eee/Total.Recall.MCP</PackageProjectUrl>
     <RepositoryUrl>https://github.com/monk-eee/Total.Recall.MCP</RepositoryUrl>

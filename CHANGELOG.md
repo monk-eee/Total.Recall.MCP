@@ -5,8 +5,8 @@ All notable changes to Total.Recall are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Versions are reconstructed from `git log` — no formal git tags exist yet.
-Dates reflect the commit date in the local repo.
+Releases are tagged in git (`v<version>`) and published to NuGet as `TotalRecall.Mcp`.
+Earlier entries (pre-2.6) were reconstructed from `git log` before tagging started.
 
 ## [Unreleased]
 

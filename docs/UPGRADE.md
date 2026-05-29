@@ -19,10 +19,11 @@ If `total-recall doctor` reports `OK`, you're done. If it reports warnings, see 
 
 | From → To | Tool update | Restart VS Code | Re-scan required | mcp.json edit | Data loss risk |
 |-----------|-------------|-----------------|------------------|---------------|----------------|
+| 2.5.x → 2.6.0 | yes | yes | **no** (optional) | no | none |
 | 2.4.0 → 2.5.x | yes | yes | **no** (optional) | no | none |
 | Source build → tool install | `dotnet tool install -g TotalRecall.Mcp` and switch `command` in `mcp.json` to `"total-recall"` | yes | no | yes (one line) | none |
 
-Patch (`2.5.0` → `2.5.1`) and preview (`2.5.0-preview.1` → `2.5.0-preview.2`) upgrades are always strictly additive.
+Patch (`2.5.0` → `2.5.1`) and preview (`2.6.0-preview.1` → `2.6.0-preview.2`) upgrades are always strictly additive.
 
 ## What's safe across every upgrade
 
@@ -111,6 +112,42 @@ total-recall report bugs --ns yourproject --severity critical --status open
 - `total-recall scan` no longer crashes on publish-style targets that ship their own `mscorlib.dll` / `System.Private.CoreLib.dll` next to the host runtime copies (was: `FileLoadException: Assembly with same name is already loaded`). If you previously had to delete duplicate core DLLs from your publish output before scanning, you can stop.
 - Bare `total-recall` from an interactive terminal now prints help instead of silently waiting on stdin. VS Code still pipes stdin so server mode triggers normally there.
 
+## 2.5.x → 2.6.0-preview.1
+
+### New on-disk surfaces
+
+All additive. Pre-2.6 namespaces simply don't have these files until something writes to them.
+
+- **`type-registry.jsonl` `schemaVersion: 2`** — adds the `lang` discriminator (`{ "kind": "dotnet" | "python" | "typescript", ... }`) for multi-language scanner support. v1 records (no `lang`) still read correctly; the server treats them as `{ "kind": "dotnet" }`.
+- **`config.json` `language` field** — `dotnet | python | typescript`. Older configs without it are treated as `dotnet`.
+
+### New MCP tools
+
+Auto-discovered over MCP. No `.vscode/mcp.json` edit needed. 2.6 adds nothing new on top of the 2.5 tool surface — it's a scanner-platform release.
+
+### Sibling scanners (new in 2.6)
+
+The .NET MCP server is now language-agnostic. Two new scanners ship on their native package managers and emit the same JSONL schema:
+
+- **`total-recall-scan-py`** on PyPI — `pipx install total-recall-scan-py` then `total-recall-py init <repo>` then `total-recall-py scan ...`. Includes a `--watch` mode.
+- **`@total-recall/scan`** on npm — `npm install -g @total-recall/scan` then `total-recall-ts scan ...`.
+
+You do not need either to keep using 2.6 against a .NET repo; the .NET scanner still works the same way. See the per-language [install prompts](install-prompts/) for paste-into-Copilot setup walkthroughs.
+
+### CLI changes
+
+- **`total-recall --version` / `-v`** — new in 2.6. Prints version and exits cleanly (previously bare `total-recall` from a TTY printed help; with `--version` it now exits with the version string without entering the help screen).
+- **`total-recall init <repo-path>`** — auto-discovery is more aggressive: it now prefers the newest `.dll` whose name matches the repo folder, picks the newest Cobertura XML across all `TestResults/**`, and writes both `config.json` and a copy-pasteable `.vscode/mcp.json` block.
+
+### Upgrade procedure
+
+`dotnet tool update -g TotalRecall.Mcp --version 2.6.0-preview.1` is the whole story. The `--version` flag is required for previews — `dotnet tool update` without it does not see pre-release versions and silently leaves any older install in place. If `total-recall doctor` still reports an older version on its first line after the update, uninstall and reinstall:
+
+```bash
+dotnet tool uninstall -g TotalRecall.Mcp
+dotnet tool install -g TotalRecall.Mcp --version 2.6.0-preview.1
+```
+
 ## Doctor warnings
 
 `total-recall doctor` returns exit `1` when something is recoverable. The most common signals after an upgrade:
@@ -126,10 +163,10 @@ total-recall report bugs --ns yourproject --severity critical --status open
 ## Rollback
 
 ```bash
-dotnet tool update -g TotalRecall.Mcp --version 2.4.0-preview.1
+dotnet tool update -g TotalRecall.Mcp --version 2.5.0-preview.1
 ```
 
-Restart VS Code. Your `data/` directory is untouched, including any `bugs.jsonl` written under 2.5 — 2.4 simply doesn't read it. No data is lost; if you reinstall 2.5 later, the file is picked up again.
+Restart VS Code. Your `data/` directory is untouched, including any 2.6-era files (`tool-calls.jsonl`, `tasks.jsonl`, `cycles.jsonl`, `challenges.jsonl`, `evals.jsonl`) — 2.5 simply doesn't read them. No data is lost; if you reinstall 2.6 later, the files are picked up again.
 
 ## Recovery
 

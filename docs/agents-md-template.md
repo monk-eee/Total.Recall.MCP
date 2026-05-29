@@ -15,7 +15,7 @@ and coverage uplift. Configured in `.vscode/mcp.json`. All tools accept an optio
 
 Total.Recall eliminates the 60–70% of agent context burned on re-discovering type metadata,
 mock patterns, coverage gaps, and gotchas each session. Scanners extract data from your
-assembly, coverage reports, and test project into JSONL files. 34 MCP tools expose this data
+assembly, coverage reports, and test project into JSONL files. 37 MCP tools expose this data
 instantly — one tool call replaces 10–15 file reads.
 
 ### Tool Reference

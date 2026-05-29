@@ -45,7 +45,7 @@ The MCP server is .NET (NuGet `TotalRecall.Mcp`). The **scanners** that populate
 │
 ▼
 ┌─────────────────────────────────────────────────────────┐
-│ Total.Recall MCP Server (stdio) — 34 tools               │
+│ Total.Recall MCP Server (stdio) — 37 tools               │
 │                                                          │
 │  v2 Decision Engine:                                     │
 │  ┌──────────────────┐ ┌──────────────────┐               │
@@ -148,7 +148,7 @@ Total.Recall/
 │       ├── Total.Recall.csproj          # Console app, stdio MCP server
 │       ├── Program.cs                   # Entry point: MCP server + scanner CLI
 │       │
-│       ├── Tools/                       # MCP tool implementations (34 tools)
+│       ├── Tools/                       # MCP tool implementations (37 tools)
 │       │   ├── AssessmentTool.cs        # add_assessment + get_assessments
 │       │   ├── ContextTool.cs           # get_context
 │       │   ├── CoverageGapsTool.cs      # get_coverage_gaps
@@ -675,7 +675,7 @@ Emits a compilable xUnit test file with: correct namespace imports, mock field d
 | **Output** | JSON telemetry object |
 | **Data Source** | In-memory `Metrics` class (ConcurrentDictionary counters, resets on restart) |
 
-> **Note**: For complete parameter documentation, examples, and usage guidance for all 34 tools, see [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md).
+> **Note**: For complete parameter documentation, examples, and usage guidance for all 37 tools, see [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md).
 
 ---
 

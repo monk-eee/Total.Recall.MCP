@@ -8,7 +8,7 @@ This is one of three scanners in the Total.Recall ecosystem:
 |---|---|---|
 | .NET | NuGet [`TotalRecall.Mcp`](https://www.nuget.org/packages/TotalRecall.Mcp) | `total-recall scan` |
 | **Python** | **PyPI `total-recall-scan-py`** *(this package)* | **`total-recall-py`** |
-| TypeScript | npm `@total-recall/scan` *(planned)* | `total-recall-ts` |
+| TypeScript | npm `@total-recall/scan` | `total-recall-ts` |
 
 All three produce identical schema-shaped JSONL — the Total.Recall MCP server is language-agnostic and reads whatever lands in `data/<namespace>/`. See [`docs/SCANNER_SCHEMA.md`](https://github.com/monk-eee/Total.Recall.MCP/blob/main/docs/SCANNER_SCHEMA.md) for the contract.
 

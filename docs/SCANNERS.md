@@ -2,7 +2,7 @@
 
 A scanner is a small process that reads a target repo and writes JSONL
 files under `data/<namespace>/`. The MCP server (which always runs as
-the .NET process) reads those files and serves the 34 tools.
+the .NET process) reads those files and serves the 37 tools.
 
 You can write a scanner in any language. The contract is in
 [`SCANNER_SCHEMA.md`](SCANNER_SCHEMA.md). This doc tells you how to
@@ -207,7 +207,7 @@ the same way.
 ## What you do **not** need to do
 
 - ❌ Reimplement the MCP server. It already speaks the protocol and
-  serves 34 tools — yours just feeds it data.
+  serves 37 tools — yours just feeds it data.
 - ❌ Implement static analysis (`--analyze`). Optional. Land symbols,
   coverage, tests first. The static-analysis tools degrade gracefully
   when those files are absent.

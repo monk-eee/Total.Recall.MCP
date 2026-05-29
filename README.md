@@ -102,6 +102,14 @@ For full build-from-source instructions and the polyglot contributor guide, see 
 
 ## Quickstart
 
+**Easiest — let Copilot do it.** Open your target repo in VS Code, open Copilot Chat in agent mode, and paste one of these prompts. Each walks the agent through prerequisites, install, scan, and `.vscode/mcp.json` wiring, reporting back at each step:
+
+- [.NET install prompt](docs/install-prompts/dotnet.md)
+- [Python install prompt](docs/install-prompts/python.md)
+- [TypeScript install prompt](docs/install-prompts/typescript.md)
+
+**Manual:**
+
 ```bash
 # 1. Scan your target repo
 total-recall scan \
@@ -515,8 +523,8 @@ src/
     Models/                           ← record types serialised to JSONL
     Reporting/                        ← report CLI sub-commands + table renderer
   Total.Recall.Analyzers/             ← Roslyn analyzer (TR0001 duplicate-helper rule)
-  Total.Recall.Scanners.Python/       ← sibling — ships on PyPI, not part of the .NET sln (planned)
-  Total.Recall.Scanners.TypeScript/   ← sibling — ships on npm, not part of the .NET sln (planned)
+  Total.Recall.Scanners.Python/       ← sibling — ships on PyPI as `total-recall-scan-py`, not part of the .NET sln
+  Total.Recall.Scanners.TypeScript/   ← sibling — ships on npm as `@total-recall/scan`, not part of the .NET sln
 tests/
   Total.Recall.Tests/                 ← xUnit tests for main project
   Total.Recall.Analyzers.Tests/       ← xUnit tests for the analyzer

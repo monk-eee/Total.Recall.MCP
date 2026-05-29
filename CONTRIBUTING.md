@@ -10,7 +10,7 @@ Also worth reading:
 
 - [README.md](README.md) — what the project is and why
 - [SPEC.md](SPEC.md) — full specification of tools, scanners, and data files
-- [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) — input/output schemas for all 34 MCP tools
+- [docs/TOOL_REFERENCE.md](docs/TOOL_REFERENCE.md) — input/output schemas for all 37 MCP tools
 
 ## Working rules (non-negotiable)
 

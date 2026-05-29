@@ -31,6 +31,14 @@ If anything looks off, run `total-recall doctor` — it prints env vars,
 data root status, per-namespace data file counts, and validates the paths
 in `config.json` are still on disk.
 
+**Even faster — let Copilot do it.** Open your target repo in VS Code, open Copilot Chat in agent mode, and paste one of these prompts into the chat:
+
+- [.NET install prompt](install-prompts/dotnet.md)
+- [Python install prompt](install-prompts/python.md)
+- [TypeScript install prompt](install-prompts/typescript.md)
+
+Each prompt walks the agent through prerequisites, install, scan, and `.vscode/mcp.json` wiring, reporting back at each step.
+
 The rest of this document is the long-form reference: full prerequisites,
 option B (build from source), per-step troubleshooting, and CI patterns.
 
@@ -276,7 +284,7 @@ On first launch the server pre-loads all JSONL data and builds O(1) lookup index
 
 ## 5. Use the Tools
 
-Total.Recall exposes **34 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
+Total.Recall exposes **37 MCP tools**. Here's the recommended workflow for a coverage-uplift session:
 
 ### Step 1 — Pick targets
 
@@ -310,6 +318,9 @@ Fill in the scaffold stubs. Use the other tools as needed:
 | `get_test_inventory` | Check what's already tested before generating duplicates |
 | `get_coverage_gaps` | ROI-ranked list of uncovered classes |
 | `add_assessment` / `get_assessments` | Testability verdicts for classes |
+| `report_bug` | File a class-scoped bug discovered while writing tests (severity low/medium/high/critical) |
+| `get_bugs` | Query open (or filtered) bugs for a class before authoring tests |
+| `update_bug_status` | Transition a bug to triaged / fixed / wontfix (append-only history) |
 | `get_source_snippet` | Read specific method implementations from target repo |
 | `get_uncovered_methods` | Method-level ROI targets when class-level is exhausted |
 | `get_stub_classes` | Trivially-testable zero-coverage classes |
@@ -355,6 +366,7 @@ You should see a scored list of classes. If it doesn't appear:
 | `mock-recipes.jsonl` | Manual curation | Pre-built Moq setup code per interface |
 | `assessments.jsonl` | `add_assessment` tool | Testability verdicts from agent analysis |
 | `sessions.jsonl` | `log_session` tool | Session outcomes for cross-session learning |
+| `bugs.jsonl` | `report_bug` / `update_bug_status` tools | Class-scoped bug reports (append-only, latest record per id wins) |
 | `tool-calls.jsonl` | Auto (every tool call) | Every MCP tool call: name, ns, sessionId, taskId, params summary, latency, response bytes |
 | `tasks.jsonl` | `start_task` / `end_task` | Agent task bracketing — start/end, success/abandon, intent |
 | `cycles.jsonl` | Auto (CycleDetector) | Detected behaviour cycles: re-query, context-loss, oscillation |

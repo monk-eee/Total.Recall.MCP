@@ -19,6 +19,14 @@ _Bugs noticed in passing during unrelated work. Each entry must record:
 (3) impact, (4) whether fixed in this run or left for later. See
 AGENTS.md "Test-driven workflow (NON-NEGOTIABLE)"._
 
+### AGENTS.md sibling-scanner table claims TypeScript scanner has an `init` sub-command — it doesn't
+
+- Observed: while writing `docs/install-prompts/typescript.md` on 2026-05-29.
+- Where: [AGENTS.md](../AGENTS.md) sibling-scanners table, TypeScript row entry-point column. Patched in same session to drop the bogus `init` claim, but the underlying scanner gap remains.
+- Root cause: [src/Total.Recall.Scanners.TypeScript/src/cli.ts](../src/Total.Recall.Scanners.TypeScript/src/cli.ts) only registers `scan` and `version`. The Python scanner has a fully-developed `init` in [init_cmd.py](../src/Total.Recall.Scanners.Python/src/total_recall_scan/init_cmd.py) that auto-discovers source root / tests / coverage / namespace and prints both a scan command and a `.vscode/mcp.json` block.
+- Impact: TypeScript users following the install prompt must do that discovery manually, which is exactly what `init` exists to remove. Doc parity gap was hiding a real product gap.
+- Fixed in this run: doc parity only. Add a TS `init` sub-command that mirrors the Python flow (discover `tsconfig.json` rootDir, `tests`/`__tests__`/`test`, newest Cobertura XML, derive namespace from `package.json` name, print `mcp.json` + scan command).
+
 ### static-singleton test races (root cause; band-aided by `[assembly: CollectionBehavior(DisableTestParallelization = true)]`)
 
 - Observed: `MetricsToolTests.GetMetrics_CacheHitRate_CalculatesCorrectly` (windows) and `AssessmentToolTests.AddAssessment_IncrementsMetrics` (ubuntu) flaked on CI run 26480790808 against `main` (commit d0a989b).

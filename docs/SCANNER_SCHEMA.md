@@ -3,7 +3,7 @@
 This document is the **contract** between Total.Recall scanners (any language)
 and the MCP server. The server reads JSONL files from
 `data/<namespace>/` and does not care which scanner produced them — as long
-as each file conforms to the schema below, every one of the 34 MCP tools works.
+as each file conforms to the schema below, every one of the 37 MCP tools works.
 
 > **Audience.** Contributors writing a new scanner (Python, TypeScript, Go,
 > Rust, …). The existing .NET scanner already conforms; this doc describes
@@ -296,7 +296,7 @@ files update in the same PR** — that is the lever that prevents drift.
 
 ## Tooling implications
 
-The 34 MCP tools were written against .NET-shaped data, but their joins
+The 37 MCP tools were written against .NET-shaped data, but their joins
 only depend on canonical fields:
 
 - `resolve_type`, `get_context`, `get_class_metrics`, `get_dependency_graph`
@@ -311,7 +311,7 @@ only depend on canonical fields:
   scaffold rendering will land alongside the Python/TS scanners; the
   tool stays language-agnostic by dispatching on `lang.kind`.
 
-A scanner that emits this schema unlocks all 34 tools. There is no
+A scanner that emits this schema unlocks all 37 tools. There is no
 per-language tool registration.
 
 ---
