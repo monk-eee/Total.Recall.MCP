@@ -5,7 +5,7 @@
 | Key | Value |
 |-----|-------|
 | Solution | `Total.Recall.sln` |
-| Version | 2.6.0-preview.1 |
+| Version | 2.7.0-preview.1 |
 | SDK | 8.0.400 (`rollForward: latestFeature`, actual: 8.0.418) |
 | dotnet | `C:\Program Files\dotnet\dotnet.exe` |
 | sourceRoot | `src/Total.Recall/` |
@@ -13,7 +13,7 @@
 | targetFramework | net8.0 |
 | transport | stdio (VS Code spawns process) |
 | dataFormat | JSONL (one JSON object per line) |
-| tests | 1180 main + 8 analyzer passing |
+| tests | 1185 main + 8 analyzer passing |
 
 ## Purpose
 
@@ -272,7 +272,7 @@ dotnet test tests/Total.Recall.Tests/Total.Recall.Tests.csproj
 
 | Assembly | TFM | csproj Path | Status |
 |----------|-----|-------------|--------|
-| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1180 tests |
+| Total.Recall.Tests | net8.0 | `tests/Total.Recall.Tests/Total.Recall.Tests.csproj` | 1185 tests |
 | Total.Recall.Analyzers.Tests | net8.0 | `tests/Total.Recall.Analyzers.Tests/Total.Recall.Analyzers.Tests.csproj` | 8 tests |
 
 ### Sibling Scanners (separate distribution, NOT in `Total.Recall.sln`)

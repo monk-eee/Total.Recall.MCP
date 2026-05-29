@@ -12,21 +12,30 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     private CoverageGap MakeGap(string className, int uncoveredLines = 20, int totalLines = 100,
         string testability = "high", int existingTestCount = 0, string? skipReason = null)
     {
+        double? testabilityScore = testability switch
+        {
+            "high" => 0.85,
+            "medium" => 0.55,
+            "low" => 0.3,
+            _ => null,
+        };
+        if (skipReason is not null)
+        {
+            testabilityScore = 0.1;
+        }
+
         return new CoverageGap
         {
-            Class = className,
-            Namespace = "App",
-            File = $"src/{className}.cs",
-            TotalLines = totalLines,
-            CoveredLines = totalLines - uncoveredLines,
-            UncoveredLines = uncoveredLines,
+            ClassName = $"App.{className}",
+            FilePath = $"src/{className}.cs",
+            LinesTotal = totalLines,
+            LinesCovered = totalLines - uncoveredLines,
             CoveragePercent = totalLines > 0 ? Math.Round(100.0 * (totalLines - uncoveredLines) / totalLines, 1) : 0,
-            Testability = testability,
-            ExistingTestCount = existingTestCount,
-            SkipReason = skipReason,
+            TestabilityScore = testabilityScore,
+            ExistingTests = existingTestCount,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 30, UncoveredLines = uncoveredLines }
+                new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, Math.Max(1, uncoveredLines)).ToArray(), TotalLines = Math.Max(1, uncoveredLines) }
             ]
         };
     }
@@ -456,18 +465,16 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "FullTarget",
-            Namespace = "App.Core",
-            File = "src/Core/FullTarget.cs",
-            TotalLines = 200,
-            CoveredLines = 150,
-            UncoveredLines = 50,
+            ClassName = "App.Core.FullTarget",
+            FilePath = "src/Core/FullTarget.cs",
+            LinesTotal = 200,
+            LinesCovered = 150,
             CoveragePercent = 75.0,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Execute", StartLine = 10, EndLine = 50, UncoveredLines = 30 },
-                new UncoveredMethod { Name = "Validate", StartLine = 55, EndLine = 70, UncoveredLines = 20 }
+                new UncoveredMethod { Name = "Execute", UncoveredLines = Enumerable.Range(10, 41).ToArray(), TotalLines = 41 },
+                new UncoveredMethod { Name = "Validate", UncoveredLines = Enumerable.Range(55, 16).ToArray(), TotalLines = 16 }
             ]
         });
         SeedTypeRegistry(new TypeRecord
@@ -605,8 +612,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_WithFailures_ReducesScore()
     {
-        var baseScore = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, 0, 0);
-        var failScore = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, 0, 2);
+        var baseScore = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, 0, 0);
+        var failScore = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, 0, 2);
 
         Assert.True(baseScore > failScore);
         // 2 failures = 0.7^2 = 0.49 multiplier
@@ -616,8 +623,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_WithSuccesses_ReducesScore()
     {
-        var baseScore = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, 0, 0);
-        var successScore = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, 1, 0);
+        var baseScore = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, 0, 0);
+        var successScore = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, 1, 0);
 
         Assert.True(baseScore > successScore);
         // 1 success = 0.5 multiplier
@@ -681,12 +688,12 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     // ── CalculateScore: uncovered testability + ctor branches (covers L242, L244, L253, L255) ──
 
     [Theory]
-    [InlineData("medium", 0.65, 0.75)]
-    [InlineData("low", 0.25, 0.35)]
+    [InlineData(0.55, 0.65, 0.75)]
+    [InlineData(0.2, 0.25, 0.35)]
     [InlineData(null, 0.45, 0.55)]
-    public void CalculateScore_Testability_AppliesExpectedMultiplier(string? testability, double expectedMinRatio, double expectedMaxRatio)
+    public void CalculateScore_Testability_AppliesExpectedMultiplier(double? testability, double expectedMinRatio, double expectedMaxRatio)
     {
-        var highScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
+        var highScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
         var score = TestableTargetsTool.CalculateScore(100, testability, 0, 0, 0, 0, 0);
 
         Assert.InRange(score / highScore, expectedMinRatio, expectedMaxRatio);
@@ -695,8 +702,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_ThreeCtorParams_ZeroMockable_AppliesHalfMultiplier()
     {
-        var zeroParamScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var threeParamScore = TestableTargetsTool.CalculateScore(100, "high", 3, 0, 0, 0, 0);
+        var zeroParamScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var threeParamScore = TestableTargetsTool.CalculateScore(100, 0.85, 3, 0, 0, 0, 0);
 
         // 0 params = 1.2x, 3 params with 0 mockable = 0.5x → ratio = 0.5/1.2 ≈ 0.417
         Assert.InRange(threeParamScore / zeroParamScore, 0.38, 0.45);
@@ -705,8 +712,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_FivePlusCtorParams_ZeroMockable_AppliesHalfMultiplier()
     {
-        var zeroParamScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var fiveParamScore = TestableTargetsTool.CalculateScore(100, "high", 5, 0, 0, 0, 0);
+        var zeroParamScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var fiveParamScore = TestableTargetsTool.CalculateScore(100, 0.85, 5, 0, 0, 0, 0);
 
         // 0 params = 1.2x, 5 params with 0 mockable = 0.5x → ratio = 0.5/1.2 ≈ 0.417
         Assert.InRange(fiveParamScore / zeroParamScore, 0.38, 0.45);
@@ -743,9 +750,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     public void CalculateScore_OneConcreteDep_PenalizesScore()
     {
         // 2 params, 1 interface, 0 concrete (from test perspective, concreteParamCount=0 default)
-        var allInterfaceScore = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0);
+        var allInterfaceScore = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0);
         // 2 params, 1 interface, 1 concrete
-        var oneConcreteScore = TestableTargetsTool.CalculateScore(100, "high", 2, 1, 0, 0, 0,
+        var oneConcreteScore = TestableTargetsTool.CalculateScore(100, 0.85, 2, 1, 0, 0, 0,
             concreteParamCount: 1);
 
         Assert.True(allInterfaceScore > oneConcreteScore,
@@ -756,10 +763,10 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     public void CalculateScore_CoupledDep_HeavyPenalty()
     {
         // 1 concrete param
-        var concreteScore = TestableTargetsTool.CalculateScore(100, "high", 1, 0, 0, 0, 0,
+        var concreteScore = TestableTargetsTool.CalculateScore(100, 0.85, 1, 0, 0, 0, 0,
             concreteParamCount: 1);
         // 1 concrete param that's also coupled/skip-listed
-        var coupledScore = TestableTargetsTool.CalculateScore(100, "high", 1, 0, 0, 0, 0,
+        var coupledScore = TestableTargetsTool.CalculateScore(100, 0.85, 1, 0, 0, 0, 0,
             concreteParamCount: 1, coupledParamCount: 1);
 
         Assert.True(concreteScore > coupledScore,
@@ -772,8 +779,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     public void CalculateScore_FourInterfaceParams_BetterThanOneConcrete()
     {
         // The key improvement: 4 all-interface params should score better than 1 coupled concrete param
-        var fourInterface = TestableTargetsTool.CalculateScore(100, "high", 4, 4, 0, 0, 0);
-        var oneCoupled = TestableTargetsTool.CalculateScore(100, "high", 1, 0, 0, 0, 0,
+        var fourInterface = TestableTargetsTool.CalculateScore(100, 0.85, 4, 4, 0, 0, 0);
+        var oneCoupled = TestableTargetsTool.CalculateScore(100, 0.85, 1, 0, 0, 0, 0,
             concreteParamCount: 1, coupledParamCount: 1);
 
         Assert.True(fourInterface > oneCoupled,
@@ -786,8 +793,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // 3 params, all interfaces → mockableRatio = 1.0 → multiplier = 0.5 + 0.6 = 1.1
         // But also: 3 interfaces with 0 recipes → recipe coverage = 0.7x
         // Net: 1.1 * 0.7 = 0.77, vs 0 params: 1.2 → ratio ≈ 0.642
-        var score = TestableTargetsTool.CalculateScore(100, "high", 3, 3, 0, 0, 0);
-        var zeroParam = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
+        var score = TestableTargetsTool.CalculateScore(100, 0.85, 3, 3, 0, 0, 0);
+        var zeroParam = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
 
         Assert.InRange(score / zeroParam, 0.60, 0.68);
     }
@@ -853,13 +860,11 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // Class has uncovered lines (e.g., auto-property boilerplate) but no named methods
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "DataPoco",
-            Namespace = "App",
-            TotalLines = 20,
-            CoveredLines = 10,
-            UncoveredLines = 10,
+            ClassName = "App.DataPoco",
+            LinesTotal = 20,
+            LinesCovered = 10,
             CoveragePercent = 50,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods = [] // No methods — just property lines
         });
 
@@ -874,18 +879,16 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // Class has only get_/set_ property accessors as uncovered methods
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "PocoModel",
-            Namespace = "App",
-            TotalLines = 30,
-            CoveredLines = 10,
-            UncoveredLines = 20,
+            ClassName = "App.PocoModel",
+            LinesTotal = 30,
+            LinesCovered = 10,
             CoveragePercent = 33.3,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "get_Name", StartLine = 5, EndLine = 5, UncoveredLines = 1 },
-                new UncoveredMethod { Name = "set_Name", StartLine = 6, EndLine = 6, UncoveredLines = 1 },
-                new UncoveredMethod { Name = "get_Value", StartLine = 8, EndLine = 8, UncoveredLines = 1 }
+                new UncoveredMethod { Name = "get_Name", UncoveredLines = [5], TotalLines = 1 },
+                new UncoveredMethod { Name = "set_Name", UncoveredLines = [6], TotalLines = 1 },
+                new UncoveredMethod { Name = "get_Value", UncoveredLines = [8], TotalLines = 1 }
             ]
         });
 
@@ -900,17 +903,15 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // Class has SOME property accessors but also real methods → should be included
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MixedClass",
-            Namespace = "App",
-            TotalLines = 50,
-            CoveredLines = 20,
-            UncoveredLines = 30,
+            ClassName = "App.MixedClass",
+            LinesTotal = 50,
+            LinesCovered = 20,
             CoveragePercent = 40,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "get_Name", StartLine = 5, EndLine = 5, UncoveredLines = 1 },
-                new UncoveredMethod { Name = "Execute", StartLine = 10, EndLine = 30, UncoveredLines = 20 }
+                new UncoveredMethod { Name = "get_Name", UncoveredLines = [5], TotalLines = 1 },
+                new UncoveredMethod { Name = "Execute", UncoveredLines = Enumerable.Range(10, 21).ToArray(), TotalLines = 21 }
             ]
         });
 
@@ -1063,9 +1064,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_MoreRealMethods_HigherScore()
     {
-        var fewMethods = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var fewMethods = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             realMethodCount: 1);
-        var manyMethods = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var manyMethods = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             realMethodCount: 10);
 
         Assert.True(manyMethods > fewMethods,
@@ -1075,9 +1076,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_ZeroRealMethods_NoBoost()
     {
-        var noMethods = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var noMethods = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             realMethodCount: 0);
-        var oneMethod = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var oneMethod = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             realMethodCount: 1);
 
         // 0 methods and 1 method should get same score (no boost below 2)
@@ -1096,9 +1097,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [InlineData(1000, 0.8)]  // very large — penalty
     public void CalculateScore_MediumComplexityBoost_AppliesCorrectMultiplier(int totalLines, double expectedMultiplier)
     {
-        var baseScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var baseScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             totalLines: 0); // baseline with unknown totalLines
-        var boostedScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var boostedScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             totalLines: totalLines);
 
         if (totalLines == 0)
@@ -1116,9 +1117,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     public void CalculateScore_SweetSpotClass_ScoresHigherThanSmall()
     {
         // 200-line class should score higher than 20-line class with same uncovered lines
-        var sweetSpot = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0,
+        var sweetSpot = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0,
             totalLines: 200);
-        var small = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0,
+        var small = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0,
             totalLines: 20);
 
         Assert.True(sweetSpot > small,
@@ -1130,8 +1131,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_TwoConcreteDeps_NearZeroScore()
     {
-        var cleanScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var twoConcreteScore = TestableTargetsTool.CalculateScore(100, "high", 2, 0, 0, 0, 0,
+        var cleanScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var twoConcreteScore = TestableTargetsTool.CalculateScore(100, 0.85, 2, 0, 0, 0, 0,
             concreteParamCount: 2);
 
         // 0.3^2 = 0.09 for concrete penalty alone, plus mockable ratio penalty
@@ -1142,8 +1143,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_OneConcretePlusCoupled_DramaticallyLow()
     {
-        var cleanScore = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var coupledScore = TestableTargetsTool.CalculateScore(100, "high", 1, 0, 0, 0, 0,
+        var cleanScore = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var coupledScore = TestableTargetsTool.CalculateScore(100, 0.85, 1, 0, 0, 0, 0,
             concreteParamCount: 1, coupledParamCount: 1);
 
         // 0.3 * 0.15 = 0.045 × mockable penalty → essentially zero
@@ -1156,9 +1157,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_NamespaceCoupledBelow3_NoPenalty()
     {
-        var score0 = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var score0 = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             namespaceCoupledCount: 0);
-        var score2 = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var score2 = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             namespaceCoupledCount: 2);
 
         Assert.Equal(score0, score2); // no penalty below 3
@@ -1167,9 +1168,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_NamespaceCoupled3Plus_Applies85Penalty()
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             namespaceCoupledCount: 0);
-        var coupled = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var coupled = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             namespaceCoupledCount: 3);
 
         Assert.InRange(coupled / clean, 0.80, 0.90); // 0.85x penalty
@@ -1180,8 +1181,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_InterfaceGotchas_ReduceScore()
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0);
-        var withGotchas = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0);
+        var withGotchas = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0,
             interfaceGotchaCount: 2);
 
         Assert.True(clean > withGotchas,
@@ -1193,9 +1194,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_ZeroInterfaceGotchas_NoPenalty()
     {
-        var score0 = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0,
+        var score0 = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0,
             interfaceGotchaCount: 0);
-        var scoreBase = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0);
+        var scoreBase = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0);
 
         Assert.Equal(score0, scoreBase);
     }
@@ -1225,18 +1226,16 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // Class has only .ctor and property accessors as uncovered methods → POCO
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "GlobalMetadataYaml",
-            Namespace = "App.Models",
-            TotalLines = 25,
-            CoveredLines = 10,
-            UncoveredLines = 15,
+            ClassName = "App.Models.GlobalMetadataYaml",
+            LinesTotal = 25,
+            LinesCovered = 10,
             CoveragePercent = 40,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = ".ctor", StartLine = 3, EndLine = 10, UncoveredLines = 7 },
-                new UncoveredMethod { Name = "get_Title", StartLine = 12, EndLine = 12, UncoveredLines = 1 },
-                new UncoveredMethod { Name = "set_Title", StartLine = 13, EndLine = 13, UncoveredLines = 1 }
+                new UncoveredMethod { Name = ".ctor", UncoveredLines = Enumerable.Range(3, 8).ToArray(), TotalLines = 8 },
+                new UncoveredMethod { Name = "get_Title", UncoveredLines = [12], TotalLines = 1 },
+                new UncoveredMethod { Name = "set_Title", UncoveredLines = [13], TotalLines = 1 }
             ]
         });
 
@@ -1251,17 +1250,15 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // Class has .ctor AND a real method → NOT a POCO, should be included
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "ServiceClass",
-            Namespace = "App",
-            TotalLines = 100,
-            CoveredLines = 50,
-            UncoveredLines = 50,
+            ClassName = "App.ServiceClass",
+            LinesTotal = 100,
+            LinesCovered = 50,
             CoveragePercent = 50,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = ".ctor", StartLine = 3, EndLine = 10, UncoveredLines = 7 },
-                new UncoveredMethod { Name = "Process", StartLine = 12, EndLine = 50, UncoveredLines = 30 }
+                new UncoveredMethod { Name = ".ctor", UncoveredLines = Enumerable.Range(3, 8).ToArray(), TotalLines = 8 },
+                new UncoveredMethod { Name = "Process", UncoveredLines = Enumerable.Range(12, 39).ToArray(), TotalLines = 39 }
             ]
         });
 
@@ -1285,10 +1282,10 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         var gapStore = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir));
         gapStore.WriteAll(
         [
-            new CoverageGap { Class = "CleanInBadNs", Namespace = "App.Heavy", TotalLines = 200, UncoveredLines = 50, CoveragePercent = 75, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 50, UncoveredLines = 50 }] },
-            new CoverageGap { Class = "CleanInGoodNs", Namespace = "App.Light", TotalLines = 200, UncoveredLines = 50, CoveragePercent = 75, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 50, UncoveredLines = 50 }] }
+            new CoverageGap { ClassName = "App.Heavy.CleanInBadNs", LinesTotal = 200, LinesCovered = 150, CoveragePercent = 75, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 41).ToArray(), TotalLines = 41 }] },
+            new CoverageGap { ClassName = "App.Light.CleanInGoodNs", LinesTotal = 200, LinesCovered = 150, CoveragePercent = 75, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 41).ToArray(), TotalLines = 41 }] }
         ]);
         StoreRegistry.Reset();
 
@@ -1296,16 +1293,16 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         var extraGaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir));
         extraGaps.WriteAll(
         [
-            new CoverageGap { Class = "CleanInBadNs", Namespace = "App.Heavy", TotalLines = 200, UncoveredLines = 50, CoveragePercent = 75, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 50, UncoveredLines = 50 }] },
-            new CoverageGap { Class = "CleanInGoodNs", Namespace = "App.Light", TotalLines = 200, UncoveredLines = 50, CoveragePercent = 75, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 50, UncoveredLines = 50 }] },
-            new CoverageGap { Class = "Heavy1", Namespace = "App.Heavy", TotalLines = 500, UncoveredLines = 100, CoveragePercent = 80, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "X", StartLine = 1, EndLine = 2, UncoveredLines = 1 }] },
-            new CoverageGap { Class = "Heavy2", Namespace = "App.Heavy", TotalLines = 500, UncoveredLines = 100, CoveragePercent = 80, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "X", StartLine = 1, EndLine = 2, UncoveredLines = 1 }] },
-            new CoverageGap { Class = "Heavy3", Namespace = "App.Heavy", TotalLines = 500, UncoveredLines = 100, CoveragePercent = 80, Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "X", StartLine = 1, EndLine = 2, UncoveredLines = 1 }] }
+            new CoverageGap { ClassName = "App.Heavy.CleanInBadNs", LinesTotal = 200, LinesCovered = 150, CoveragePercent = 75, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 41).ToArray(), TotalLines = 41 }] },
+            new CoverageGap { ClassName = "App.Light.CleanInGoodNs", LinesTotal = 200, LinesCovered = 150, CoveragePercent = 75, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 41).ToArray(), TotalLines = 41 }] },
+            new CoverageGap { ClassName = "App.Heavy.Heavy1", LinesTotal = 500, LinesCovered = 400, CoveragePercent = 80, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "X", UncoveredLines = [1, 2], TotalLines = 2 }] },
+            new CoverageGap { ClassName = "App.Heavy.Heavy2", LinesTotal = 500, LinesCovered = 400, CoveragePercent = 80, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "X", UncoveredLines = [1, 2], TotalLines = 2 }] },
+            new CoverageGap { ClassName = "App.Heavy.Heavy3", LinesTotal = 500, LinesCovered = 400, CoveragePercent = 80, TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "X", UncoveredLines = [1, 2], TotalLines = 2 }] }
         ]);
         StoreRegistry.Reset();
 
@@ -1372,14 +1369,12 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MediumClass",
-            Namespace = "App",
-            TotalLines = 200,
-            CoveredLines = 150,
-            UncoveredLines = 50,
+            ClassName = "App.MediumClass",
+            LinesTotal = 200,
+            LinesCovered = 150,
             CoveragePercent = 75,
-            Testability = "high",
-            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 10, EndLine = 50, UncoveredLines = 50 }]
+            TestabilityScore = 0.85,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = Enumerable.Range(10, 41).ToArray(), TotalLines = 41 }]
         });
 
         var result = TestableTargetsTool.GetTestableTargets();
@@ -1399,8 +1394,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [InlineData("testable", 1.0, 1.0)]
     public void CalculateScore_SelfVerdict_AppliesExpectedPenalty(string selfVerdict, double expectedMinRatio, double expectedMaxRatio)
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var penalized = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var penalized = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             selfVerdict: selfVerdict);
 
         Assert.InRange(penalized / clean, expectedMinRatio, expectedMaxRatio);
@@ -1411,8 +1406,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_OneUnmockableInterface_StrongPenalty()
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0);
-        var unmockable = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0);
+        var unmockable = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0,
             unmockableInterfaceCount: 1);
 
         Assert.InRange(unmockable / clean, 0.15, 0.25); // 0.2x
@@ -1421,8 +1416,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_TwoUnmockableInterfaces_NearZero()
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0);
-        var unmockable = TestableTargetsTool.CalculateScore(100, "high", 2, 2, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0);
+        var unmockable = TestableTargetsTool.CalculateScore(100, 0.85, 2, 2, 0, 0, 0,
             unmockableInterfaceCount: 2);
 
         Assert.True(unmockable / clean < 0.05,
@@ -1434,8 +1429,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_BaseTypeCoupled_SeverePenalty()
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var coupled = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var coupled = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             baseTypeCoupled: true);
 
         Assert.InRange(coupled / clean, 0.13, 0.17); // 0.15x
@@ -1553,7 +1548,7 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         var score = targets[0].GetProperty("score").GetDouble();
 
         // Should have severe penalty: concrete (0.3x) + coupled via transitive (0.15x)
-        var cleanScore = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, totalLines: 100);
+        var cleanScore = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, totalLines: 100);
         Assert.True(score < cleanScore * 0.1,
             $"Transitive coupled ({score:F1}) should be <10% of clean ({cleanScore:F1})");
     }
@@ -1649,7 +1644,7 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     public void CalculateScore_AllPenaltiesStack_NearZero()
     {
         // Class with coupled self-verdict + base type + unmockable interface + concrete dep
-        var score = TestableTargetsTool.CalculateScore(100, "high", 2, 1, 0, 0, 0,
+        var score = TestableTargetsTool.CalculateScore(100, 0.85, 2, 1, 0, 0, 0,
             concreteParamCount: 1, coupledParamCount: 1,
             selfVerdict: "coupled", unmockableInterfaceCount: 1, baseTypeCoupled: true);
 
@@ -1664,8 +1659,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         // With linear base, 200-line class was 10x a 20-line class (200/20).
         // With log-scale, 200 → ~77.2, 20 → ~43.4 → ratio ~1.78x (much closer)
-        var smallScore = TestableTargetsTool.CalculateScore(20, "high", 0, 0, 0, 0, 0);
-        var largeScore = TestableTargetsTool.CalculateScore(200, "high", 0, 0, 0, 0, 0);
+        var smallScore = TestableTargetsTool.CalculateScore(20, 0.85, 0, 0, 0, 0, 0);
+        var largeScore = TestableTargetsTool.CalculateScore(200, 0.85, 0, 0, 0, 0, 0);
 
         var ratio = largeScore / smallScore;
         Assert.InRange(ratio, 1.5, 2.2); // compressed from 10x to ~1.8x
@@ -1675,9 +1670,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     public void CalculateScore_LogScale_PureSmallClassBeatsLargeCoupled()
     {
         // The core fix: a 30-line pure class should beat a 200-line coupled class
-        var pureSmall = TestableTargetsTool.CalculateScore(30, "high", 2, 2, 2, 0, 0,
+        var pureSmall = TestableTargetsTool.CalculateScore(30, 0.85, 2, 2, 2, 0, 0,
             totalLines: 100); // sweet-spot, all-interface deps, has recipes
-        var largeCoupled = TestableTargetsTool.CalculateScore(200, "high", 3, 1, 0, 0, 0,
+        var largeCoupled = TestableTargetsTool.CalculateScore(200, 0.85, 3, 1, 0, 0, 0,
             concreteParamCount: 2, totalLines: 300); // 2 concrete deps, no recipes
 
         Assert.True(pureSmall > largeCoupled,
@@ -1692,8 +1687,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [InlineData(2, 0.20, 0.30)]
     public void CalculateScore_ExternalDeps_AppliesExpectedPenalty(int externalDepCount, double expectedMinRatio, double expectedMaxRatio)
     {
-        var clean = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0);
-        var penalized = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, 0, 0,
+        var clean = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0);
+        var penalized = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, 0, 0,
             externalDepCount: externalDepCount);
 
         Assert.InRange(penalized / clean, expectedMinRatio, expectedMaxRatio);
@@ -1806,8 +1801,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [InlineData(0, 30, 0.0, 0.015)]  // 1/31 * 0.3 ≈ 0.0097x
     public void CalculateScore_HeavilyTested_CliffPenalty(int baselineTestCount, int targetTestCount, double expectedMinRatio, double expectedMaxRatio)
     {
-        var baseline = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, baselineTestCount, 0);
-        var target = TestableTargetsTool.CalculateScore(100, "high", 0, 0, 0, targetTestCount, 0);
+        var baseline = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, baselineTestCount, 0);
+        var target = TestableTargetsTool.CalculateScore(100, 0.85, 0, 0, 0, targetTestCount, 0);
 
         Assert.InRange(target / baseline, expectedMinRatio, expectedMaxRatio);
     }
@@ -1849,8 +1844,8 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     [Fact]
     public void CalculateScore_HasTestFile_AppliesOnePointFiveMultiplier()
     {
-        var without = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, hasTestFile: false);
-        var with = TestableTargetsTool.CalculateScore(50, "high", 0, 0, 0, 0, 0, hasTestFile: true);
+        var without = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, hasTestFile: false);
+        var with = TestableTargetsTool.CalculateScore(50, 0.85, 0, 0, 0, 0, 0, hasTestFile: true);
 
         Assert.True(with > without);
         Assert.InRange(with / without, 1.49, 1.51);
@@ -1940,9 +1935,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
         // Seed a class that will score very low (coupled assessment)
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Tiny", Namespace = "App", File = "Tiny.cs",
-            TotalLines = 10, CoveredLines = 8, UncoveredLines = 2,
-            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 5, UncoveredLines = 2 }]
+            ClassName = "App.Tiny", FilePath = "Tiny.cs",
+            LinesTotal = 10, LinesCovered = 8,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = [1, 2], TotalLines = 5 }]
         });
         SeedTypeRegistry(new TypeRecord { Name = "Tiny", Namespace = "App" });
 
@@ -1959,9 +1954,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Foo", Namespace = "App", File = "Foo.cs",
-            TotalLines = 100, CoveredLines = 50, UncoveredLines = 50,
-            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 50, UncoveredLines = 50 }]
+            ClassName = "App.Foo", FilePath = "Foo.cs",
+            LinesTotal = 100, LinesCovered = 50,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = Enumerable.Range(1, 50).ToArray(), TotalLines = 50 }]
         });
         SeedTypeRegistry(new TypeRecord { Name = "Foo", Namespace = "App" });
 
@@ -2010,9 +2005,9 @@ public sealed class TestableTargetsToolTests : ToolTestBase
     {
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "BigClass", Namespace = "App", File = "BigClass.cs",
-            TotalLines = 200, CoveredLines = 50, UncoveredLines = 150,
-            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 150, UncoveredLines = 150 }]
+            ClassName = "App.BigClass", FilePath = "BigClass.cs",
+            LinesTotal = 200, LinesCovered = 50,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = Enumerable.Range(1, 150).ToArray(), TotalLines = 150 }]
         });
         SeedTypeRegistry(new TypeRecord
         {

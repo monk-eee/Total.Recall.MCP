@@ -57,7 +57,7 @@ public static class CoverageGapsTool
 
         IEnumerable<CoverageGap> filtered = all;
         if (skipUntestable)
-            filtered = all.Where(g => string.IsNullOrEmpty(g.SkipReason));
+            filtered = all.Where(g => g.TestabilityScore is null or >= 0.3);
 
         var scored = filtered.Select(g => new
         {
@@ -67,7 +67,7 @@ public static class CoverageGapsTool
 
         var ordered = sortBy.ToLowerInvariant() switch
         {
-            "uncovered" => scored.OrderByDescending(x => x.gap.UncoveredLines),
+            "uncovered" => scored.OrderByDescending(x => x.gap.UncoveredLineCount),
             "coverage" => scored.OrderBy(x => x.gap.CoveragePercent),
             _ => scored.OrderByDescending(x => x.roiScore)
         };
@@ -78,29 +78,30 @@ public static class CoverageGapsTool
         {
             var summaryResults = results.Select(x => new
             {
-                x.gap.Class,
-                x.gap.Namespace,
-                x.gap.UncoveredLines,
+                className = x.gap.ClassName,
+                x.gap.LinesTotal,
+                x.gap.LinesCovered,
+                uncoveredLineCount = x.gap.UncoveredLineCount,
                 x.gap.CoveragePercent,
-                x.gap.ExistingTestCount,
-                RoiScore = Math.Round(x.roiScore, 1)
+                x.gap.ExistingTests,
+                roiScore = Math.Round(x.roiScore, 1)
             }).ToList();
             return JsonSerializer.Serialize(summaryResults, SharedJsonOptions.CamelCaseIndented);
         }
 
         var detailedResults = results.Select(x => new
         {
-            x.gap.Class,
-            x.gap.Namespace,
-            x.gap.File,
-            x.gap.TotalLines,
-            x.gap.CoveredLines,
-            x.gap.UncoveredLines,
+            x.gap.SchemaVersion,
+            x.gap.ClassName,
+            x.gap.FilePath,
+            x.gap.LinesTotal,
+            x.gap.LinesCovered,
+            uncoveredLineCount = x.gap.UncoveredLineCount,
             x.gap.CoveragePercent,
             x.gap.UncoveredMethods,
-            x.gap.ExistingTestCount,
-            x.gap.Testability,
-            RoiScore = Math.Round(x.roiScore, 1)
+            x.gap.ExistingTests,
+            x.gap.TestabilityScore,
+            roiScore = Math.Round(x.roiScore, 1)
         }).ToList();
 
         return JsonSerializer.Serialize(detailedResults, SharedJsonOptions.CamelCaseIndented);
@@ -108,19 +109,12 @@ public static class CoverageGapsTool
 
 
     /// <summary>
-    /// ROI = uncoveredLines * testabilityMultiplier / (1 + existingTestCount).
-    /// Higher score = more value from writing tests for this class.
+    /// ROI = uncoveredLineCount * testabilityScore / (1 + existingTests).
+    /// Null testabilityScore defaults to 0.5 (neutral baseline). Higher = better target.
     /// </summary>
     private static double CalculateRoi(CoverageGap gap)
     {
-        var testabilityMultiplier = (gap.Testability?.ToLowerInvariant()) switch
-        {
-            "high" => 1.0,
-            "medium" => 0.7,
-            "low" => 0.3,
-            _ => 0.5 // unknown
-        };
-
-        return gap.UncoveredLines * testabilityMultiplier / (1 + gap.ExistingTestCount);
+        var testability = gap.TestabilityScore ?? 0.5;
+        return gap.UncoveredLineCount * testability / (1 + (gap.ExistingTests ?? 0));
     }
 }

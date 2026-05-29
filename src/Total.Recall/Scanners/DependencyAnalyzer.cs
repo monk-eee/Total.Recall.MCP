@@ -30,11 +30,11 @@ public static class DependencyAnalyzer
             .GroupBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-        // Load coverage data if available (for TotalLines metric)
+        // Load coverage data if available (key by short class name; type registry uses short name).
         var coverageStore = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(dataDir));
         var coverageMap = coverageStore.HasData()
             ? coverageStore.LoadAll()
-                .GroupBy(c => c.Class, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(c => c.ShortName, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, CoverageGap>(StringComparer.OrdinalIgnoreCase);
 
@@ -195,7 +195,7 @@ public static class DependencyAnalyzer
             var inheritanceDepth = ComputeInheritanceDepth(type, typeMap);
 
             // Total lines from coverage
-            var totalLines = coverageMap.TryGetValue(type.Name, out var gap) ? gap.TotalLines : 0;
+            var totalLines = coverageMap.TryGetValue(type.Name, out var gap) ? gap.LinesTotal : 0;
 
             var m = new ClassMetrics
             {

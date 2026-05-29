@@ -89,8 +89,8 @@ public static class RefreshCoverageTool
         var beforeGaps = stores.CoverageGaps.HasData()
             ? stores.CoverageGaps.LoadAll()
             : [];
-        var beforeTotalLines = beforeGaps.Sum(g => g.TotalLines);
-        var beforeCoveredLines = beforeGaps.Sum(g => g.CoveredLines);
+        var beforeTotalLines = beforeGaps.Sum(g => g.LinesTotal);
+        var beforeCoveredLines = beforeGaps.Sum(g => g.LinesCovered);
         var beforeClassCount = beforeGaps.Count;
 
         // Re-parse coverage
@@ -113,8 +113,8 @@ public static class RefreshCoverageTool
 
         // Force cache invalidation by reloading
         var afterGaps = stores.CoverageGaps.LoadAll();
-        var afterTotalLines = afterGaps.Sum(g => g.TotalLines);
-        var afterCoveredLines = afterGaps.Sum(g => g.CoveredLines);
+        var afterTotalLines = afterGaps.Sum(g => g.LinesTotal);
+        var afterCoveredLines = afterGaps.Sum(g => g.LinesCovered);
 
         var beforeRate = beforeTotalLines > 0 ? Math.Round(100.0 * beforeCoveredLines / beforeTotalLines, 2) : 0;
         var afterRate = afterTotalLines > 0 ? Math.Round(100.0 * afterCoveredLines / afterTotalLines, 2) : 0;
@@ -122,25 +122,25 @@ public static class RefreshCoverageTool
 
         // Find newly covered classes (were uncovered, now have coverage)
         var newlyCovered = new List<string>();
-        var beforeByClass = beforeGaps.ToDictionary(g => g.Class, g => g, StringComparer.OrdinalIgnoreCase);
+        var beforeByClass = beforeGaps.ToDictionary(g => g.ClassName, g => g, StringComparer.OrdinalIgnoreCase);
         foreach (var gap in afterGaps)
         {
-            if (beforeByClass.TryGetValue(gap.Class, out var before))
+            if (beforeByClass.TryGetValue(gap.ClassName, out var before))
             {
                 if (before.CoveragePercent < 1 && gap.CoveragePercent >= 1)
-                    newlyCovered.Add(gap.Class);
+                    newlyCovered.Add(gap.ClassName);
             }
         }
 
         // Top 5 classes with biggest coverage improvement
         var improvements = afterGaps
-            .Where(g => beforeByClass.ContainsKey(g.Class))
+            .Where(g => beforeByClass.ContainsKey(g.ClassName))
             .Select(g => new
             {
-                g.Class,
-                before = beforeByClass[g.Class].CoveragePercent,
+                className = g.ClassName,
+                before = beforeByClass[g.ClassName].CoveragePercent,
                 after = g.CoveragePercent,
-                delta = g.CoveragePercent - beforeByClass[g.Class].CoveragePercent
+                delta = g.CoveragePercent - beforeByClass[g.ClassName].CoveragePercent
             })
             .Where(x => x.delta > 0)
             .OrderByDescending(x => x.delta)
@@ -183,7 +183,7 @@ public static class RefreshCoverageTool
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, TypeRecord>(StringComparer.OrdinalIgnoreCase);
 
-        // Build test inventory map
+        // Build test inventory map (keyed by short name; inventory predates FQN coverage records)
         var testMap = stores.TestInventory.HasData()
             ? stores.TestInventory.LoadAll()
                 .GroupBy(t => t.Class, StringComparer.OrdinalIgnoreCase)
@@ -193,33 +193,19 @@ public static class RefreshCoverageTool
         var enrichedCount = 0;
         foreach (var gap in gaps)
         {
-            if (testMap.TryGetValue(gap.Class, out var testEntry))
+            if (testMap.TryGetValue(gap.ShortName, out var testEntry))
             {
-                gap.ExistingTestCount = testEntry.TestCount;
+                gap.ExistingTests = testEntry.TestCount;
                 enrichedCount++;
             }
 
-            if (typeMap.TryGetValue(gap.Class, out var typeRecord))
+            if (typeMap.TryGetValue(gap.ShortName, out var typeRecord))
             {
-                gap.Testability = ClassifyTestability(typeRecord);
+                gap.TestabilityScore = TestabilityClassifier.Score(typeRecord);
             }
         }
 
         stores.CoverageGaps.WriteAll(gaps);
         return enrichedCount;
-    }
-
-    private static string ClassifyTestability(TypeRecord type)
-    {
-        if (type.IsAbstract || type.IsInterface)
-            return "low";
-        if (type.IsStatic)
-            return "medium";
-        var maxCtorParams = type.Constructors.Count > 0
-            ? type.Constructors.Max(c => c.Params.Count)
-            : 0;
-        if (maxCtorParams <= 3) return "high";
-        if (maxCtorParams <= 6) return "medium";
-        return "low";
     }
 }

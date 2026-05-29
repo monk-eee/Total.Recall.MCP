@@ -22,23 +22,20 @@ public sealed class StubClassesToolTests : ToolTestBase
             uncoveredMethods.Add(new UncoveredMethod
             {
                 Name = name,
-                StartLine = line,
-                EndLine = line + lines - 1,
-                UncoveredLines = lines
+                UncoveredLines = Enumerable.Range(line, lines).ToArray(),
+                TotalLines = lines
             });
             line += lines + 2;
         }
 
         return new CoverageGap
         {
-            Class = className,
-            Namespace = "App",
-            File = $"src/{className}.cs",
-            TotalLines = totalLines,
-            CoveredLines = 0,
-            UncoveredLines = uncoveredLines,
+            ClassName = $"App.{className}",
+            FilePath = $"src/{className}.cs",
+            LinesTotal = totalLines,
+            LinesCovered = 0,
             CoveragePercent = 0.0,
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods = uncoveredMethods
         };
     }
@@ -56,23 +53,20 @@ public sealed class StubClassesToolTests : ToolTestBase
             uncoveredMethods.Add(new UncoveredMethod
             {
                 Name = name,
-                StartLine = line,
-                EndLine = line + lines - 1,
-                UncoveredLines = lines
+                UncoveredLines = Enumerable.Range(line, lines).ToArray(),
+                TotalLines = lines
             });
             line += lines + 2;
         }
 
         return new CoverageGap
         {
-            Class = className,
-            Namespace = "App",
-            File = $"src/{className}.cs",
-            TotalLines = totalLines,
-            CoveredLines = totalLines - uncoveredLines,
-            UncoveredLines = uncoveredLines,
+            ClassName = $"App.{className}",
+            FilePath = $"src/{className}.cs",
+            LinesTotal = totalLines,
+            LinesCovered = totalLines - uncoveredLines,
             CoveragePercent = Math.Round(100.0 * (totalLines - uncoveredLines) / totalLines, 1),
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods = uncoveredMethods
         };
     }
@@ -237,7 +231,7 @@ public sealed class StubClassesToolTests : ToolTestBase
     public void GetStubClasses_ExcludesSkipReasonClasses()
     {
         var gap = MakeZeroCoverageGap("SkippedByReason", 30);
-        gap.SkipReason = "Cannot test";
+        gap.TestabilityScore = 0.1;
         SeedCoverageGaps(gap);
 
         var result = StubClassesTool.GetStubClasses();
@@ -250,7 +244,7 @@ public sealed class StubClassesToolTests : ToolTestBase
     public void GetStubClasses_ExcludesZeroUncoveredLines()
     {
         var gap = MakeZeroCoverageGap("FullyCovered", 0);
-        gap.UncoveredLines = 0;
+        gap.LinesTotal = gap.LinesCovered;
         SeedCoverageGaps(gap);
 
         var result = StubClassesTool.GetStubClasses();
@@ -670,10 +664,10 @@ public sealed class StubClassesToolTests : ToolTestBase
     public void GetStubClasses_UsesGapExistingTestCount_WhenNoInventory()
     {
         var gap = MakeZeroCoverageGap("FallbackClass", 30);
-        gap.ExistingTestCount = 2;
+        gap.ExistingTests = 2;
         SeedCoverageGaps(gap);
 
-        // No test inventory seeded — should fall back to gap.ExistingTestCount
+        // No test inventory seeded — should fall back to gap.ExistingTests
         // With includeWithTests=false (default), this class should be excluded
         var result = StubClassesTool.GetStubClasses();
         Assert.Contains("No stub classes found", result);

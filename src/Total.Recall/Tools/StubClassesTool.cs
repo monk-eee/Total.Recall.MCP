@@ -70,18 +70,18 @@ public static class StubClassesTool
 
         foreach (var gap in gaps)
         {
-            if (gap.UncoveredLines == 0)
+            if (gap.UncoveredLineCount == 0)
                 continue;
 
             // Only include classes at or below the coverage threshold
             if (gap.CoveragePercent > maxCoveragePercent)
                 continue;
 
-            // Skip explicitly untestable classes
-            if (!string.IsNullOrEmpty(gap.SkipReason))
+            // Skip very low-testability classes (formerly the SkipReason marker).
+            if (gap.TestabilityScore is < 0.3)
                 continue;
 
-            var className = gap.Class;
+            var className = gap.ShortName;
             var bareName = TestableTargetsTool.NormalizeName(className);
 
             // Skip assessed-skip/coupled/deferred classes
@@ -123,7 +123,7 @@ public static class StubClassesTool
 
             var hasTestFile = testEntry?.TestFiles is { Count: > 0 };
             var testFiles = testEntry?.TestFiles ?? [];
-            var existingTestCount = testEntry?.TestCount ?? gap.ExistingTestCount;
+            var existingTestCount = testEntry?.TestCount ?? gap.ExistingTests ?? 0;
 
             // Filter by test existence
             if (!includeWithTests && existingTestCount > 0)
@@ -142,18 +142,18 @@ public static class StubClassesTool
 
             var category = ClassifyStub(typeRecord, gap, realMethods, boilerplateMethods);
 
-            var score = CalculateStubScore(gap.UncoveredLines, minCtorParams, allParamsMockable,
-                hasTestFile, existingTestCount, realMethods, gap.TotalLines);
-            var reason = BuildStubReason(gap.UncoveredLines, minCtorParams, allParamsMockable,
-                hasTestFile, existingTestCount, category, realMethods, gap.TotalLines);
+            var score = CalculateStubScore(gap.UncoveredLineCount, minCtorParams, allParamsMockable,
+                hasTestFile, existingTestCount, realMethods, gap.LinesTotal);
+            var reason = BuildStubReason(gap.UncoveredLineCount, minCtorParams, allParamsMockable,
+                hasTestFile, existingTestCount, category, realMethods, gap.LinesTotal);
 
             targets.Add(new StubClassTarget
             {
-                Class = gap.Class,
-                Namespace = gap.Namespace,
-                File = gap.File,
-                TotalLines = gap.TotalLines,
-                UncoveredLines = gap.UncoveredLines,
+                Class = gap.ShortName,
+                Namespace = gap.NamespacePart,
+                File = gap.FilePath,
+                TotalLines = gap.LinesTotal,
+                UncoveredLines = gap.UncoveredLineCount,
                 CoveragePercent = Math.Round(gap.CoveragePercent, 1),
                 RealMethodCount = realMethods,
                 BoilerplateMethodCount = boilerplateMethods,

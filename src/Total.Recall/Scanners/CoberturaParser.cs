@@ -6,6 +6,8 @@ namespace Total.Recall.Scanners;
 
 /// <summary>
 /// Parses a Cobertura XML coverage report and writes coverage-gaps.jsonl.
+/// Emits the canonical schema documented in docs/SCANNER_SCHEMA.md so the .NET
+/// MCP server can consume JSONL from any language's scanner.
 /// </summary>
 public static class CoberturaParser
 {
@@ -33,26 +35,25 @@ public static class CoberturaParser
             }
         }
 
-        // Deduplicate by namespace + class name (Cobertura sometimes duplicates partial classes).
-        // Using namespace-qualified key prevents merging classes with the same short name
-        // from different namespaces (e.g. Item in Models vs Catalog).
+        // Deduplicate by FQN. Cobertura sometimes emits one <class> entry per partial-class
+        // file fragment, and the merged record needs both line totals and uncovered methods
+        // summed across the fragments. FQN keying keeps classes with the same short name
+        // in different namespaces (e.g. Item in Models vs Catalog) separate.
         records = records
-            .GroupBy(r => $"{r.Namespace}.{r.Class}", StringComparer.OrdinalIgnoreCase)
+            .GroupBy(r => r.ClassName, StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
                 if (g.Count() == 1) return g.First();
-                // Merge: sum lines, combine uncovered methods (partial classes in same namespace)
                 var first = g.First();
-                first.TotalLines = g.Sum(x => x.TotalLines);
-                first.CoveredLines = g.Sum(x => x.CoveredLines);
-                first.UncoveredLines = g.Sum(x => x.UncoveredLines);
-                first.CoveragePercent = first.TotalLines > 0
-                    ? Math.Round(100.0 * first.CoveredLines / first.TotalLines, 2)
+                first.LinesTotal = g.Sum(x => x.LinesTotal);
+                first.LinesCovered = g.Sum(x => x.LinesCovered);
+                first.CoveragePercent = first.LinesTotal > 0
+                    ? Math.Round(100.0 * first.LinesCovered / first.LinesTotal, 2)
                     : 0;
                 first.UncoveredMethods = g.SelectMany(x => x.UncoveredMethods).ToList();
                 return first;
             })
-            .OrderByDescending(r => r.UncoveredLines)
+            .OrderByDescending(r => r.UncoveredLineCount)
             .ToList();
 
         var store = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(dataDir));
@@ -69,37 +70,26 @@ public static class CoberturaParser
         if (string.IsNullOrEmpty(fullName))
             return null;
 
-        // Split fully qualified name into namespace + class
-        var lastDot = fullName.LastIndexOf('.');
-        var className = lastDot >= 0 ? fullName[(lastDot + 1)..] : fullName;
-        var ns = lastDot >= 0 ? fullName[..lastDot] : "";
-
-        // Parse lines
         var lines = cls.Descendants("line").ToList();
-        var totalLines = lines.Count;
-        var coveredLines = lines.Count(l => int.Parse(l.Attribute("hits")?.Value ?? "0") > 0);
-        var uncoveredLines = totalLines - coveredLines;
+        var linesTotal = lines.Count;
+        var linesCovered = lines.Count(l => int.Parse(l.Attribute("hits")?.Value ?? "0") > 0);
 
-        if (totalLines == 0)
+        if (linesTotal == 0)
             return null;
 
-        var coveragePercent = Math.Round(100.0 * coveredLines / totalLines, 2);
+        var coveragePercent = Math.Round(100.0 * linesCovered / linesTotal, 2);
 
-        // Parse uncovered methods
         var uncoveredMethods = ParseUncoveredMethods(cls);
 
         return new CoverageGap
         {
-            Class = className,
-            Namespace = ns,
-            File = fileName ?? "",
-            TotalLines = totalLines,
-            CoveredLines = coveredLines,
-            UncoveredLines = uncoveredLines,
+            ClassName = fullName,
+            FilePath = fileName ?? "",
+            LinesTotal = linesTotal,
+            LinesCovered = linesCovered,
             CoveragePercent = coveragePercent,
             UncoveredMethods = uncoveredMethods,
-            ExistingTestCount = 0, // Will be enriched later
-            Testability = "unknown"
+            // ExistingTests / TestabilityScore stay null until enrichment runs.
         };
     }
 
@@ -119,14 +109,11 @@ public static class CoberturaParser
             var uncoveredLineNums = methodLines
                 .Where(l => int.Parse(l.Attribute("hits")?.Value ?? "0") == 0)
                 .Select(l => int.Parse(l.Attribute("number")?.Value ?? "0"))
-                .ToList();
+                .OrderBy(n => n)
+                .ToArray();
 
-            if (uncoveredLineNums.Count == 0)
+            if (uncoveredLineNums.Length == 0)
                 continue;
-
-            var allLineNums = methodLines
-                .Select(l => int.Parse(l.Attribute("number")?.Value ?? "0"))
-                .ToList();
 
             var signature = method.Attribute("signature")?.Value ?? "";
 
@@ -134,9 +121,8 @@ public static class CoberturaParser
             {
                 Name = methodName,
                 Signature = signature,
-                StartLine = allLineNums.Min(),
-                EndLine = allLineNums.Max(),
-                UncoveredLines = uncoveredLineNums.Count
+                UncoveredLines = uncoveredLineNums,
+                TotalLines = methodLines.Count,
             });
         }
 

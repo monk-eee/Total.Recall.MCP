@@ -103,8 +103,8 @@ public static class ResolveTypeTool
         {
             var coverageData = stores.CoverageGaps.LoadAll();
             var classesInFile = coverageData
-                .Where(c => c.File?.Contains(filePath, StringComparison.OrdinalIgnoreCase) == true)
-                .Select(c => c.Class)
+                .Where(c => c.FilePath?.Contains(filePath, StringComparison.OrdinalIgnoreCase) == true)
+                .Select(c => c.ShortName)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             matches = matches.Where(t => classesInFile.Contains(t.Name)).ToList();

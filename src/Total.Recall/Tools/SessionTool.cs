@@ -740,8 +740,8 @@ public static class SessionTool
             return 0;
 
         var gaps = stores.CoverageGaps.LoadAll();
-        var totalLines = gaps.Sum(g => g.TotalLines);
-        var coveredLines = gaps.Sum(g => g.CoveredLines);
+        var totalLines = gaps.Sum(g => g.LinesTotal);
+        var coveredLines = gaps.Sum(g => g.LinesCovered);
 
         if (totalLines == 0)
             return 0;

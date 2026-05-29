@@ -39,7 +39,7 @@ internal static class FullScaffoldGenerator
 
         var coverageGap = stores.CoverageGaps.HasData()
             ? stores.CoverageGaps.LoadAll().FirstOrDefault(g =>
-                g.Class.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase))
+                g.ShortName.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase))
             : null;
 
         var mockRecipes = stores.MockRecipes.HasData()
@@ -273,7 +273,7 @@ internal static class FullScaffoldGenerator
                 sb.AppendLine("        // Assert");
                 // Smart assertion hints based on method name patterns
                 var hint = AssertionRules.GetAssertionHint(method.Name);
-                sb.AppendLine($"        // {hint} (lines {method.StartLine}-{method.EndLine}, {method.UncoveredLines} uncovered)");
+                sb.AppendLine($"        // {hint} (uncovered: lines {method.FirstUncoveredLine}-{method.LastUncoveredLine}, {method.UncoveredLineCount} of {method.TotalLines})");
                 sb.AppendLine("    }");
 
                 // Edge case stubs for methods with recognizable parameter patterns

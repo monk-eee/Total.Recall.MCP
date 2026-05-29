@@ -20,9 +20,9 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_ReturnsTopNByUncoveredLines()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "Small", UncoveredLines = 5 },
-            new CoverageGap { Class = "Big", UncoveredLines = 50 },
-            new CoverageGap { Class = "Medium", UncoveredLines = 20 }
+            new CoverageGap { ClassName = "Small", LinesTotal = 5, LinesCovered = 0 },
+            new CoverageGap { ClassName = "Big", LinesTotal = 50, LinesCovered = 0 },
+            new CoverageGap { ClassName = "Medium", LinesTotal = 20, LinesCovered = 0 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(top: 2);
@@ -36,8 +36,8 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_SkipUntestable_FiltersOutSkippedClasses()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "Testable", UncoveredLines = 30, SkipReason = null },
-            new CoverageGap { Class = "Untestable", UncoveredLines = 100, SkipReason = "Creates HttpClient internally" }
+            new CoverageGap { ClassName = "Testable", LinesTotal = 30, LinesCovered = 0 },
+            new CoverageGap { ClassName = "Untestable", LinesTotal = 100, LinesCovered = 0, TestabilityScore = 0.1 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(skipUntestable: true);
@@ -50,8 +50,8 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_SkipUntestableFalse_IncludesSkippedClasses()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "Testable", UncoveredLines = 30, SkipReason = null },
-            new CoverageGap { Class = "Untestable", UncoveredLines = 100, SkipReason = "Creates HttpClient internally" }
+            new CoverageGap { ClassName = "Testable", LinesTotal = 30, LinesCovered = 0 },
+            new CoverageGap { ClassName = "Untestable", LinesTotal = 100, LinesCovered = 0, TestabilityScore = 0.1 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(skipUntestable: false);
@@ -64,7 +64,7 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_DefaultTop_ReturnsTwenty()
     {
         var records = Enumerable.Range(1, 25)
-            .Select(i => new CoverageGap { Class = $"Class{i}", UncoveredLines = i })
+            .Select(i => new CoverageGap { ClassName = $"Class{i}", LinesTotal = i, LinesCovered = 0 })
             .ToArray();
         SeedCoverageGaps(records);
 
@@ -82,9 +82,9 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_SortByUncovered_OrdersByUncoveredLinesDescending()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "Small", UncoveredLines = 5, Testability = "high" },
-            new CoverageGap { Class = "Big", UncoveredLines = 50, Testability = "high" },
-            new CoverageGap { Class = "Medium", UncoveredLines = 20, Testability = "high" }
+            new CoverageGap { ClassName = "Small", LinesTotal = 5, LinesCovered = 0, TestabilityScore = 0.85 },
+            new CoverageGap { ClassName = "Big", LinesTotal = 50, LinesCovered = 0, TestabilityScore = 0.85 },
+            new CoverageGap { ClassName = "Medium", LinesTotal = 20, LinesCovered = 0, TestabilityScore = 0.85 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(sortBy: "uncovered");
@@ -101,9 +101,9 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_SortByCoverage_OrdersByCoveragePercentAscending()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "MostCovered", CoveragePercent = 90, UncoveredLines = 5 },
-            new CoverageGap { Class = "LeastCovered", CoveragePercent = 10, UncoveredLines = 50 },
-            new CoverageGap { Class = "HalfCovered", CoveragePercent = 50, UncoveredLines = 20 }
+            new CoverageGap { ClassName = "MostCovered", CoveragePercent = 90, LinesTotal = 50, LinesCovered = 45 },
+            new CoverageGap { ClassName = "LeastCovered", CoveragePercent = 10, LinesTotal = 100, LinesCovered = 50 },
+            new CoverageGap { ClassName = "HalfCovered", CoveragePercent = 50, LinesTotal = 40, LinesCovered = 20 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(sortBy: "coverage");
@@ -120,37 +120,37 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_SortByRoi_DefaultSortUsesRoiScore()
     {
         SeedCoverageGaps(
-            // ROI = 10 * 1.0 / (1+0) = 10.0
-            new CoverageGap { Class = "HighRoi", UncoveredLines = 10, Testability = "high", ExistingTestCount = 0 },
+            // ROI = 10 * 0.85 / (1+0) = 8.5
+            new CoverageGap { ClassName = "HighRoi", LinesTotal = 10, LinesCovered = 0, TestabilityScore = 0.85, ExistingTests = 0 },
             // ROI = 100 * 0.3 / (1+0) = 30.0
-            new CoverageGap { Class = "LowTestability", UncoveredLines = 100, Testability = "low", ExistingTestCount = 0 },
-            // ROI = 50 * 0.7 / (1+5) = 5.83
-            new CoverageGap { Class = "ManyTests", UncoveredLines = 50, Testability = "medium", ExistingTestCount = 5 }
+            new CoverageGap { ClassName = "LowTestability", LinesTotal = 100, LinesCovered = 0, TestabilityScore = 0.3, ExistingTests = 0 },
+            // ROI = 50 * 0.55 / (1+5) = 4.58
+            new CoverageGap { ClassName = "ManyTests", LinesTotal = 50, LinesCovered = 0, TestabilityScore = 0.55, ExistingTests = 5 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(sortBy: "roi");
 
-        // LowTestability (30.0) > HighRoi (10.0) > ManyTests (5.83)
+        // LowTestability (30.0) > HighRoi (8.5) > ManyTests (4.58)
         var lowTestIdx = result.IndexOf("LowTestability");
         var highRoiIdx = result.IndexOf("HighRoi");
         var manyTestsIdx = result.IndexOf("ManyTests");
-        Assert.True(lowTestIdx < highRoiIdx, "LowTestability (ROI=30) should come before HighRoi (ROI=10)");
-        Assert.True(highRoiIdx < manyTestsIdx, "HighRoi (ROI=10) should come before ManyTests (ROI=5.83)");
+        Assert.True(lowTestIdx < highRoiIdx, "LowTestability (ROI=30) should come before HighRoi (ROI=8.5)");
+        Assert.True(highRoiIdx < manyTestsIdx, "HighRoi (ROI=8.5) should come before ManyTests (ROI=4.58)");
     }
 
     [Fact]
     public void GetCoverageGaps_RoiScore_UnknownTestability_Uses05Multiplier()
     {
         SeedCoverageGaps(
-            // ROI = 20 * 0.5 / (1+0) = 10.0 (unknown testability)
-            new CoverageGap { Class = "Unknown", UncoveredLines = 20, ExistingTestCount = 0 },
-            // ROI = 20 * 1.0 / (1+0) = 20.0 (high testability)
-            new CoverageGap { Class = "High", UncoveredLines = 20, Testability = "high", ExistingTestCount = 0 }
+            // ROI = 20 * 0.5 / (1+0) = 10.0 (null TestabilityScore defaults to 0.5)
+            new CoverageGap { ClassName = "Unknown", LinesTotal = 20, LinesCovered = 0, ExistingTests = 0 },
+            // ROI = 20 * 0.85 / (1+0) = 17.0 (high testability)
+            new CoverageGap { ClassName = "High", LinesTotal = 20, LinesCovered = 0, TestabilityScore = 0.85, ExistingTests = 0 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(sortBy: "roi");
 
-        // High (20.0) should come before Unknown (10.0)
+        // High (17.0) should come before Unknown (10.0)
         var highIdx = result.IndexOf("High");
         var unknownIdx = result.IndexOf("Unknown");
         Assert.True(highIdx < unknownIdx, "High testability should rank higher than unknown");
@@ -160,7 +160,7 @@ public sealed class CoverageGapsToolTests : ToolTestBase
     public void GetCoverageGaps_ResultIncludesRoiScoreField()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "TestClass", UncoveredLines = 20, Testability = "high", ExistingTestCount = 0 }
+            new CoverageGap { ClassName = "TestClass", LinesTotal = 20, LinesCovered = 0, TestabilityScore = 0.85, ExistingTests = 0 }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps();
@@ -186,34 +186,32 @@ public sealed class CoverageGapsToolTests : ToolTestBase
         SeedCoverageGaps(
             new CoverageGap
             {
-                Class = "MyService",
-                Namespace = "App.Services",
-                UncoveredLines = 30,
+                ClassName = "App.Services.MyService",
+                LinesTotal = 100,
+                LinesCovered = 70,
                 CoveragePercent = 60.5,
-                ExistingTestCount = 2,
-                Testability = "high",
-                File = "MyService.cs",
-                TotalLines = 100,
-                CoveredLines = 70,
-                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = 30, StartLine = 10, EndLine = 40 }]
+                ExistingTests = 2,
+                TestabilityScore = 0.85,
+                FilePath = "MyService.cs",
+                UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 31).ToArray(), TotalLines = 31 }]
             }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(summaryOnly: true);
 
-        // Should contain summary fields
-        Assert.Contains("\"class\":", result);
-        Assert.Contains("\"namespace\":", result);
-        Assert.Contains("\"uncoveredLines\":", result);
+        // Should contain summary fields (new canonical schema)
+        Assert.Contains("\"className\":", result);
+        Assert.Contains("\"linesTotal\":", result);
+        Assert.Contains("\"linesCovered\":", result);
+        Assert.Contains("\"uncoveredLineCount\":", result);
         Assert.Contains("\"coveragePercent\":", result);
-        Assert.Contains("\"existingTestCount\":", result);
+        Assert.Contains("\"existingTests\":", result);
         Assert.Contains("\"roiScore\":", result);
 
-        // Should NOT contain detailed fields
+        // Should NOT contain detailed-only fields
         Assert.DoesNotContain("\"uncoveredMethods\":", result);
-        Assert.DoesNotContain("\"file\":", result);
-        Assert.DoesNotContain("\"totalLines\":", result);
-        Assert.DoesNotContain("\"testability\":", result);
+        Assert.DoesNotContain("\"filePath\":", result);
+        Assert.DoesNotContain("\"testabilityScore\":", result);
     }
 
     [Fact]
@@ -222,22 +220,20 @@ public sealed class CoverageGapsToolTests : ToolTestBase
         SeedCoverageGaps(
             new CoverageGap
             {
-                Class = "DetailService",
-                Namespace = "App",
-                UncoveredLines = 20,
-                File = "DetailService.cs",
-                TotalLines = 50,
-                CoveredLines = 30,
-                Testability = "high",
-                UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = 20, StartLine = 5, EndLine = 25 }]
+                ClassName = "App.DetailService",
+                LinesTotal = 50,
+                LinesCovered = 30,
+                FilePath = "DetailService.cs",
+                TestabilityScore = 0.85,
+                UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = Enumerable.Range(5, 21).ToArray(), TotalLines = 21 }]
             }
         );
 
         var result = CoverageGapsTool.GetCoverageGaps(summaryOnly: false);
 
-        // Should contain detailed fields
+        // Should contain detailed fields (new canonical schema)
         Assert.Contains("\"uncoveredMethods\":", result);
-        Assert.Contains("\"file\":", result);
-        Assert.Contains("\"totalLines\":", result);
+        Assert.Contains("\"filePath\":", result);
+        Assert.Contains("\"linesTotal\":", result);
     }
 }

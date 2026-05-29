@@ -53,7 +53,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
     [Fact]
     public void GetSourceSnippet_NoSourceRoot_ReturnsConfigError()
     {
-        SeedCoverageGaps(new CoverageGap { Class = "MyClass", File = "src/MyClass.cs" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "MyClass", FilePath = "src/MyClass.cs" });
 
         var result = SourceSnippetTool.GetSourceSnippet("MyClass");
 
@@ -69,7 +69,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         StoreRegistry.Reset();
 
         var filePath = CreateSourceFile("src/Calculator.cs", "public class Calculator { public int Add(int a, int b) => a + b; }");
-        SeedCoverageGaps(new CoverageGap { Class = "Calculator", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Calculator", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("Calculator");
 
@@ -86,7 +86,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         StoreRegistry.Reset();
 
         var filePath = CreateSourceFile("src/Parser.cs", "public class Parser { public void Parse() { } }");
-        SeedCoverageGaps(new CoverageGap { Class = "Parser", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Parser", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("Parser");
 
@@ -102,7 +102,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(Path.Combine(TempDir, "does-not-exist"));
         StoreRegistry.Reset();
 
-        SeedCoverageGaps(new CoverageGap { Class = "X", File = "src/X.cs" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "X", FilePath = "src/X.cs" });
 
         var result = SourceSnippetTool.GetSourceSnippet("X");
 
@@ -130,7 +130,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(_sourceDir);
         StoreRegistry.Reset();
 
-        SeedCoverageGaps(new CoverageGap { Class = "OtherClass", File = "src/OtherClass.cs" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "OtherClass", FilePath = "src/OtherClass.cs" });
 
         var result = SourceSnippetTool.GetSourceSnippet("NonExistent");
 
@@ -146,7 +146,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         StoreRegistry.Reset();
 
         var filePath = CreateSourceFile("src/StringHelper.cs", "public class StringHelper { }");
-        SeedCoverageGaps(new CoverageGap { Class = "StringHelper", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "StringHelper", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("Helper");
 
@@ -161,7 +161,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(_sourceDir);
         StoreRegistry.Reset();
 
-        SeedCoverageGaps(new CoverageGap { Class = "NoFile", File = "" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "NoFile", FilePath = "" });
 
         var result = SourceSnippetTool.GetSourceSnippet("NoFile");
 
@@ -176,7 +176,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(_sourceDir);
         StoreRegistry.Reset();
 
-        SeedCoverageGaps(new CoverageGap { Class = "Evil", File = "../../etc/passwd" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Evil", FilePath = "../../etc/passwd" });
 
         var result = SourceSnippetTool.GetSourceSnippet("Evil");
 
@@ -191,7 +191,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         SetSourceRootEnv(_sourceDir);
         StoreRegistry.Reset();
 
-        SeedCoverageGaps(new CoverageGap { Class = "Missing", File = "src/Missing.cs" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Missing", FilePath = "src/Missing.cs" });
 
         var result = SourceSnippetTool.GetSourceSnippet("Missing");
 
@@ -208,7 +208,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
 
         var source = "line1\nline2\nline3\nline4\nline5";
         var filePath = CreateSourceFile("src/Small.cs", source);
-        SeedCoverageGaps(new CoverageGap { Class = "Small", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Small", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("Small", maxLines: 200);
         var doc = JsonDocument.Parse(result);
@@ -228,7 +228,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
 
         var lines = string.Join("\n", Enumerable.Range(1, 50).Select(i => $"// line {i}"));
         var filePath = CreateSourceFile("src/BigFile.cs", lines);
-        SeedCoverageGaps(new CoverageGap { Class = "BigFile", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "BigFile", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("BigFile", maxLines: 10);
         var doc = JsonDocument.Parse(result);
@@ -250,11 +250,11 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Methods.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Methods",
-            File = filePath,
+            ClassName = "Methods",
+            FilePath = filePath,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 20, UncoveredLines = 5 }
+                new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 4).Append(20).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -280,11 +280,11 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Partial.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Partial",
-            File = filePath,
+            ClassName = "Partial",
+            FilePath = filePath,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "ExecuteCommand", StartLine = 5, EndLine = 15, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "ExecuteCommand", UncoveredLines = Enumerable.Range(5, 7).Append(15).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -306,8 +306,8 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Fallback.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Fallback",
-            File = filePath,
+            ClassName = "Fallback",
+            FilePath = filePath,
             UncoveredMethods = []  // No methods in coverage
         });
 
@@ -330,11 +330,11 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Empty.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Empty",
-            File = filePath,
+            ClassName = "Empty",
+            FilePath = filePath,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "OtherMethod", StartLine = 1, EndLine = 5, UncoveredLines = 3 }
+                new UncoveredMethod { Name = "OtherMethod", UncoveredLines = Enumerable.Range(1, 2).Append(5).ToArray(), TotalLines = 5 }
             ]
         });
 
@@ -353,7 +353,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         StoreRegistry.Reset();
 
         var filePath = CreateSourceFile("src/Struct.cs", "public class Struct { }");
-        SeedCoverageGaps(new CoverageGap { Class = "Struct", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Struct", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("Struct");
         var doc = JsonDocument.Parse(result);
@@ -386,7 +386,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         Directory.CreateDirectory(Path.GetDirectoryName(altPath)!);
         File.WriteAllText(altPath, "file in alt-source dir");
 
-        SeedCoverageGaps(new CoverageGap { Class = "X", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "X", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("X");
 
@@ -403,7 +403,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
 
         var source = "line1\nline2\nline3";
         var filePath = CreateSourceFile("src/Numbered.cs", source);
-        SeedCoverageGaps(new CoverageGap { Class = "Numbered", File = filePath });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Numbered", FilePath = filePath });
 
         var result = SourceSnippetTool.GetSourceSnippet("Numbered");
         var doc = JsonDocument.Parse(result);
@@ -424,11 +424,11 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/NumMethod.cs", lines);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "NumMethod",
-            File = filePath,
+            ClassName = "NumMethod",
+            FilePath = filePath,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 20, UncoveredLines = 5 }
+                new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 4).Append(20).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -492,7 +492,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         File.WriteAllText(Path.Combine(TempDir, "config.json"), "NOT VALID JSON {{{{");
         StoreRegistry.Reset();
 
-        SeedCoverageGaps(new CoverageGap { Class = "MyClass", File = "src/MyClass.cs" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "MyClass", FilePath = "src/MyClass.cs" });
 
         var result = SourceSnippetTool.GetSourceSnippet("MyClass");
 
@@ -510,7 +510,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var config = new NamespaceConfig { SourceRoot = "" };
         var json = JsonSerializer.Serialize(config, SharedJsonOptions.CamelCase);
         File.WriteAllText(Path.Combine(TempDir, "config.json"), json);
-        SeedCoverageGaps(new CoverageGap { Class = "MyClass", File = "src/MyClass.cs" });
+        SeedCoverageGaps(new CoverageGap { ClassName = "MyClass", FilePath = "src/MyClass.cs" });
 
         var result = SourceSnippetTool.GetSourceSnippet("MyClass");
 
@@ -529,12 +529,12 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/LongMethod.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "LongMethod",
-            File = filePath,
+            ClassName = "LongMethod",
+            FilePath = filePath,
             UncoveredMethods =
             [
                 // Method spanning lines 10-90 (80 lines), but context adds 5 before/after → 85 lines
-                new UncoveredMethod { Name = "BigMethod", StartLine = 10, EndLine = 90, UncoveredLines = 40 }
+                new UncoveredMethod { Name = "BigMethod", UncoveredLines = Enumerable.Range(10, 39).Append(90).ToArray(), TotalLines = 81 }
             ]
         });
 
@@ -561,8 +561,8 @@ public sealed class SourceSnippetToolTests : ToolTestBase
             string.Join("\n", Enumerable.Range(1, 58).Select(i => $"// implementation line {i}")));
 
         SeedCoverageGaps(
-            new CoverageGap { Class = "PivotEntry", Namespace = "Models", File = smallFile, TotalLines = 7, UncoveredLines = 3 },
-            new CoverageGap { Class = "PivotEntry", Namespace = "Invoices", File = largeFile, TotalLines = 58, UncoveredLines = 40 }
+            new CoverageGap { ClassName = "Models.PivotEntry", FilePath = smallFile, LinesTotal = 7, LinesCovered = 4 },
+            new CoverageGap { ClassName = "Invoices.PivotEntry", FilePath = largeFile, LinesTotal = 58, LinesCovered = 18 }
         );
 
         var result = SourceSnippetTool.GetSourceSnippet("PivotEntry");
@@ -581,7 +581,7 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         StoreRegistry.Reset();
 
         var filePath = CreateSourceFile("src/Unique.cs", "public class Unique { }");
-        SeedCoverageGaps(new CoverageGap { Class = "Unique", File = filePath, TotalLines = 1, UncoveredLines = 1 });
+        SeedCoverageGaps(new CoverageGap { ClassName = "Unique", FilePath = filePath, LinesTotal = 1, LinesCovered = 0 });
 
         var result = SourceSnippetTool.GetSourceSnippet("Unique");
         var doc = JsonDocument.Parse(result);
@@ -602,8 +602,8 @@ public sealed class SourceSnippetToolTests : ToolTestBase
             string.Join("\n", Enumerable.Range(1, 30).Select(i => $"// line {i}")));
 
         SeedCoverageGaps(
-            new CoverageGap { Class = "SmallPivotEntry", Namespace = "App", File = smallFile, TotalLines = 5, UncoveredLines = 2 },
-            new CoverageGap { Class = "LargePivotEntry", Namespace = "App", File = largeFile, TotalLines = 30, UncoveredLines = 20 }
+            new CoverageGap { ClassName = "App.SmallPivotEntry", FilePath = smallFile, LinesTotal = 5, LinesCovered = 3 },
+            new CoverageGap { ClassName = "App.LargePivotEntry", FilePath = largeFile, LinesTotal = 30, LinesCovered = 10 }
         );
 
         var result = SourceSnippetTool.GetSourceSnippet("PivotEntry");
@@ -689,13 +689,13 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Worker.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Worker", File = filePath,
-            TotalLines = 6, CoveredLines = 0, UncoveredLines = 6,
+            ClassName = "Worker", FilePath = filePath,
+            LinesTotal = 6, LinesCovered = 0,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Start", StartLine = 3, EndLine = 3, UncoveredLines = 1 },
-                new UncoveredMethod { Name = "Stop", StartLine = 4, EndLine = 4, UncoveredLines = 1 },
-                new UncoveredMethod { Name = "Pause", StartLine = 5, EndLine = 5, UncoveredLines = 1 }
+                new UncoveredMethod { Name = "Start", UncoveredLines = [3], TotalLines = 1 },
+                new UncoveredMethod { Name = "Stop", UncoveredLines = [4], TotalLines = 1 },
+                new UncoveredMethod { Name = "Pause", UncoveredLines = [5], TotalLines = 1 }
             ]
         });
 
@@ -717,9 +717,9 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Calc.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Calc", File = filePath,
-            TotalLines = 1, CoveredLines = 0, UncoveredLines = 1,
-            UncoveredMethods = [new UncoveredMethod { Name = "Add", StartLine = 1, EndLine = 1, UncoveredLines = 1 }]
+            ClassName = "Calc", FilePath = filePath,
+            LinesTotal = 1, LinesCovered = 0,
+            UncoveredMethods = [new UncoveredMethod { Name = "Add", UncoveredLines = [1], TotalLines = 1 }]
         });
 
         var result = SourceSnippetTool.GetSourceSnippet("Calc", methodName: "Add,NonExistent");
@@ -741,9 +741,9 @@ public sealed class SourceSnippetToolTests : ToolTestBase
         var filePath = CreateSourceFile("src/Svc.cs", source);
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Svc", File = filePath,
-            TotalLines = 1, CoveredLines = 0, UncoveredLines = 1,
-            UncoveredMethods = [new UncoveredMethod { Name = "Run", StartLine = 1, EndLine = 1, UncoveredLines = 1 }]
+            ClassName = "Svc", FilePath = filePath,
+            LinesTotal = 1, LinesCovered = 0,
+            UncoveredMethods = [new UncoveredMethod { Name = "Run", UncoveredLines = [1], TotalLines = 1 }]
         });
 
         var result = SourceSnippetTool.GetSourceSnippet("Svc", methodName: "Run");

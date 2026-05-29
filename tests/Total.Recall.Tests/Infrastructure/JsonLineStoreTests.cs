@@ -313,18 +313,16 @@ public sealed class JsonLineStoreTests : IDisposable
         var store = new JsonLineStore<CoverageGap>(_tempFile);
         var original = new CoverageGap
         {
-            Class = "Parser",
-            Namespace = "My.Proj",
-            File = "Parser.cs",
-            TotalLines = 100,
-            CoveredLines = 60,
-            UncoveredLines = 40,
+            ClassName = "My.Proj.Parser",
+            FilePath = "Parser.cs",
+            LinesTotal = 100,
+            LinesCovered = 60,
             CoveragePercent = 60.0,
-            ExistingTestCount = 3,
-            Testability = "high",
+            ExistingTests = 3,
+            TestabilityScore = 0.85,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Parse", StartLine = 10, EndLine = 25, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "Parse", UncoveredLines = Enumerable.Range(10, 16).ToArray(), TotalLines = 16 }
             ]
         };
 
@@ -332,11 +330,11 @@ public sealed class JsonLineStoreTests : IDisposable
         var loaded = store.LoadAll();
 
         Assert.Single(loaded);
-        Assert.Equal("Parser", loaded[0].Class);
-        Assert.Equal(100, loaded[0].TotalLines);
+        Assert.Equal("My.Proj.Parser", loaded[0].ClassName);
+        Assert.Equal(100, loaded[0].LinesTotal);
         Assert.Single(loaded[0].UncoveredMethods);
         Assert.Equal("Parse", loaded[0].UncoveredMethods[0].Name);
-        Assert.Equal(8, loaded[0].UncoveredMethods[0].UncoveredLines);
+        Assert.Equal(16, loaded[0].UncoveredMethods[0].UncoveredLines.Length);
     }
 
     // --- Corrupt JSONL handling ---

@@ -210,12 +210,11 @@ public sealed class ContextToolTests : ToolTestBase
         SeedTypes(new TypeRecord { Name = "AuditEntry", Namespace = "Server.Auditing" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "AuditEntry",
-            Namespace = "Server.Auditing",
-            TotalLines = 100,
-            UncoveredLines = 30,
+            ClassName = "Server.Auditing.AuditEntry",
+            LinesTotal = 100,
+            LinesCovered = 70,
             CoveragePercent = 70.0,
-            UncoveredMethods = [new UncoveredMethod { Name = "Validate", StartLine = 10, EndLine = 20, UncoveredLines = 8 }]
+            UncoveredMethods = [new UncoveredMethod { Name = "Validate", UncoveredLines = Enumerable.Range(10, 11).ToArray(), TotalLines = 11 }]
         });
 
         var result = ContextTool.GetContext("AuditEntry");
@@ -223,7 +222,8 @@ public sealed class ContextToolTests : ToolTestBase
 
         var gap = doc.RootElement.GetProperty("coverageGap");
         Assert.NotEqual(JsonValueKind.Null, gap.ValueKind);
-        Assert.Equal(30, gap.GetProperty("uncoveredLines").GetInt32());
+        Assert.Equal(100, gap.GetProperty("linesTotal").GetInt32());
+        Assert.Equal(70, gap.GetProperty("linesCovered").GetInt32());
         Assert.Equal(70.0, gap.GetProperty("coveragePercent").GetDouble());
     }
 
@@ -329,8 +329,8 @@ public sealed class ContextToolTests : ToolTestBase
         SeedTypes(new TypeRecord { Name = "AsyncWorker", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "AsyncWorker",
-            UncoveredMethods = [new UncoveredMethod { Name = "DoWorkAsync", StartLine = 1, EndLine = 10, UncoveredLines = 5 }]
+            ClassName = "App.AsyncWorker",
+            UncoveredMethods = [new UncoveredMethod { Name = "DoWorkAsync", UncoveredLines = Enumerable.Range(1, 10).ToArray(), TotalLines = 10 }]
         });
 
         var result = ContextTool.GetContext("AsyncWorker", depth: "full");

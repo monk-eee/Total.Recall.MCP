@@ -115,11 +115,9 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
         // Seed before-state
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Worker",
-            Namespace = "App",
-            TotalLines = 100,
-            CoveredLines = 40,
-            UncoveredLines = 60,
+            ClassName = "App.Worker",
+            LinesTotal = 100,
+            LinesCovered = 40,
             CoveragePercent = 40.0
         });
 
@@ -195,8 +193,8 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
 
         // Verify the coverage gaps were enriched with test counts
         var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
-        var gap = gaps.First(g => g.Class == "EnrichMe");
-        Assert.Equal(7, gap.ExistingTestCount);
+        var gap = gaps.First(g => g.ShortName == "EnrichMe");
+        Assert.Equal(7, gap.ExistingTests);
     }
 
     [Fact]
@@ -216,8 +214,8 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
         RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
 
         var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
-        var gap = gaps.First(g => g.Class == "AbstractService");
-        Assert.Equal("low", gap.Testability);
+        var gap = gaps.First(g => g.ShortName == "AbstractService");
+        Assert.Equal(0.2, gap.TestabilityScore);
     }
 
     [Fact]
@@ -236,8 +234,8 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
         RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
 
         var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
-        var gap = gaps.First(g => g.Class == "Helpers");
-        Assert.Equal("medium", gap.Testability);
+        var gap = gaps.First(g => g.ShortName == "Helpers");
+        Assert.Equal(0.55, gap.TestabilityScore);
     }
 
     [Fact]
@@ -256,8 +254,8 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
         RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
 
         var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
-        var gap = gaps.First(g => g.Class == "SimpleService");
-        Assert.Equal("high", gap.Testability);
+        var gap = gaps.First(g => g.ShortName == "SimpleService");
+        Assert.Equal(0.85, gap.TestabilityScore);
     }
 
     [Fact]
@@ -276,8 +274,8 @@ public sealed class RefreshCoverageToolTests : ToolTestBase
         RefreshCoverageTool.RefreshCoverage(xmlPath, reEnrich: true);
 
         var gaps = new JsonLineStore<CoverageGap>(RepoConfig.CoverageGapsPath(TempDir)).LoadAll();
-        var gap = gaps.First(g => g.Class == "ComplexService");
-        Assert.Equal("low", gap.Testability);
+        var gap = gaps.First(g => g.ShortName == "ComplexService");
+        Assert.Equal(0.2, gap.TestabilityScore);
     }
 
     [Fact]

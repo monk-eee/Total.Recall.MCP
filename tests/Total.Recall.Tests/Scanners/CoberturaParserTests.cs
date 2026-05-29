@@ -135,9 +135,8 @@ public sealed class CoberturaParserTests : IDisposable
 
         var outputPath = Path.Combine(_tempDir, "coverage-gaps.jsonl");
         var content = File.ReadAllText(outputPath);
-        // Class name should be "MyClass", namespace should be "MyApp.Deep.Namespace"
-        Assert.Contains("\"class\":\"MyClass\"", content);
-        Assert.Contains("\"namespace\":\"MyApp.Deep.Namespace\"", content);
+        // Class name is preserved as the fully qualified name in `className`
+        Assert.Contains("\"className\":\"MyApp.Deep.Namespace.MyClass\"", content);
     }
 
     [Fact]
@@ -176,8 +175,8 @@ public sealed class CoberturaParserTests : IDisposable
         Assert.Equal(1, count);
         var outputPath = Path.Combine(_tempDir, "coverage-gaps.jsonl");
         var content = File.ReadAllText(outputPath);
-        Assert.Contains("\"totalLines\":4", content);
-        Assert.Contains("\"coveredLines\":3", content);
+        Assert.Contains("\"linesTotal\":4", content);
+        Assert.Contains("\"linesCovered\":3", content);
     }
 
     [Fact]
@@ -482,6 +481,6 @@ public sealed class CoberturaParserTests : IDisposable
         // Same namespace + same class → merged as partial
         Assert.Equal(1, count);
         var content = File.ReadAllText(Path.Combine(_tempDir, "coverage-gaps.jsonl"));
-        Assert.Contains("\"totalLines\":4", content);
+        Assert.Contains("\"linesTotal\":4", content);
     }
 }
