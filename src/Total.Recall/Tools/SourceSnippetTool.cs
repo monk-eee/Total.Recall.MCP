@@ -71,7 +71,7 @@ public static class SourceSnippetTool
 
         // Exact match (may return multiple classes with the same name in different namespaces/files)
         var exactMatches = allGaps
-            .Where(g => g.Class.Equals(className, StringComparison.OrdinalIgnoreCase))
+            .Where(g => g.ShortName.Equals(className, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         CoverageGap? gap;
@@ -80,10 +80,10 @@ public static class SourceSnippetTool
         if (exactMatches.Count > 1)
         {
             // Multiple classes with the same name — pick the one with most uncovered lines (substantive implementation)
-            gap = exactMatches.OrderByDescending(g => g.UncoveredLines).ThenByDescending(g => g.TotalLines).First();
+            gap = exactMatches.OrderByDescending(g => g.UncoveredLineCount).ThenByDescending(g => g.LinesTotal).First();
             ambiguityNote = $"Note: {exactMatches.Count} classes named '{className}' found. " +
-                           $"Returning the one with most uncovered lines ({gap.UncoveredLines} lines in {gap.File}). " +
-                           $"Other matches: {string.Join(", ", exactMatches.Where(g => !ReferenceEquals(g, gap)).Select(g => $"{g.Namespace}.{g.Class} ({g.File}, {g.UncoveredLines} uncovered)"))}";
+                           $"Returning the one with most uncovered lines ({gap.UncoveredLineCount} lines in {gap.FilePath}). " +
+                           $"Other matches: {string.Join(", ", exactMatches.Where(g => !ReferenceEquals(g, gap)).Select(g => $"{g.ClassName} ({g.FilePath}, {g.UncoveredLineCount} uncovered)"))}";
         }
         else if (exactMatches.Count == 1)
         {
@@ -93,9 +93,10 @@ public static class SourceSnippetTool
         {
             // Try partial match — also prefer by uncovered lines
             var partialMatches = allGaps
-                .Where(g => g.Class.Contains(className, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(g => g.UncoveredLines)
-                .ThenByDescending(g => g.TotalLines)
+                .Where(g => g.ShortName.Contains(className, StringComparison.OrdinalIgnoreCase)
+                         || g.ClassName.Contains(className, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(g => g.UncoveredLineCount)
+                .ThenByDescending(g => g.LinesTotal)
                 .ToList();
 
             gap = partialMatches.FirstOrDefault();
@@ -103,18 +104,18 @@ public static class SourceSnippetTool
             if (partialMatches.Count > 1)
             {
                 ambiguityNote = $"Note: {partialMatches.Count} partial matches for '{className}'. " +
-                               $"Returning '{gap!.Class}' ({gap.File}, {gap.UncoveredLines} uncovered lines).";
+                               $"Returning '{gap!.ClassName}' ({gap.FilePath}, {gap.UncoveredLineCount} uncovered lines).";
             }
         }
 
         if (gap is null)
             return $"No coverage data found for class '{className}'. Cannot resolve file path.";
 
-        if (string.IsNullOrEmpty(gap.File))
+        if (string.IsNullOrEmpty(gap.FilePath))
             return $"Coverage data for '{className}' has no file path. Cannot locate source.";
 
         // Resolve the full file path
-        var relativePath = gap.File.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        var relativePath = gap.FilePath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
         var fullPath = Path.GetFullPath(Path.Combine(sourceRoot, relativePath));
 
         // Security: ensure the resolved path is under the source root
@@ -166,7 +167,7 @@ public static class SourceSnippetTool
                 {
                     className,
                     filePath = fullPath,
-                    relativePath = gap.File,
+                    relativePath = gap.FilePath,
                     requestedMethods = methodNames.Length,
                     returnedMethods = results.Count,
                     ambiguityNote,
@@ -189,7 +190,7 @@ public static class SourceSnippetTool
         {
             className,
             filePath = fullPath,
-            relativePath = gap.File,
+            relativePath = gap.FilePath,
             totalFileLines = allLines.Length,
             returnedLines = linesToReturn,
             truncated,
@@ -217,12 +218,16 @@ public static class SourceSnippetTool
                 m.Name.Contains(methodName, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (method is not null && method.StartLine > 0 && method.EndLine > 0)
+        if (method is not null && method.UncoveredLines.Length > 0)
         {
-            // Use coverage data line range with context
+            // Derive method span from first..last uncovered line. Cobertura only tells us where the
+            // uncovered statements are, not the full method extent — the context window below makes
+            // the snippet readable when the actual signature/closing brace fall outside the span.
+            var firstLine = method.FirstUncoveredLine;
+            var lastLine = method.LastUncoveredLine;
             var contextLines = 5;
-            var startLine = Math.Max(1, method.StartLine - contextLines);
-            var endLine = Math.Min(allLines.Length, method.EndLine + contextLines);
+            var startLine = Math.Max(1, firstLine - contextLines);
+            var endLine = Math.Min(allLines.Length, lastLine + contextLines);
             var lineCount = endLine - startLine + 1;
 
             if (lineCount > maxLines)
@@ -235,7 +240,7 @@ public static class SourceSnippetTool
                 className,
                 methodName = method.Name,
                 filePath = fullPath,
-                relativePath = gap.File,
+                relativePath = gap.FilePath,
                 startLine,
                 endLine,
                 uncoveredLines = method.UncoveredLines,
@@ -294,7 +299,7 @@ public static class SourceSnippetTool
             className,
             methodName,
             filePath = fullPath,
-            relativePath = gap.File,
+            relativePath = gap.FilePath,
             startLine = mStart + 1,
             endLine = mEnd + 1,
             note = "Line range from source search (not coverage data)",

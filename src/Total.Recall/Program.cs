@@ -490,17 +490,16 @@ static int EnrichCoverageGaps(string dataDir)
     var enrichedCount = 0;
     foreach (var gap in gaps)
     {
-        // Enrich test count
-        if (testMap.TryGetValue(gap.Class, out var testEntry))
+        // Test inventory keys by short class name; coverage gaps carry FQN.
+        if (testMap.TryGetValue(gap.ShortName, out var testEntry))
         {
-            gap.ExistingTestCount = testEntry.TestCount;
+            gap.ExistingTests = testEntry.TestCount;
             enrichedCount++;
         }
 
-        // Enrich testability based on type metadata
-        if (typeMap.TryGetValue(gap.Class, out var typeRecord))
+        if (typeMap.TryGetValue(gap.ShortName, out var typeRecord))
         {
-            gap.Testability = ClassifyTestability(typeRecord);
+            gap.TestabilityScore = TestabilityClassifier.Score(typeRecord);
         }
     }
 
@@ -704,31 +703,6 @@ static int EnrichMockRecipeUsageExamples(string dataDir, string testsPath)
     }
 
     return enrichedCount;
-}
-
-static string ClassifyTestability(Total.Recall.Models.TypeRecord type)
-{
-    // Heuristic testability classification
-    if (type.IsAbstract || type.IsInterface)
-        return "low";
-
-    if (type.IsStatic)
-        return "medium"; // static classes can be tested but need special handling
-
-    var maxCtorParams = type.Constructors.Count > 0
-        ? type.Constructors.Max(c => c.Params.Count)
-        : 0;
-
-    if (maxCtorParams == 0)
-        return "high"; // parameterless = very easy to test
-
-    if (maxCtorParams <= 3)
-        return "high";
-
-    if (maxCtorParams <= 6)
-        return "medium";
-
-    return "low"; // heavy DI = hard to test
 }
 
 static void WriteConfig(string dataDir, ScanOptions options)

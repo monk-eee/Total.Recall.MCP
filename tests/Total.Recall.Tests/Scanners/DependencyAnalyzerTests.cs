@@ -379,10 +379,9 @@ public sealed class DependencyAnalyzerTests : IDisposable
         SeedTypes(new TypeRecord { Name = "MyClass", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MyClass",
-            Namespace = "App",
-            TotalLines = 150,
-            UncoveredLines = 50
+            ClassName = "App.MyClass",
+            LinesTotal = 150,
+            LinesCovered = 100
         });
 
         DependencyAnalyzer.Analyze(_tempDir);

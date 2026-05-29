@@ -70,14 +70,14 @@ public static class UncoveredMethodsTool
 
         foreach (var gap in gaps)
         {
-            if (gap.UncoveredLines == 0)
+            if (gap.UncoveredLineCount == 0)
                 continue;
 
-            // Skip explicitly untestable classes
-            if (!string.IsNullOrEmpty(gap.SkipReason))
+            // Skip very low-testability classes (formerly the SkipReason marker).
+            if (gap.TestabilityScore is < 0.3)
                 continue;
 
-            var className = gap.Class;
+            var className = gap.ShortName;
             var bareName = TestableTargetsTool.NormalizeName(className);
 
             // Skip assessed-skip/coupled classes
@@ -103,7 +103,7 @@ public static class UncoveredMethodsTool
 
             var hasTestFile = testEntry?.TestFiles is { Count: > 0 };
             var testFiles = testEntry?.TestFiles ?? [];
-            var existingTestCount = testEntry?.TestCount ?? gap.ExistingTestCount;
+            var existingTestCount = testEntry?.TestCount ?? gap.ExistingTests ?? 0;
 
             if (onlyWithExistingTests && !hasTestFile)
                 continue;
@@ -111,24 +111,24 @@ public static class UncoveredMethodsTool
             // Flatten each uncovered method into its own target
             foreach (var method in gap.UncoveredMethods)
             {
-                if (method.UncoveredLines < minUncoveredLines)
+                if (method.UncoveredLineCount < minUncoveredLines)
                     continue;
 
                 if (excludeBoilerplate && TestableTargetsTool.IsBoilerplateMethod(method.Name))
                     continue;
 
-                var score = CalculateMethodScore(method.UncoveredLines, hasTestFile, existingTestCount);
-                var reason = BuildMethodReason(method.UncoveredLines, hasTestFile, existingTestCount, testFiles.Count);
+                var score = CalculateMethodScore(method.UncoveredLineCount, hasTestFile, existingTestCount);
+                var reason = BuildMethodReason(method.UncoveredLineCount, hasTestFile, existingTestCount, testFiles.Count);
 
                 targets.Add(new UncoveredMethodTarget
                 {
-                    Class = gap.Class,
-                    Namespace = gap.Namespace,
-                    File = gap.File,
+                    Class = gap.ShortName,
+                    Namespace = gap.NamespacePart,
+                    File = gap.FilePath,
                     Method = method.Name,
-                    UncoveredLines = method.UncoveredLines,
-                    StartLine = method.StartLine,
-                    EndLine = method.EndLine,
+                    UncoveredLines = method.UncoveredLineCount,
+                    StartLine = method.FirstUncoveredLine,
+                    EndLine = method.LastUncoveredLine,
                     HasTestFile = hasTestFile,
                     TestFiles = testFiles,
                     ExistingTestCount = existingTestCount,

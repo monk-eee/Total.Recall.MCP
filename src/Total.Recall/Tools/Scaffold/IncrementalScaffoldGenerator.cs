@@ -31,8 +31,9 @@ internal static class IncrementalScaffoldGenerator
 
         var coverageGap = stores.CoverageGaps.HasData()
             ? stores.CoverageGaps.LoadAll().FirstOrDefault(g =>
-                g.Class.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase)
-                || g.Class.Equals(className, StringComparison.OrdinalIgnoreCase))
+                g.ShortName.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase)
+                || g.ShortName.Equals(className, StringComparison.OrdinalIgnoreCase)
+                || g.ClassName.Equals(className, StringComparison.OrdinalIgnoreCase))
             : null;
 
         var gotchas = stores.Gotchas.HasData()
@@ -104,8 +105,8 @@ internal static class IncrementalScaffoldGenerator
             sb.AppendLine();
             sb.AppendLine("        // Assert");
             var hint = AssertionRules.GetAssertionHint(method.Name);
-            if (method.UncoveredLines > 0)
-                sb.AppendLine($"        // {hint} (lines {method.StartLine}-{method.EndLine}, {method.UncoveredLines} uncovered)");
+            if (method.UncoveredLineCount > 0)
+                sb.AppendLine($"        // {hint} (uncovered: lines {method.FirstUncoveredLine}-{method.LastUncoveredLine}, {method.UncoveredLineCount} of {method.TotalLines})");
             else
                 sb.AppendLine($"        // {hint}");
             sb.AppendLine("    }");

@@ -19,23 +19,20 @@ public sealed class UncoveredMethodsToolTests : ToolTestBase
             uncoveredMethods.Add(new UncoveredMethod
             {
                 Name = name,
-                StartLine = line,
-                EndLine = line + lines - 1,
-                UncoveredLines = lines
+                UncoveredLines = Enumerable.Range(line, lines).ToArray(),
+                TotalLines = lines
             });
             line += lines + 5;
         }
 
         return new CoverageGap
         {
-            Class = className,
-            Namespace = "App",
-            File = $"src/{className}.cs",
-            TotalLines = totalLines,
-            CoveredLines = 20,
-            UncoveredLines = uncoveredLines,
+            ClassName = $"App.{className}",
+            FilePath = $"src/{className}.cs",
+            LinesTotal = totalLines,
+            LinesCovered = 20,
             CoveragePercent = Math.Round(100.0 * 20 / totalLines, 1),
-            Testability = "high",
+            TestabilityScore = 0.85,
             UncoveredMethods = uncoveredMethods
         };
     }
@@ -215,7 +212,7 @@ public sealed class UncoveredMethodsToolTests : ToolTestBase
     public void GetUncoveredMethods_SkipsClassesWithSkipReason()
     {
         var gap = MakeGapWithMethods("SkippedClass", ("DoWork", 20));
-        gap.SkipReason = "auto-generated code";
+        gap.TestabilityScore = 0.1;
         SeedCoverageGaps(gap, MakeGapWithMethods("GoodClass", ("Process", 10)));
 
         var result = UncoveredMethodsTool.GetUncoveredMethods();
@@ -232,9 +229,9 @@ public sealed class UncoveredMethodsToolTests : ToolTestBase
         SeedCoverageGaps(
             new CoverageGap
             {
-                Class = "FullyCovered",
-                Namespace = "App",
-                UncoveredLines = 0,
+                ClassName = "App.FullyCovered",
+                LinesTotal = 0,
+                LinesCovered = 0,
                 UncoveredMethods = []
             },
             MakeGapWithMethods("GoodClass", ("Process", 10))

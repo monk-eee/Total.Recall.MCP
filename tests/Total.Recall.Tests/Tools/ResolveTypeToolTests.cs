@@ -157,8 +157,8 @@ public sealed class ResolveTypeToolTests : ToolTestBase
             new TypeRecord { Name = "ParseResult", Namespace = "MyApp.Parsing" }
         );
         SeedCoverageGaps(
-            new CoverageGap { Class = "AuditEntry", File = "src/Auditing/AuditEntry.cs" },
-            new CoverageGap { Class = "ParseResult", File = "src/Parsing/ParseResult.cs" }
+            new CoverageGap { ClassName = "Server.Auditing.AuditEntry", FilePath = "src/Auditing/AuditEntry.cs" },
+            new CoverageGap { ClassName = "MyApp.Parsing.ParseResult", FilePath = "src/Parsing/ParseResult.cs" }
         );
 
         var result = ResolveTypeTool.ResolveType("AuditEntry", filePath: "Auditing");
@@ -174,8 +174,8 @@ public sealed class ResolveTypeToolTests : ToolTestBase
             new TypeRecord { Name = "ParseResult", Namespace = "MyApp.Parsing" }
         );
         SeedCoverageGaps(
-            new CoverageGap { Class = "AuditEntry", File = "src/Auditing/AuditEntry.cs" },
-            new CoverageGap { Class = "ParseResult", File = "src/Parsing/ParseResult.cs" }
+            new CoverageGap { ClassName = "Server.Auditing.AuditEntry", FilePath = "src/Auditing/AuditEntry.cs" },
+            new CoverageGap { ClassName = "MyApp.Parsing.ParseResult", FilePath = "src/Parsing/ParseResult.cs" }
         );
 
         // filePath filter matches only ParseResult
@@ -206,7 +206,7 @@ public sealed class ResolveTypeToolTests : ToolTestBase
             new TypeRecord { Name = "Entry", Namespace = "MyApp.Parsing" }
         );
         SeedCoverageGaps(
-            new CoverageGap { Class = "Entry", File = "src/Auditing/Entry.cs" }
+            new CoverageGap { ClassName = "Server.Auditing.Entry", FilePath = "src/Auditing/Entry.cs" }
         );
 
         var result = ResolveTypeTool.ResolveType("Entry",

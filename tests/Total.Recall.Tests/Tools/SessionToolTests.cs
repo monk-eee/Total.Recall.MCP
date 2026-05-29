@@ -1448,8 +1448,8 @@ public sealed class SessionToolTests : ToolTestBase
     public void ComputeOverallCoverage_BasicData_ComputesCorrectly()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "A", TotalLines = 100, CoveredLines = 80 },
-            new CoverageGap { Class = "B", TotalLines = 200, CoveredLines = 100 }
+            new CoverageGap { ClassName = "A", LinesTotal = 100, LinesCovered = 80 },
+            new CoverageGap { ClassName = "B", LinesTotal = 200, LinesCovered = 100 }
         );
 
         var stores = StoreRegistry.ForNamespace(null);
@@ -1471,7 +1471,7 @@ public sealed class SessionToolTests : ToolTestBase
     public void ComputeOverallCoverage_ZeroTotalLines_ReturnsZero()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "Empty", TotalLines = 0, CoveredLines = 0 }
+            new CoverageGap { ClassName = "Empty", LinesTotal = 0, LinesCovered = 0 }
         );
 
         var stores = StoreRegistry.ForNamespace(null);
@@ -1484,7 +1484,7 @@ public sealed class SessionToolTests : ToolTestBase
     {
         // Seed coverage data so auto-computation can work
         SeedCoverageGaps(
-            new CoverageGap { Class = "MyClass", TotalLines = 200, CoveredLines = 130 }
+            new CoverageGap { ClassName = "MyClass", LinesTotal = 200, LinesCovered = 130 }
         );
         // Seed a previous session with coverageAfter so coverageBefore can be derived
         SeedSessions(new SessionRecord
@@ -1511,7 +1511,7 @@ public sealed class SessionToolTests : ToolTestBase
     public void LogSession_AutoCoverage_DoesNotTrigger_WhenValuesProvided()
     {
         SeedCoverageGaps(
-            new CoverageGap { Class = "X", TotalLines = 100, CoveredLines = 50 }
+            new CoverageGap { ClassName = "X", LinesTotal = 100, LinesCovered = 50 }
         );
 
         var result = SessionTool.LogSession(

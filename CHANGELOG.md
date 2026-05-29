@@ -10,6 +10,35 @@ Dates reflect the commit date in the local repo.
 
 ## [Unreleased]
 
+## [2.7.0-preview.1] — 2026-05-29
+
+**Breaking on-disk schema change**: `coverage-gaps.jsonl` field names now exactly match the canonical cross-language scanner contract documented in `docs/SCANNER_SCHEMA.md` §2. Older `coverage-gaps.jsonl` files written by ≤2.6 servers are unreadable by 2.7+ and vice versa. **Re-scan after upgrading** (`total-recall scan --coverage <xml>` or re-run your existing `total-recall init` / scan pipeline). No other JSONL stores are affected; gotchas, assessments, sessions, bugs, tests, type-registry are unchanged.
+
+This change was driven by an integration regression: the Python and TypeScript sibling scanners (decisions 69 + 70) emit JSONL in the canonical schema, but the .NET MCP reader still used legacy field names (`class`, `namespace`, `file`, `totalLines`, `coveredLines`, `existingTestCount`, `testability` string, `skipReason`, per-method `uncoveredLines: int` count). Result: `get_coverage_gaps` / `get_testable_targets` / `get_uncovered_methods` returned blank fields when reading Python- or TypeScript-emitted data. The fix is a hard rename across the .NET reader — no shims, no `[JsonPropertyName]` aliases, no transitional bridges (per the AGENTS.md prime directive: do the right thing).
+
+### Breaking
+- **`coverage-gaps.jsonl` on-disk schema renamed to canonical** (decision 72):
+  - `class` + `namespace` → `className` (fully-qualified, e.g. `MyApp.Common.StringExtensions`).
+  - `file` → `filePath`.
+  - `totalLines` → `linesTotal`. `coveredLines` → `linesCovered`.
+  - `existingTestCount` (`int`) → `existingTests` (`int?`, nullable).
+  - `testability` (`string` "high"/"medium"/"low"/"skip") → `testabilityScore` (`double?`, 0.0–1.0).
+  - `skipReason` removed; folded into `testabilityScore = 0.1` so the legacy `skipUntestable` filter (cut-off `< 0.3`) continues to work.
+  - `uncoveredMethods[].startLine` + `endLine` removed.
+  - `uncoveredMethods[].uncoveredLines` is now an `int[]` of actual line numbers (was previously just a count). `totalLines` added per method.
+- **`get_coverage_gaps` tool output schema renamed to canonical**. This tool's JSON envelope IS the raw read of the on-disk store, so the field-name rename propagates to MCP clients. `get_testable_targets`, `get_uncovered_methods`, `get_stub_classes` envelopes are unchanged (legitimate separation between scanner schema and tool output contracts).
+
+### Added
+- **`Infrastructure/TestabilityClassifier.Score(TypeRecord?) → double?`** (decision 73): single shared scorer replacing two near-duplicate `ClassifyTestability` string helpers in `Program.cs` and `RefreshCoverageTool.cs`. Bands: `null` unknown, `0.2` abstract/interface, `0.55` static, `0.95` parameterless ctor, `0.85` ≤3 ctor params, `0.55` ≤6 ctor params, `0.2` otherwise.
+- **`tests/Total.Recall.Tests/Models/CoverageGapSchemaTests.cs`** (5 facts): pins canonical JSON field names, asserts legacy names absent, round-trips Python-scanner-shaped JSONL, exercises derived-helper edge cases.
+- **`CoverageGap` derived `[JsonIgnore]` helpers** for in-memory call sites: `ShortName` (last segment of `ClassName`), `NamespacePart` (everything before the last `.`), `UncoveredLineCount` (`LinesTotal - LinesCovered`). `UncoveredMethod` helpers: `UncoveredLineCount` (`UncoveredLines.Length`), `FirstUncoveredLine`, `LastUncoveredLine`.
+
+### Compatibility
+- The Python (`total-recall-scan-py` 0.1.1) and TypeScript (`@total-recall/scan` 0.1.1) sibling scanners already emit canonical schema and are now correctly consumed by the .NET MCP server. No scanner version bump required — this release fixes the .NET reader.
+
+### Upgrade
+See `docs/UPGRADE.md` § "2.6 → 2.7" for the full procedure. TL;DR: `dotnet tool update -g TotalRecall.Mcp`, then re-run your scan command to regenerate `coverage-gaps.jsonl` in the new format.
+
 ## [2.6.0-preview.1] — 2026-05-27
 
 Multi-language scanner expansion and bug-report tooling. All on-disk

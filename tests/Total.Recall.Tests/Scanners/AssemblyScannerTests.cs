@@ -161,9 +161,9 @@ public sealed class AssemblyScannerTests : IDisposable
         var store = new JsonLineStore<TypeRecord>(RepoConfig.TypeRegistryPath(_tempDir));
         var all = store.LoadAll();
 
-        // CoverageGap.TotalLines is int, CoverageGap.CoveragePercent is double
+        // CoverageGap.LinesTotal is int, CoverageGap.CoveragePercent is double
         var coverageGap = all.First(t => t.Name == "CoverageGap");
-        var totalLines = coverageGap.Properties.FirstOrDefault(p => p.Name == "TotalLines");
+        var totalLines = coverageGap.Properties.FirstOrDefault(p => p.Name == "LinesTotal");
         Assert.NotNull(totalLines);
         Assert.Equal("int", totalLines.ClrType);
 

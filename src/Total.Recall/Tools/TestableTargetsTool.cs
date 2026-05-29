@@ -109,12 +109,12 @@ public static class TestableTargetsTool
             {
                 // Find the namespace for this class from coverage gaps
                 var matchingGap = gaps.FirstOrDefault(g =>
-                    g.Class.Equals(assessment.Class, StringComparison.OrdinalIgnoreCase)
-                    || NormalizeName(g.Class).Equals(assessment.Class, StringComparison.OrdinalIgnoreCase));
-                if (matchingGap is not null && !string.IsNullOrEmpty(matchingGap.Namespace))
+                    g.ShortName.Equals(assessment.Class, StringComparison.OrdinalIgnoreCase)
+                    || NormalizeName(g.ShortName).Equals(assessment.Class, StringComparison.OrdinalIgnoreCase));
+                if (matchingGap is not null && !string.IsNullOrEmpty(matchingGap.NamespacePart))
                 {
-                    namespaceCoupledCounts[matchingGap.Namespace] =
-                        namespaceCoupledCounts.GetValueOrDefault(matchingGap.Namespace) + 1;
+                    namespaceCoupledCounts[matchingGap.NamespacePart] =
+                        namespaceCoupledCounts.GetValueOrDefault(matchingGap.NamespacePart) + 1;
                 }
             }
         }
@@ -136,11 +136,12 @@ public static class TestableTargetsTool
 
         foreach (var gap in gaps)
         {
-            if (gap.UncoveredLines == 0)
+            if (gap.UncoveredLineCount == 0)
                 continue;
 
-            // Skip classes explicitly marked untestable in coverage data
-            if (!string.IsNullOrEmpty(gap.SkipReason))
+            // Skip classes with very low testability heuristic (interfaces, heavy DI).
+            // The numeric score replaces the legacy free-text SkipReason marker.
+            if (gap.TestabilityScore is < 0.3)
                 continue;
 
             // ── Stub/empty-body detection ──
@@ -156,7 +157,7 @@ public static class TestableTargetsTool
                 continue;
 
             // Resolve class name — handle nested classes (Parent/Nested → try both forms)
-            var className = gap.Class;
+            var className = gap.ShortName;
             var bareName = NormalizeName(className);
 
             // Cross-reference with type registry using centralized resolver
@@ -181,7 +182,7 @@ public static class TestableTargetsTool
             if (typeRecord is { IsStatic: true })
                 continue; // static classes are rarely unit-testable in isolation
 
-            if (gap.TotalLines > maxTotalLines)
+            if (gap.LinesTotal > maxTotalLines)
                 continue;
 
             // Determine constructor complexity
@@ -281,7 +282,7 @@ public static class TestableTargetsTool
             }
 
             // Check existing tests — try exact, then bare nested name, then fuzzy
-            var existingTestCount = gap.ExistingTestCount;
+            var existingTestCount = gap.ExistingTests ?? 0;
             var hasTestFile = false;
             var testFilesList = new List<string>();
             if (testInventory.TryGetValue(className, out var testEntry)
@@ -321,30 +322,30 @@ public static class TestableTargetsTool
             // Calculate composite score
             // Filter out property accessors for "real" method count
             var realMethodCount = gap.UncoveredMethods.Count(m => !IsPropertyAccessor(m.Name));
-            var nsCoupledCount = namespaceCoupledCounts.GetValueOrDefault(gap.Namespace);
+            var nsCoupledCount = namespaceCoupledCounts.GetValueOrDefault(gap.NamespacePart);
             var score = CalculateScore(
-                gap.UncoveredLines, gap.Testability, ctorParamCount,
+                gap.UncoveredLineCount, gap.TestabilityScore, ctorParamCount,
                 mockableParams, recipeCoveredParams, existingTestCount, gotchaCount,
                 pastSuccesses, pastFailures, concreteParamCount, coupledParamCount,
-                realMethodCount, gap.TotalLines, nsCoupledCount, interfaceGotchaCount,
+                realMethodCount, gap.LinesTotal, nsCoupledCount, interfaceGotchaCount,
                 selfVerdict, unmockableInterfaceCount, baseTypeCoupled, externalDepCount,
                 hasTestFile);
 
             var reason = BuildReason(
-                gap.UncoveredLines, ctorParamCount, mockableParams, concreteParamCount, coupledParamCount,
+                gap.UncoveredLineCount, ctorParamCount, mockableParams, concreteParamCount, coupledParamCount,
                 gap.UncoveredMethods.Count, gotchaCount, existingTestCount,
                 pastSuccesses, pastFailures, concreteParamNames,
-                gap.TotalLines, nsCoupledCount, interfaceGotchaCount,
+                gap.LinesTotal, nsCoupledCount, interfaceGotchaCount,
                 selfVerdict, unmockableInterfaceCount, baseTypeCoupled, typeRecord?.BaseType,
                 externalDepCount, hasTestFile);
 
             targets.Add(new TestableTarget
             {
-                Class = gap.Class,
-                Namespace = gap.Namespace,
-                File = gap.File,
-                TotalLines = gap.TotalLines,
-                UncoveredLines = gap.UncoveredLines,
+                Class = gap.ShortName,
+                Namespace = gap.NamespacePart,
+                File = gap.FilePath,
+                TotalLines = gap.LinesTotal,
+                UncoveredLines = gap.UncoveredLineCount,
                 CoveragePercent = gap.CoveragePercent,
                 UncoveredMethodCount = gap.UncoveredMethods.Count,
                 UncoveredMethods = gap.UncoveredMethods.Select(m => m.Name).ToList(),
@@ -494,7 +495,7 @@ public static class TestableTargetsTool
     /// and transitive dependency detection via assessment Dependencies fields.
     /// </summary>
     internal static double CalculateScore(
-        int uncoveredLines, string? testability, int ctorParamCount,
+        int uncoveredLines, double? testabilityScore, int ctorParamCount,
         int mockableParams, int recipeCoveredParams, int existingTestCount, int gotchaCount,
         int pastSuccesses = 0, int pastFailures = 0,
         int concreteParamCount = 0, int coupledParamCount = 0,
@@ -509,13 +510,13 @@ public static class TestableTargetsTool
         // 20→43, 50→57, 100→67, 200→77. Compresses range so testability factors dominate.
         double score = 10.0 * Math.Log2(1 + uncoveredLines);
 
-        // Testability multiplier
-        score *= (testability?.ToLowerInvariant()) switch
+        // Testability multiplier (null score → unknown → neutral 0.5x).
+        score *= testabilityScore switch
         {
-            "high" => 1.0,
-            "medium" => 0.7,
-            "low" => 0.3,
-            _ => 0.5
+            null => 0.5,
+            >= 0.8 => 1.0,
+            >= 0.4 => 0.7,
+            _ => 0.3,
         };
 
         // ── Medium-complexity class boost (P0-B) ──

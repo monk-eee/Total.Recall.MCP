@@ -233,11 +233,11 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "Parser", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Parser",
+            ClassName = "Parser",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Parse", StartLine = 10, EndLine = 30, UncoveredLines = 15 },
-                new UncoveredMethod { Name = "Validate", StartLine = 35, EndLine = 50, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "Parse", UncoveredLines = Enumerable.Range(10, 14).Append(30).ToArray(), TotalLines = 21 },
+                new UncoveredMethod { Name = "Validate", UncoveredLines = Enumerable.Range(35, 7).Append(50).ToArray(), TotalLines = 16 }
             ]
         });
 
@@ -390,11 +390,11 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "PropClass", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "PropClass",
+            ClassName = "PropClass",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "get_Value", StartLine = 1, EndLine = 5, UncoveredLines = 3 },
-                new UncoveredMethod { Name = "set_Value", StartLine = 6, EndLine = 10, UncoveredLines = 3 }
+                new UncoveredMethod { Name = "get_Value", UncoveredLines = Enumerable.Range(1, 2).Append(5).ToArray(), TotalLines = 5 },
+                new UncoveredMethod { Name = "set_Value", UncoveredLines = Enumerable.Range(6, 2).Append(10).ToArray(), TotalLines = 5 }
             ]
         });
 
@@ -420,8 +420,8 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedGotchas(new Gotcha { Type = "MetaClass", Category = "bug", Description = "test", Date = "2025-01-01" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MetaClass",
-            UncoveredMethods = [new UncoveredMethod { Name = "DoWork", StartLine = 1, EndLine = 10, UncoveredLines = 5 }]
+            ClassName = "MetaClass",
+            UncoveredMethods = [new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(1, 4).Append(10).ToArray(), TotalLines = 10 }]
         });
 
         var result = TestScaffoldTool.GenerateTestScaffold("MetaClass");
@@ -553,10 +553,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "AsyncService", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "AsyncService",
+            ClassName = "AsyncService",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "ProcessAsync", StartLine = 10, EndLine = 30, UncoveredLines = 15 }
+                new UncoveredMethod { Name = "ProcessAsync", UncoveredLines = Enumerable.Range(10, 14).Append(30).ToArray(), TotalLines = 21 }
             ]
         });
 
@@ -575,11 +575,11 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "MixedService", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MixedService",
+            ClassName = "MixedService",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "SyncWork", StartLine = 5, EndLine = 15, UncoveredLines = 8 },
-                new UncoveredMethod { Name = "DoWorkAsync", StartLine = 20, EndLine = 40, UncoveredLines = 12 }
+                new UncoveredMethod { Name = "SyncWork", UncoveredLines = Enumerable.Range(5, 7).Append(15).ToArray(), TotalLines = 11 },
+                new UncoveredMethod { Name = "DoWorkAsync", UncoveredLines = Enumerable.Range(20, 11).Append(40).ToArray(), TotalLines = 21 }
             ]
         });
 
@@ -599,12 +599,12 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "AsyncMeta", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "AsyncMeta",
+            ClassName = "AsyncMeta",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "LoadAsync", StartLine = 1, EndLine = 10, UncoveredLines = 5 },
-                new UncoveredMethod { Name = "SaveAsync", StartLine = 11, EndLine = 20, UncoveredLines = 5 },
-                new UncoveredMethod { Name = "Reset", StartLine = 21, EndLine = 30, UncoveredLines = 5 }
+                new UncoveredMethod { Name = "LoadAsync", UncoveredLines = Enumerable.Range(1, 4).Append(10).ToArray(), TotalLines = 10 },
+                new UncoveredMethod { Name = "SaveAsync", UncoveredLines = Enumerable.Range(11, 4).Append(20).ToArray(), TotalLines = 10 },
+                new UncoveredMethod { Name = "Reset", UncoveredLines = Enumerable.Range(21, 4).Append(30).ToArray(), TotalLines = 10 }
             ]
         });
 
@@ -795,10 +795,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "Validator", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Validator",
+            ClassName = "Validator",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Validate", StartLine = 10, EndLine = 30, UncoveredLines = 15 }
+                new UncoveredMethod { Name = "Validate", UncoveredLines = Enumerable.Range(10, 14).Append(30).ToArray(), TotalLines = 21 }
             ]
         });
 
@@ -819,10 +819,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "NameParser", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "NameParser",
+            ClassName = "NameParser",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "ParseName", StartLine = 5, EndLine = 20, UncoveredLines = 10 }
+                new UncoveredMethod { Name = "ParseName", UncoveredLines = Enumerable.Range(5, 9).Append(20).ToArray(), TotalLines = 16 }
             ]
         });
 
@@ -842,10 +842,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "BatchProcessor", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "BatchProcessor",
+            ClassName = "BatchProcessor",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "ProcessBatchItems", StartLine = 5, EndLine = 20, UncoveredLines = 10 }
+                new UncoveredMethod { Name = "ProcessBatchItems", UncoveredLines = Enumerable.Range(5, 9).Append(20).ToArray(), TotalLines = 16 }
             ]
         });
 
@@ -863,10 +863,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "Paginator", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Paginator",
+            ClassName = "Paginator",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "GetPageCount", StartLine = 5, EndLine = 20, UncoveredLines = 10 }
+                new UncoveredMethod { Name = "GetPageCount", UncoveredLines = Enumerable.Range(5, 9).Append(20).ToArray(), TotalLines = 16 }
             ]
         });
 
@@ -884,10 +884,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         SeedTypeRegistry(new TypeRecord { Name = "Worker", Namespace = "App" });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "Worker",
+            ClassName = "Worker",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Execute", StartLine = 5, EndLine = 20, UncoveredLines = 10 }
+                new UncoveredMethod { Name = "Execute", UncoveredLines = Enumerable.Range(5, 9).Append(20).ToArray(), TotalLines = 16 }
             ]
         });
 
@@ -1205,13 +1205,12 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MyService",
-            Namespace = "App",
+            ClassName = "App.MyService",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 20, UncoveredLines = 8 },
-                new UncoveredMethod { Name = "Process", StartLine = 30, EndLine = 40, UncoveredLines = 5 },
-                new UncoveredMethod { Name = "Validate", StartLine = 50, EndLine = 60, UncoveredLines = 3 }
+                new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 7).Append(20).ToArray(), TotalLines = 11 },
+                new UncoveredMethod { Name = "Process", UncoveredLines = Enumerable.Range(30, 4).Append(40).ToArray(), TotalLines = 11 },
+                new UncoveredMethod { Name = "Validate", UncoveredLines = Enumerable.Range(50, 2).Append(60).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -1240,11 +1239,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MyService",
-            Namespace = "App",
+            ClassName = "App.MyService",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 20, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 7).Append(20).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -1253,7 +1251,7 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         var parsed = JsonSerializer.Deserialize<JsonElement>(result);
         var stubs = parsed.GetProperty("stubs").GetString()!;
         Assert.Contains("lines 10-20", stubs);
-        Assert.Contains("8 uncovered", stubs);
+        Assert.Contains("8 of 11", stubs);
     }
 
     [Fact]
@@ -1321,11 +1319,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "MyService",
-            Namespace = "App",
+            ClassName = "App.MyService",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "DoWork", StartLine = 10, EndLine = 20, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "DoWork", UncoveredLines = Enumerable.Range(10, 7).Append(20).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -1463,11 +1460,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "EdgeTarget",
-            Namespace = "App",
+            ClassName = "App.EdgeTarget",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "GetName", StartLine = 10, EndLine = 20, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "GetName", UncoveredLines = Enumerable.Range(10, 7).Append(20).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -1491,11 +1487,10 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "EdgeTarget2",
-            Namespace = "App",
+            ClassName = "App.EdgeTarget2",
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "GetName", StartLine = 10, EndLine = 20, UncoveredLines = 8 }
+                new UncoveredMethod { Name = "GetName", UncoveredLines = Enumerable.Range(10, 7).Append(20).ToArray(), TotalLines = 11 }
             ]
         });
 
@@ -1601,12 +1596,12 @@ public sealed class TestScaffoldToolTests : ToolTestBase
         });
         SeedCoverageGaps(new CoverageGap
         {
-            Class = "ConcreteOrder", Namespace = "App", File = "src/ConcreteOrder.cs",
-            TotalLines = 50, CoveredLines = 20, UncoveredLines = 30,
+            ClassName = "App.ConcreteOrder", FilePath = "src/ConcreteOrder.cs",
+            LinesTotal = 50, LinesCovered = 20,
             UncoveredMethods =
             [
-                new UncoveredMethod { Name = "Equals", Signature = "(System.Object)System.Boolean", StartLine = 10, EndLine = 20, UncoveredLines = 5 },
-                new UncoveredMethod { Name = "Equals", Signature = "(App.ConcreteOrder)System.Boolean", StartLine = 25, EndLine = 35, UncoveredLines = 5 }
+                new UncoveredMethod { Name = "Equals", Signature = "(System.Object)System.Boolean", UncoveredLines = Enumerable.Range(10, 4).Append(20).ToArray(), TotalLines = 11 },
+                new UncoveredMethod { Name = "Equals", Signature = "(App.ConcreteOrder)System.Boolean", UncoveredLines = Enumerable.Range(25, 4).Append(35).ToArray(), TotalLines = 11 }
             ]
         });
 

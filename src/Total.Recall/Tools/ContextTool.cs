@@ -92,8 +92,8 @@ public static class ContextTool
 
         var coverageGap = stores.CoverageGaps.HasData()
             ? stores.CoverageGaps.LoadAll().FirstOrDefault(g =>
-                g.Class.Equals(typeName, StringComparison.OrdinalIgnoreCase)
-                || (typeRecord is not null && g.Class.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase)))
+                g.ShortName.Equals(typeName, StringComparison.OrdinalIgnoreCase)
+                || (typeRecord is not null && g.ShortName.Equals(typeRecord.Name, StringComparison.OrdinalIgnoreCase)))
             : null;
 
         // STANDARD: type + gotchas + tests + coverage + open bugs — good enough for most test authoring

@@ -20,6 +20,8 @@ If `total-recall doctor` reports `OK`, you're done. If it reports warnings, see 
 | From → To | Tool update | Restart VS Code | Re-scan required | mcp.json edit | Data loss risk |
 |-----------|-------------|-----------------|------------------|---------------|----------------|
 | 2.4.0 → 2.5.x | yes | yes | **no** (optional) | no | none |
+| 2.5.x → 2.6.x | yes | yes | **no** (optional) | no | none |
+| **2.6.x → 2.7.x** | **yes** | **yes** | **YES (breaking on-disk schema for `coverage-gaps.jsonl` only)** | **no** | **none** for any other store |
 | Source build → tool install | `dotnet tool install -g TotalRecall.Mcp` and switch `command` in `mcp.json` to `"total-recall"` | yes | no | yes (one line) | none |
 
 Patch (`2.5.0` → `2.5.1`) and preview (`2.5.0-preview.1` → `2.5.0-preview.2`) upgrades are always strictly additive.
@@ -110,6 +112,52 @@ total-recall report bugs --ns yourproject --severity critical --status open
 
 - `total-recall scan` no longer crashes on publish-style targets that ship their own `mscorlib.dll` / `System.Private.CoreLib.dll` next to the host runtime copies (was: `FileLoadException: Assembly with same name is already loaded`). If you previously had to delete duplicate core DLLs from your publish output before scanning, you can stop.
 - Bare `total-recall` from an interactive terminal now prints help instead of silently waiting on stdin. VS Code still pipes stdin so server mode triggers normally there.
+
+## 2.6 → 2.7
+
+**Breaking on-disk schema change** for `coverage-gaps.jsonl` only. No other store is affected, no `.vscode/mcp.json` edit is needed, no environment variables changed.
+
+### What broke and why
+
+The Python (`total-recall-scan-py`) and TypeScript (`@total-recall/scan`) sibling scanners shipped in 2.6 emit `coverage-gaps.jsonl` in the canonical cross-language schema documented in `docs/SCANNER_SCHEMA.md` §2 (fields: `className`, `filePath`, `linesCovered`, `linesTotal`, `coveragePercent`, `uncoveredMethods[].uncoveredLines: int[]`, `existingTests`, `testabilityScore`). The .NET reader in 2.6 still used the legacy field names from the original .NET-only scanner (`class`, `namespace`, `file`, `totalLines`, `coveredLines`, `existingTestCount`, `testability` string, `skipReason`, per-method `uncoveredLines: int` count). Result: when an agent pointed the MCP server at a Python or TypeScript repo's namespace, `get_coverage_gaps` / `get_testable_targets` / `get_uncovered_methods` returned records with blank string fields (only `coveragePercent` populated by happy accident).
+
+The fix is a hard rename across the .NET reader and writer — no shims, no `[JsonPropertyName]` aliases, no transitional bridges (per the AGENTS.md prime directive: do the right thing). On-disk `coverage-gaps.jsonl` produced by ≤2.6 is unreadable by 2.7+ and vice versa.
+
+### What you need to do
+
+```bash
+dotnet tool update -g TotalRecall.Mcp
+# Restart VS Code so Copilot reconnects.
+# Then re-scan to regenerate coverage-gaps.jsonl in the new format:
+total-recall scan --coverage <path-to-cobertura.xml> --ns <your-namespace>
+# Or, if you have an existing `total-recall init` setup, just re-run your scan pipeline.
+total-recall doctor --ns <your-namespace>
+```
+
+A rescan overwrites only `type-registry.jsonl`, `coverage-gaps.jsonl`, `test-inventory.jsonl`, and (with `--enrich`) `class-metrics.jsonl` / `dependency-graph.jsonl`. All your append-only stores (gotchas, assessments, bugs, sessions, tool-calls, tasks, cycles, challenges, evals) are untouched.
+
+### MCP tool output schema changes
+
+`get_coverage_gaps` is the only tool whose output schema changed — it IS the raw read of the on-disk store, so the field-rename propagates. Agents reading the response should expect:
+
+| Old field | New field | Notes |
+|-----------|-----------|-------|
+| `class` + `namespace` | `className` | Now fully-qualified (`MyApp.Common.StringExtensions`). Use the new derived helpers in your code if you need just the short name. |
+| `file` | `filePath` | |
+| `totalLines` | `linesTotal` | |
+| `coveredLines` | `linesCovered` | |
+| `existingTestCount` (`int`) | `existingTests` (`int?`) | Nullable now; `null` means "test inventory not joined yet". |
+| `testability` (`string`) | `testabilityScore` (`double?`) | `0.0`–`1.0`; the legacy `skipUntestable` filter uses `< 0.3` as the cut-off. |
+| `skipReason` | (removed) | Folded into `testabilityScore = 0.1`. |
+| `uncoveredMethods[].startLine` + `endLine` | (removed) | |
+| `uncoveredMethods[].uncoveredLines` (`int` count) | `uncoveredMethods[].uncoveredLines` (`int[]` line numbers) | Richer payload — actual line numbers instead of a count. |
+| (new) | `uncoveredMethods[].totalLines` (`int`) | |
+
+`get_testable_targets`, `get_uncovered_methods`, and `get_stub_classes` keep their existing field names — those tools project the scanner data into a different output contract (legitimate separation of concerns).
+
+### Compatibility with sibling scanners
+
+The Python (`total-recall-scan-py` 0.1.1+) and TypeScript (`@total-recall/scan` 0.1.1+) sibling scanners already emit canonical schema and are now correctly consumed by the .NET MCP server in 2.7. No scanner version bump required — this release fixes the .NET side.
 
 ## Doctor warnings
 
